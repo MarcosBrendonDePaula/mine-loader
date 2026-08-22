@@ -1,5 +1,14 @@
 # Minecraft Lua Loader
 
+## Especificações
+
+- [Especificação geral do projeto](docs/SPECIFICATION.md)
+- [Formato de mods e manifesto JSON](docs/MOD_FORMAT_SPEC.md)
+- [Blocos dinâmicos e Lua](docs/DYNAMIC_BLOCKS.md)
+- [Especificação de segurança](docs/SECURITY_SPEC.md)
+- [Roadmap de implementação](docs/ROADMAP.md)
+- [Pipeline de geração por IA](docs/AI_PIPELINE.md)
+
 Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java inicia pelo Fabric, descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
 
 ## Requisitos
