@@ -1,0 +1,26 @@
+# Gradle e caches
+.gradle/
+build/
+
+# Execução local do Minecraft
+run/
+logs/
+
+# IDEs e sistemas operacionais
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários
+tmp/
+*.tmp
+*.part
+*.log
+
+# Credenciais e configurações locais
+.env
+.env.*
+*.key
+*.pem

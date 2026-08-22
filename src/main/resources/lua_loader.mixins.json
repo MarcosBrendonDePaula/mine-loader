@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.lualoader.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ResourcePackManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

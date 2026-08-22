@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "lua_loader",
+  "version": "${version}",
+  "name": "Minecraft Lua Loader",
+  "description": "Núcleo de um modloader declarativo com mods JSON e lógica Lua.",
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.lualoader.LuaLoaderMod"
+    ]
+  },
+  "mixins": [
+    "lua_loader.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
