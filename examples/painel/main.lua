@@ -99,7 +99,7 @@ local function on_player_joined(ctx)
 
     -- O HUD fica sobre o jogo: nao captura o mouse nem pausa nada.
     atualizar_hud(ctx)
-    ctx.player.send_message("Use /mod painel para abrir a tela, /mod painel hud para limpar o HUD.")
+    ctx.player.send_message("Painel: /mod painel abre a tela, /mod painel somar move o HUD.")
 end
 
 mod.command("painel", function(ctx)
@@ -120,11 +120,28 @@ mod.command("painel", function(ctx)
         return
     end
 
-    -- Um cliente sem o loader nao consegue mostrar a tela; o mod decide o que fazer.
-    if not ctx.player.supports_screens() then
-        ctx.player.send_message("Seu cliente nao tem o loader instalado.")
+    -- Testar o HUD sem depender da tela: /mod painel somar
+    if ctx.subcommand == "somar" then
+        ctx.state.contador = (ctx.state.contador or 0) + 1
+        atualizar_hud(ctx)
+        ctx.player.send_message("Contador: " .. ctx.state.contador .. "/10 (veja o HUD no canto)")
         return
     end
+
+    if ctx.subcommand == "zerar" then
+        ctx.state.contador = 0
+        atualizar_hud(ctx)
+        ctx.player.send_message("Contador zerado.")
+        return
+    end
+
+    -- Um cliente sem o loader nao consegue mostrar a tela; o mod decide o que fazer.
+    if not ctx.player.supports_screens() then
+        ctx.player.send_message("Seu cliente nao tem o loader instalado; use /mod painel somar.")
+        return
+    end
+
+    ctx.log.info("Abrindo o painel para " .. ctx.player.name .. ".")
 
     ctx.player.open_screen("principal", desenhar(ctx))
 end)
