@@ -3,10 +3,13 @@
 -- Mostra a interface customizada: uma tela desenhada pelo mod e um HUD fixo.
 -- Abra com /mod painel
 
-local COR_FUNDO   = "#101018E0"
-local COR_TITULO  = "#FFD700"
-local COR_TEXTO   = "#FFFFFF"
-local COR_BARRA   = "#4CAF50"
+-- Um modulo do proprio mod, carregado uma vez e compartilhado entre os scripts.
+local ui = mod.import("lib/ui.lua")
+
+local COR_FUNDO   = ui.CORES.fundo
+local COR_TITULO  = ui.CORES.titulo
+local COR_TEXTO   = ui.CORES.texto
+local COR_BARRA   = ui.CORES.barra
 
 --- Monta a descricao da tela a partir do estado.
 -- Uma tela e apenas dados: uma lista de elementos com posicao e tamanho.
@@ -22,8 +25,8 @@ local function desenhar(ctx)
             -- Fundo da janela.
             { type = "panel", x = 0, y = 0, w = 220, h = 140, color = COR_FUNDO },
 
-            -- Titulo em escala maior.
-            { type = "label", x = 10, y = 10, text = "Painel do Loader", color = COR_TITULO, scale = 1.5 },
+            -- Titulo montado pelo modulo de componentes.
+            ui.titulo(10, 10, "Painel do Loader"),
 
             { type = "label", x = 10, y = 34, text = "Cliques: " .. contador, color = COR_TEXTO },
             { type = "label", x = 10, y = 46, text = "Meta: 10", color = COR_TEXTO },

@@ -149,7 +149,14 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
 
     @Override
     public boolean openScreen(String screenId, String descriptionJson) {
-        if (!supportsScreens()) return false;
+        if (!supportsScreens()) {
+            dev.lualoader.LuaLoaderMod.LOGGER.warn(
+                    "Cliente de {} nao registrou o canal de telas; {} nao foi aberta",
+                    player.getName().getString(), screenId);
+            return false;
+        }
+        dev.lualoader.LuaLoaderMod.LOGGER.info("Enviando tela {} para {} ({} caracteres)",
+                screenId, player.getName().getString(), descriptionJson.length());
 
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
                 new dev.lualoader.network.ScreenPayloads.OpenScreen(

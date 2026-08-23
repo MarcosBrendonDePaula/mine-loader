@@ -83,7 +83,7 @@ public final class ScreenModel {
                     inteiro(elemento, "y", 0),
                     inteiro(elemento, "w", 0),
                     inteiro(elemento, "h", 0),
-                    texto(elemento, "anchor", "center"),
+                    texto(elemento, "anchor", ""),
                     texto(elemento, "text", ""),
                     texto(elemento, "value", ""),
                     texto(elemento, "item", ""),

@@ -63,23 +63,36 @@ public class LuaScreen extends Screen {
         return (height - model.height()) / 2;
     }
 
-    /** Resolve a posição final de um elemento a partir da âncora declarada. */
+    /**
+     * Resolve a posição final de um elemento.
+     *
+     * <p>Sem âncora, a coordenada é relativa ao canto da janela do mod, que fica centralizada na
+     * tela do jogo — é o que faz uma janela de 220 por 140 aparecer no meio, com os elementos
+     * posicionados a partir do canto dela.
+     *
+     * <p>Com âncora, a origem passa a ser um ponto da tela do jogo, o que permite prender um
+     * elemento à borda em resoluções diferentes. Nas âncoras centradas, metade do tamanho do
+     * elemento é descontada: caso contrário o canto do elemento é que ficaria no centro, e não o
+     * elemento.
+     */
     private int[] resolve(ScreenModel.Element element) {
-        int baseX = originX();
-        int baseY = originY();
+        // Sem âncora: relativo à janela do mod, já centralizada.
+        if (element.anchor().isBlank()) {
+            return new int[]{originX() + element.x(), originY() + element.y()};
+        }
 
-        // A âncora move o ponto de origem para um canto da tela do jogo, e não da janela do mod:
-        // é o que permite prender um elemento à borda em telas de tamanhos diferentes.
+        int baseX;
+        int baseY;
         switch (element.anchor()) {
             case "top_left" -> { baseX = 0; baseY = 0; }
-            case "top" -> { baseX = width / 2; baseY = 0; }
-            case "top_right" -> { baseX = width; baseY = 0; }
-            case "left" -> { baseX = 0; baseY = height / 2; }
-            case "right" -> { baseX = width; baseY = height / 2; }
-            case "bottom_left" -> { baseX = 0; baseY = height; }
-            case "bottom" -> { baseX = width / 2; baseY = height; }
-            case "bottom_right" -> { baseX = width; baseY = height; }
-            default -> { }
+            case "top" -> { baseX = width / 2 - element.w() / 2; baseY = 0; }
+            case "top_right" -> { baseX = width - element.w(); baseY = 0; }
+            case "left" -> { baseX = 0; baseY = height / 2 - element.h() / 2; }
+            case "right" -> { baseX = width - element.w(); baseY = height / 2 - element.h() / 2; }
+            case "bottom_left" -> { baseX = 0; baseY = height - element.h(); }
+            case "bottom" -> { baseX = width / 2 - element.w() / 2; baseY = height - element.h(); }
+            case "bottom_right" -> { baseX = width - element.w(); baseY = height - element.h(); }
+            default -> { baseX = width / 2 - element.w() / 2; baseY = height / 2 - element.h() / 2; }
         }
         return new int[]{baseX + element.x(), baseY + element.y()};
     }
@@ -161,6 +174,8 @@ public class LuaScreen extends Screen {
     }
 
     private void send(String elementId, String action, String value) {
+        LuaLoaderClient.LOGGER.info("Enviando evento: tela={} elemento={} acao={}",
+                screenId, elementId, action);
         ClientPlayNetworking.send(new ScreenPayloads.ScreenEvent(
                 ScreenProtocol.VERSION, screenId, elementId, action, value));
     }

@@ -42,6 +42,9 @@ public final class ScreenNetwork {
     }
 
     private static void handleEvent(ScreenPayloads.ScreenEvent payload, ServerPlayerEntity player) {
+        LuaLoaderMod.LOGGER.info("Evento de tela recebido: {} elemento={} acao={}",
+                payload.screenId(), payload.elementId(), payload.action());
+
         if (payload.version() != ScreenProtocol.VERSION) {
             LuaLoaderMod.LOGGER.warn("Evento de tela em versao {} ignorado; esta em uso a {}",
                     payload.version(), ScreenProtocol.VERSION);

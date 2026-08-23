@@ -5,6 +5,8 @@ import dev.lualoader.ui.ScreenProtocol;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Ponto de entrada do lado cliente.
@@ -14,6 +16,8 @@ import net.minecraft.client.MinecraftClient;
  * usa isso para não enviar telas que ninguém pode mostrar.
  */
 public class LuaLoaderClient implements ClientModInitializer {
+    static final Logger LOGGER = LoggerFactory.getLogger("lua_loader/client");
+
     @Override
     public void onInitializeClient() {
         // As cargas ja foram registradas pelo entrypoint principal, que tambem roda no cliente.
@@ -36,11 +40,16 @@ public class LuaLoaderClient implements ClientModInitializer {
 
     private static void abrir(ScreenPayloads.OpenScreen payload) {
         if (payload.version() != ScreenProtocol.VERSION) {
-            // Versão diferente: melhor não abrir do que abrir errado.
+            LOGGER.warn("Tela em versao {} recusada; cliente usa a {}",
+                    payload.version(), ScreenProtocol.VERSION);
             return;
         }
         ScreenModel model = ScreenModel.parse(payload.description());
-        if (model == null) return;
+        if (model == null) {
+            LOGGER.error("Descricao de tela invalida recebida para {}", payload.screenId());
+            return;
+        }
+        LOGGER.info("Abrindo tela {} com {} elemento(s)", payload.screenId(), model.elements().size());
 
         MinecraftClient.getInstance().setScreen(new LuaScreen(payload.screenId(), model));
     }

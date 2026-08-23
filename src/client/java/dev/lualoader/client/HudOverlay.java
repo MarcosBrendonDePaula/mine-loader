@@ -39,16 +39,32 @@ public final class HudOverlay {
             int altura = client.getWindow().getScaledHeight();
 
             for (ScreenModel.Element element : model.elements()) {
+                // Sem ancora, o HUD parte do canto superior esquerdo: e o canto natural para um
+                // elemento fixo, e o que alguem espera ao escrever x = 4, y = 4.
                 int x = element.x();
                 int y = element.y();
 
                 switch (element.anchor()) {
-                    case "top_right" -> x = largura + element.x();
-                    case "bottom_left" -> y = altura + element.y();
-                    case "bottom_right" -> { x = largura + element.x(); y = altura + element.y(); }
-                    case "center" -> { x = largura / 2 + element.x(); y = altura / 2 + element.y(); }
-                    case "top" -> x = largura / 2 + element.x();
-                    case "bottom" -> { x = largura / 2 + element.x(); y = altura + element.y(); }
+                    case "top" -> x = largura / 2 - element.w() / 2 + element.x();
+                    case "top_right" -> x = largura - element.w() + element.x();
+                    case "left" -> y = altura / 2 - element.h() / 2 + element.y();
+                    case "right" -> {
+                        x = largura - element.w() + element.x();
+                        y = altura / 2 - element.h() / 2 + element.y();
+                    }
+                    case "bottom_left" -> y = altura - element.h() + element.y();
+                    case "bottom" -> {
+                        x = largura / 2 - element.w() / 2 + element.x();
+                        y = altura - element.h() + element.y();
+                    }
+                    case "bottom_right" -> {
+                        x = largura - element.w() + element.x();
+                        y = altura - element.h() + element.y();
+                    }
+                    case "center" -> {
+                        x = largura / 2 - element.w() / 2 + element.x();
+                        y = altura / 2 - element.h() / 2 + element.y();
+                    }
                     default -> { }
                 }
 

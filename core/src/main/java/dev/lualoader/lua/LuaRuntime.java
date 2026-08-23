@@ -50,6 +50,9 @@ public final class LuaRuntime {
     /** Teto de tarefas agendadas simultaneas, para um laco de agendamento nao consumir a memoria. */
     private static final int MAX_SCHEDULED = 4_096;
 
+    /** Teto de modulos por mod, para uma cadeia de imports nao crescer sem limite. */
+    private static final int MAX_MODULES = 128;
+
     /**
      * Tempo maximo de um callback, em milissegundos.
      *
@@ -501,6 +504,11 @@ public final class LuaRuntime {
     private LoadedScript compile(ModLoader.LoadedMod mod) throws IOException {
         ExecutionBudget budget = new ExecutionBudget(CALLBACK_LIMIT_MILLIS);
         Globals globals = restrictedGlobals(budget);
+
+        // Modulos ja carregados nesta compilacao, para um arquivo importado duas vezes rodar
+        // uma vez so, como se espera de um sistema de modulos.
+        Map<String, LuaValue> modulos = new LinkedHashMap<>();
+        java.util.Deque<String> carregando = new java.util.ArrayDeque<>();
         Map<String, LuaFunction> callbacks = new LinkedHashMap<>();
         LuaTable modApi = createLogApi(mod.manifest().id);
         modApi.set("on", new TwoArgFunction() {
@@ -523,6 +531,39 @@ public final class LuaRuntime {
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
         modApi.set("server", serverApiFor(mod));
+
+        modApi.set("import", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                String caminho = value.tojstring();
+                if (!caminho.toLowerCase(java.util.Locale.ROOT).endsWith(".lua")) {
+                    throw new LuaError("import exige um caminho .lua: " + caminho);
+                }
+
+                // Ja carregado: devolve o mesmo valor, sem executar de novo.
+                LuaValue pronto = modulos.get(caminho);
+                if (pronto != null) return pronto;
+
+                if (carregando.contains(caminho)) {
+                    throw new LuaError("import circular em " + caminho
+                            + " (cadeia: " + String.join(" -> ", carregando) + ")");
+                }
+                if (modulos.size() >= MAX_MODULES) {
+                    throw new LuaError("limite de " + MAX_MODULES + " modulos por mod atingido");
+                }
+
+                carregando.push(caminho);
+                try {
+                    LuaValue resultado = loadModule(mod, globals, caminho);
+                    modulos.put(caminho, resultado);
+                    return resultado;
+                } catch (IOException error) {
+                    throw new LuaError(error.getMessage());
+                } finally {
+                    carregando.pop();
+                }
+            }
+        });
 
         modApi.set("menu", new VarArgFunction() {
             @Override
@@ -802,6 +843,45 @@ public final class LuaRuntime {
             return null;
         }
         return (LuaFunction) candidate;
+    }
+
+    /**
+     * Carrega um arquivo Lua do proprio mod como modulo.
+     *
+     * <p>O {@code require} padrao do Lua fica fora do ambiente, porque procuraria arquivos em
+     * qualquer lugar da maquina. Este import resolve o caminho dentro da pasta do mod, ou sob a
+     * base remota quando ela existe, e compartilha os mesmos globais: um modulo enxerga
+     * {@code mod.state} e a API do loader como qualquer outro script daquele mod.
+     *
+     * @return o valor devolvido pelo arquivo, ou {@code true} quando ele nao devolve nada
+     */
+    private LuaValue loadModule(ModLoader.LoadedMod mod, Globals globals, String caminho)
+            throws IOException {
+        Path root = mod.directory().toAbsolutePath().normalize();
+        Path arquivo = mod.directory().resolve(caminho).normalize();
+        if (!arquivo.startsWith(root)) {
+            throw new IOException("modulo sai da pasta do mod: " + caminho);
+        }
+
+        String fonte;
+        if (Files.isRegularFile(arquivo)) {
+            fonte = Files.readString(arquivo, StandardCharsets.UTF_8);
+        } else {
+            byte[] bytes = new ManifestImports(mod.directory(), remoteCache)
+                    .withRemoteBase(mod.manifest().remoteBase)
+                    .readRelative(caminho);
+            if (bytes == null) throw new IOException("modulo nao encontrado: " + caminho);
+            fonte = new String(bytes, StandardCharsets.UTF_8);
+        }
+
+        try {
+            LuaValue chunk = globals.load(fonte, mod.manifest().id + "/" + caminho);
+            LuaValue devolvido = chunk.call();
+            // Um modulo que nao devolve nada ainda precisa marcar presenca no cache.
+            return devolvido.isnil() ? LuaValue.TRUE : devolvido;
+        } catch (LuaError error) {
+            throw new IOException("erro no modulo " + caminho + ": " + error.getMessage(), error);
+        }
     }
 
     /** Compila um arquivo de comportamento, que precisa devolver uma funcao. */

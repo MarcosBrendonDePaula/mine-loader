@@ -201,6 +201,43 @@ E para publicar o mod na web, com o usuário instalando apenas um manifesto pequ
 Cada arquivo é procurado primeiro no disco e, se não existir, sob a base. Sem `sha256`, o conteúdo é
 buscado a cada carga, então publicar uma versão nova atualiza o mod na próxima inicialização.
 
+## Organizar o código em módulos
+
+Um mod pode ter arquivos Lua próprios, carregados com `mod.import`:
+
+```lua
+-- lib/ui.lua
+local M = {}
+M.CORES = { titulo = "#FFD700" }
+function M.titulo(x, y, texto)
+    return { type = "label", x = x, y = y, text = texto, color = M.CORES.titulo, scale = 1.5 }
+end
+return M
+```
+
+```lua
+-- main.lua
+local ui = mod.import("lib/ui.lua")
+```
+
+| Propriedade | Comportamento |
+|---|---|
+| Execução | O arquivo roda uma vez, mesmo importado em vários lugares |
+| Retorno | O que o arquivo devolve é o que o import entrega; sem retorno, entrega `true` |
+| Escopo | O módulo compartilha os globais do mod, então enxerga `mod.state` e a API do loader |
+| Caminho | Resolvido dentro da pasta do mod, ou sob `remote_base` quando o mod é publicado na web |
+| Ciclos | Um import circular é recusado com a cadeia no erro |
+
+O `require`, `dofile` e `loadfile` padrão do Lua continuam fora do ambiente: eles procurariam arquivos
+em qualquer lugar da máquina. `mod.import` faz o mesmo papel com o caminho preso ao mod.
+
+Não confunda com `mod.require`, que serve para usar **outro mod** como biblioteca:
+
+| Função | Alcance |
+|---|---|
+| `mod.import("lib/x.lua")` | Um arquivo do próprio mod |
+| `mod.require("outro_mod")` | A API pública de outro mod, declarado em `dependencies` |
+
 ## Usar outro mod como biblioteca
 
 ```json
