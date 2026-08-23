@@ -6,6 +6,35 @@ O projeto será um runtime de mods para Minecraft Java em que cada mod possui um
 
 O MVP não tentará descarregar classes Java arbitrárias nem substituir imediatamente os registries vanilla de blocos e itens. O objetivo inicial é validar o ciclo completo: descobrir um mod, validar o manifesto, iniciar o estado Lua, receber eventos do jogo, executar callbacks e recarregar o script.
 
+## Camadas e independência de plataforma
+
+O projeto é dividido em dois módulos Gradle com uma fronteira verificada pelo compilador.
+
+| Módulo | Conteúdo | Minecraft no classpath |
+|---|---|---|
+| `core` | manifesto, validação, runtime Lua, montagem de resource pack, cache remoto e as interfaces de plataforma | **Não** |
+| raiz | adaptador Fabric: registro de blocos, resource pack virtual, mixins e entrypoint | Sim |
+
+O `core/build.gradle` deliberadamente não declara dependência de Minecraft nem de Fabric. Um `import net.minecraft.*` dentro do núcleo não compila, então a separação não depende de disciplina de quem escreve o código.
+
+### Contrato de plataforma
+
+O núcleo nunca chama o jogo diretamente. Toda operação atravessa `dev.lualoader.platform`:
+
+| Tipo | Papel |
+|---|---|
+| `GameBridge` | Operações que o núcleo solicita ao jogo: `broadcast`, `setBlockVariant`, `setBlockProperty`, `setBlockLuminance`. |
+| `PlayerHandle` | Referência neutra a um jogador, válida apenas durante o callback que a recebeu. |
+| `BridgeException` | Falha de plataforma traduzida para um tipo que o núcleo entende. |
+
+O adaptador Fabric implementa esse contrato em `FabricGameBridge` e `FabricPlayerHandle`. O `LuaRuntime` recebe a bridge por `attach()` e usa `GameBridge.DETACHED` quando nenhuma plataforma está conectada, o que permite validar manifestos e scripts sem iniciar o jogo.
+
+### Acrescentar outra plataforma
+
+Um novo alvo (NeoForge, por exemplo) não altera o núcleo. Ele precisa de um módulo próprio que forneça quatro coisas: o entrypoint do loader, a implementação de `GameBridge`, a implementação de `PlayerHandle` e o registro de conteúdo declarativo equivalente ao `BlockRegistrar`, além da geração do resource pack virtual na API daquela plataforma. Manifesto, sandbox Lua, permissões e validação são compartilhados sem duplicação.
+
+O trabalho real de um segundo adaptador está no registro de blocos e no resource pack, que são específicos de cada plataforma por natureza. O ganho da camada é que esse esforço fica confinado ao adaptador.
+
 ## Modelo de execução
 
 O loader terá quatro partes. O `ModScanner` procura diretórios em `mods-lua/`; o `ManifestValidator` valida cada `mod.json`; o `LuaRuntime` cria um ambiente isolado por mod; e o `MinecraftBridge` converte eventos e operações permitidas em chamadas da API do jogo.

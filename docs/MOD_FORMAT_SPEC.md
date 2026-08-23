@@ -202,3 +202,100 @@ Permissões futuras para recursos remotos, conteúdo de cliente e persistência 
 O campo `schema` identifica o formato estrutural. O loader deve distinguir erro de sintaxe, erro de schema, incompatibilidade de versão e falha de runtime. Uma migração poderá transformar schema 1 em schema 2, mas não deve alterar o conteúdo silenciosamente.
 
 Campos de extensão deverão usar uma chave de namespace, por exemplo `extensions.example_mod`. Campos desconhecidos na raiz devem ser rejeitados no modo estrito e preservados apenas no modo de ferramentas.
+
+## Itens
+
+O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id` e `name`.
+
+```json
+{
+  "items": [
+    {
+      "id": "ruby",
+      "name": "Rubi",
+      "max_stack_size": 64,
+      "max_damage": 0,
+      "rarity": "rare",
+      "fire_resistant": false,
+      "texture": {
+        "source": "local",
+        "path": "assets/hello_lua/textures/item/ruby.png",
+        "fallback": "minecraft:item/redstone"
+      }
+    }
+  ]
+}
+```
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `max_stack_size` | 1 a 64 | Padrao 64. |
+| `max_damage` | inteiro >= 0 | Maior que zero exige `max_stack_size` igual a 1; caso contrario o manifesto e rejeitado. |
+| `rarity` | `common`, `uncommon`, `rare`, `epic` | Outro valor e rejeitado. |
+| `fire_resistant` | booleano | Item nao queima no lava/fogo. |
+| `texture` | objeto de textura | Sem `path`, o loader usa `fallback`. |
+
+## Aba do inventario criativo
+
+Sem `creative_tab`, o conteudo do mod nao aparece no inventario criativo e so pode ser obtido por comando. A aba recebe os blocos e itens do mod, na ordem em que foram declarados.
+
+```json
+{
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "Hello Lua",
+    "icon": "hello_lua:ruby_block"
+  }
+}
+```
+
+O `icon` precisa do formato `mod:item`. Se o item indicado nao existir, o loader avisa e usa o primeiro conteudo declarado.
+
+## Drops do bloco
+
+O campo `loot` controla o que o bloco dropa. O loader gera a loot table dentro do data pack virtual.
+
+| `mode` | Efeito |
+|---|---|
+| `self` | Dropa o proprio bloco. Padrao. |
+| `item` | Dropa o item indicado em `loot.item`. |
+| `none` | Nao dropa nada. |
+| `table` | Usa a tabela externa indicada em `loot.table`; o loader nao a gera. |
+
+O campo `count` multiplica a quantidade dropada.
+
+## Tags
+
+O campo `tags` insere o bloco em tags do jogo, tambem via data pack virtual, sempre com `"replace": false` para preservar o conteudo vanilla.
+
+```json
+{
+  "tags": ["minecraft:mineable/pickaxe", "minecraft:needs_iron_tool"]
+}
+```
+
+Declarar `settings.requires_tool` sem a tag de mineracao correspondente faz o bloco nao dropar nada ao ser minerado.
+
+## Estados declarados
+
+O campo `state.properties` cria propriedades reais de blockstate. Os tipos aceitos sao `bool`, `int` e `string`.
+
+```json
+{
+  "state": {
+    "properties": [
+      {"name": "polished", "type": "bool", "values": ["false", "true"]}
+    ],
+    "default": {"polished": "false"}
+  }
+}
+```
+
+Alem dessas, o loader sempre adiciona `lua_variant` e `lua_luminance`, usadas pela API Lua.
+
+## Campos aceitos mas ainda nao aplicados
+
+O manifesto aceita campos que o loader ainda nao implementa. Eles nao impedem a carga do mod, mas sao listados no log durante a inicializacao, um a um, para que nenhuma declaracao passe despercebida.
+
+Nesta versao, os campos avisados sao `type` diferente de `generic`, `base`, todo o bloco `behavior`, todo o bloco `placement`, `shape` diferente de `full_cube` e, em `render`, `model` diferente de `cube_all`, `render_layer`, `translucent`, `cutout`, `emissive` e `tint`.

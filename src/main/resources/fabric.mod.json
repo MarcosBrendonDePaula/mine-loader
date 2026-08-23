@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "dev.lualoader.LuaLoaderMod"
+    ],
+    "fabric-gametest": [
+      "dev.lualoader.gametest.BlockInteractionGameTest"
     ]
   },
   "mixins": [

@@ -7,3 +7,6 @@ pluginManagement {
 }
 
 rootProject.name = 'minecraft-lua-loader'
+
+// Nucleo agnostico de plataforma. O modulo raiz e o adaptador Fabric.
+include 'core'

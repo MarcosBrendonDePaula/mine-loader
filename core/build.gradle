@@ -1,0 +1,33 @@
+plugins {
+    id 'java-library'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// O núcleo NÃO declara dependência de Minecraft nem de Fabric.
+// Essa ausência é a fronteira arquitetural: qualquer vazamento de
+// net.minecraft.* ou net.fabricmc.* para cá vira erro de compilação.
+dependencies {
+    api "org.luaj:luaj-jse:${project.luaj_version}"
+    api 'com.google.code.gson:gson:2.11.0'
+    api 'org.slf4j:slf4j-api:2.0.9'
+    testImplementation platform('org.junit:junit-bom:5.11.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+test {
+    useJUnitPlatform()
+}

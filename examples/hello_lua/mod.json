@@ -4,14 +4,21 @@
   "name": "Hello Lua",
   "version": "0.1.0",
   "description": "Mod de exemplo para o Minecraft Lua Loader.",
-  "authors": ["Minecraft Lua Loader"],
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "player.read", "world.write"],
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "world.write"
+  ],
   "events": {
     "loader_ready": "on_loader_ready",
     "server_started": "on_server_started",
     "player_joined": "on_player_joined",
-    "tick": "on_tick"
+    "block_used": "on_block_used",
+    "block_attacked": "on_block_attacked"
   },
   "blocks": [
     {
@@ -47,8 +54,19 @@
         "drops_nothing": false
       },
       "state": {
-        "properties": [],
-        "default": {}
+        "properties": [
+          {
+            "name": "polished",
+            "type": "bool",
+            "values": [
+              "false",
+              "true"
+            ]
+          }
+        ],
+        "default": {
+          "polished": "false"
+        }
       },
       "shape": {
         "collision": "full_cube",
@@ -88,10 +106,14 @@
         "emissive": false
       },
       "loot": {
-        "mode": "self",
-        "count": 1
+        "mode": "item",
+        "item": "hello_lua:ruby",
+        "count": 2
       },
-      "tags": ["minecraft:mineable/pickaxe", "minecraft:needs_iron_tool"],
+      "tags": [
+        "minecraft:mineable/pickaxe",
+        "minecraft:needs_iron_tool"
+      ],
       "item": {
         "register": true,
         "max_stack_size": 64,
@@ -104,5 +126,25 @@
       }
     }
   ],
-  "enabled": true
+  "enabled": true,
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "Hello Lua",
+    "icon": "hello_lua:ruby_block"
+  },
+  "items": [
+    {
+      "id": "ruby",
+      "name": "Rubi",
+      "max_stack_size": 64,
+      "rarity": "rare",
+      "fire_resistant": false,
+      "texture": {
+        "source": "local",
+        "path": "assets/hello_lua/textures/item/ruby.png",
+        "fallback": "minecraft:item/redstone"
+      }
+    }
+  ]
 }

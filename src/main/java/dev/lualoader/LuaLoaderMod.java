@@ -1,8 +1,13 @@
 package dev.lualoader;
 
 import dev.lualoader.lua.LuaRuntime;
+import dev.lualoader.manifest.ManifestDiagnostics;
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.minecraft.BlockInteractionEvents;
 import dev.lualoader.minecraft.BlockRegistrar;
+import dev.lualoader.minecraft.ContentRegistrar;
+import dev.lualoader.minecraft.FabricGameBridge;
+import dev.lualoader.minecraft.FabricPlayerHandle;
 import dev.lualoader.resources.GeneratedResourcePackProvider;
 import dev.lualoader.resources.ResourcePackAssembler;
 import net.fabricmc.api.ModInitializer;
@@ -26,6 +31,8 @@ public final class LuaLoaderMod implements ModInitializer {
     private static BlockRegistrar blockRegistrar;
     private static LuaRuntime luaRuntime;
     private static ResourcePackAssembler resourcePackAssembler;
+    private static FabricGameBridge gameBridge;
+    private static ContentRegistrar contentRegistrar;
 
     @Override
     public void onInitialize() {
@@ -35,7 +42,10 @@ public final class LuaLoaderMod implements ModInitializer {
         Path resourceCache = gameDirectory.resolve("lua-loader/cache");
         ModLoader manifestLoader = new ModLoader(LOGGER);
         blockRegistrar = new BlockRegistrar(LOGGER);
+        contentRegistrar = new ContentRegistrar(LOGGER);
         luaRuntime = new LuaRuntime(LOGGER);
+        gameBridge = new FabricGameBridge(blockRegistrar);
+        luaRuntime.attach(gameBridge);
 
         try {
             resourcePackAssembler = new ResourcePackAssembler(LOGGER, resourceCache);
@@ -43,8 +53,16 @@ public final class LuaLoaderMod implements ModInitializer {
             resourcePackAssembler.assemble(loadedMods, generatedPack);
             GeneratedResourcePackProvider.setRoot(generatedPack);
 
+            ManifestDiagnostics diagnostics = new ManifestDiagnostics(LOGGER);
             for (ModLoader.LoadedMod mod : loadedMods) {
+                diagnostics.report(mod.manifest());
                 blockRegistrar.register(mod.manifest());
+                contentRegistrar.registerItems(mod.manifest());
+            }
+            // A aba criativa so pode ser montada depois que blocos e itens existem no registry.
+            for (ModLoader.LoadedMod mod : loadedMods) {
+                contentRegistrar.registerCreativeTab(mod.manifest(),
+                        blockRegistrar.blockItems(mod.manifest().id));
             }
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {
@@ -55,22 +73,33 @@ public final class LuaLoaderMod implements ModInitializer {
             }
             LOGGER.info("Minecraft Lua Loader inicializado: {} mod(s), {} bloco(s)",
                     loadedMods.size(), blockRegistrar.registeredBlocks().size());
-            luaRuntime.triggerAll("loader_ready", null, null);
+            luaRuntime.triggerAll("loader_ready", null);
         } catch (IOException | RuntimeException error) {
             LOGGER.error("Não foi possível inicializar os mods Lua", error);
         }
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 LuaLoaderCommands.register(dispatcher));
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> luaRuntime.triggerAll("server_started", null, server));
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> luaRuntime.triggerAll("server_stopped", null, server));
+        new BlockInteractionEvents(luaRuntime, blockRegistrar).register();
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            gameBridge.setServer(server);
+            luaRuntime.triggerAll("server_started", null);
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            luaRuntime.triggerAll("server_stopped", null);
+            gameBridge.setServer(null);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                luaRuntime.triggerAll("player_joined", handler.player, server));
-        ServerTickEvents.END_SERVER_TICK.register(server -> luaRuntime.triggerAll("tick", null, server));
+                luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player)));
+        ServerTickEvents.END_SERVER_TICK.register(server -> luaRuntime.triggerAll("tick", null));
     }
 
     public static List<ModLoader.LoadedMod> loadedMods() {
         return loadedMods;
+    }
+
+    public static ContentRegistrar contentRegistrar() {
+        return contentRegistrar;
     }
 
     public static BlockRegistrar blockRegistrar() {

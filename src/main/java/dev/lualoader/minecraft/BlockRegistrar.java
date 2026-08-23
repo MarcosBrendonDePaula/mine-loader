@@ -7,15 +7,21 @@ import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Rarity;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** Registra blocos declarados no manifesto durante a inicialização do Minecraft. */
 public final class BlockRegistrar {
     private final Logger logger;
     private final Map<Identifier, Block> blocks = new LinkedHashMap<>();
+    private final Map<Identifier, Integer> variantCounts = new LinkedHashMap<>();
+    private final Map<String, List<Identifier>> blockItemsByMod = new LinkedHashMap<>();
 
     public BlockRegistrar(Logger logger) {
         this.logger = logger;
@@ -33,16 +39,32 @@ public final class BlockRegistrar {
             ModManifest.SettingsDefinition values = definition.settings == null
                     ? new ModManifest.SettingsDefinition()
                     : definition.settings;
-            Block block = new DeclarativeBlock(
-                    BlockSettingsFactory.create(definition),
-                    values.hardness,
-                    values.resistance,
-                    values.slipperiness,
-                    values.velocityMultiplier,
-                    values.jumpVelocityMultiplier
-            );
+            DeclarativeStateProperties declaredState = DeclarativeStateProperties.from(definition);
+            Block block;
+            // As propriedades declaradas precisam estar visiveis durante o construtor do bloco.
+            DeclarativeBlock.beginConstruction(declaredState);
+            try {
+                block = new DeclarativeBlock(
+                        BlockSettingsFactory.create(definition),
+                        values.hardness,
+                        values.resistance,
+                        values.slipperiness,
+                        values.velocityMultiplier,
+                        values.jumpVelocityMultiplier
+                );
+            } finally {
+                DeclarativeBlock.endConstruction();
+            }
+            if (!declaredState.isEmpty()) {
+                logger.info("Bloco {} recebeu {} propriedade(s) de estado declaradas",
+                        id, declaredState.properties().size());
+            }
             Registry.register(Registries.BLOCK, id, block);
             blocks.put(id, block);
+            int variants = definition.render == null || definition.render.variantTextures == null
+                    ? 1
+                    : Math.max(1, definition.render.variantTextures.size());
+            variantCounts.put(id, variants);
 
             if (definition.item == null || definition.item.register) {
                 Item.Settings itemSettings = new Item.Settings();
@@ -52,15 +74,40 @@ public final class BlockRegistrar {
                 if (definition.item != null && definition.item.maxDamage > 0) {
                     itemSettings = itemSettings.maxDamage(definition.item.maxDamage);
                 }
+                if (definition.item != null) {
+                    itemSettings = itemSettings.rarity(rarity(definition.item.rarity));
+                    if (definition.item.fireResistant) itemSettings = itemSettings.fireproof();
+                }
                 Registry.register(Registries.ITEM, id, new BlockItem(block, itemSettings));
+                blockItemsByMod.computeIfAbsent(manifest.id, key -> new ArrayList<>()).add(id);
             }
 
             logger.info("Lua Loader registrou bloco {} ({})", id, definition.name);
         }
     }
 
+    private static Rarity rarity(String value) {
+        String key = value == null || value.isBlank() ? "common" : value.trim().toLowerCase(Locale.ROOT);
+        return switch (key) {
+            case "uncommon" -> Rarity.UNCOMMON;
+            case "rare" -> Rarity.RARE;
+            case "epic" -> Rarity.EPIC;
+            default -> Rarity.COMMON;
+        };
+    }
+
+    /** Itens de bloco registrados para o mod, na ordem de declaracao. */
+    public List<Identifier> blockItems(String modId) {
+        return List.copyOf(blockItemsByMod.getOrDefault(modId, List.of()));
+    }
+
     public Block get(Identifier id) {
         return blocks.get(id);
+    }
+
+    /** Quantidade de variantes visuais declaradas para o bloco, no mínimo 1. */
+    public int variantCount(Identifier id) {
+        return variantCounts.getOrDefault(id, 1);
     }
 
     public Map<Identifier, Block> registeredBlocks() {

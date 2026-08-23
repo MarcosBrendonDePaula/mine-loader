@@ -19,6 +19,8 @@ public final class ModManifest {
     public List<String> permissions = new ArrayList<>();
     public Map<String, String> events = new LinkedHashMap<>();
     public List<BlockDefinition> blocks = new ArrayList<>();
+    public List<ItemEntryDefinition> items = new ArrayList<>();
+    public CreativeTabDefinition creativeTab;
     public boolean enabled = true;
 
     public static final class BlockDefinition {
@@ -144,5 +146,32 @@ public final class ModManifest {
         public String onUse;
         public String onRandomTick;
         public String onNeighborUpdate;
+    }
+
+    /** Item declarado pelo manifesto que nao pertence a um bloco. */
+    public static final class ItemEntryDefinition {
+        public String id;
+        public String name;
+        public int maxStackSize = 64;
+        public int maxDamage = 0;
+        public String rarity = "common";
+        public boolean fireResistant = false;
+        public TextureDefinition texture = new TextureDefinition();
+        public String model = "item/generated";
+        public ItemBehaviorDefinition behavior = new ItemBehaviorDefinition();
+    }
+
+    /** Callbacks Lua associados a um item. */
+    public static final class ItemBehaviorDefinition {
+        public String onUse;
+    }
+
+    /** Aba propria do mod no inventario criativo. */
+    public static final class CreativeTabDefinition {
+        public boolean register = true;
+        public String id = "main";
+        public String name;
+        /** Item mostrado como icone da aba, no formato mod:item. Vazio usa o primeiro conteudo. */
+        public String icon;
     }
 }

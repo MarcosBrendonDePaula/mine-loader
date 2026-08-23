@@ -2,13 +2,10 @@ package dev.lualoader.lua;
 
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
-import dev.lualoader.LuaLoaderMod;
-import dev.lualoader.minecraft.DeclarativeBlock;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import dev.lualoader.platform.BlockEventData;
+import dev.lualoader.platform.BridgeException;
+import dev.lualoader.platform.GameBridge;
+import dev.lualoader.platform.PlayerHandle;
 import org.luaj.vm2.Globals;
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaFunction;
@@ -33,14 +30,21 @@ import java.util.Set;
 /** Runtime Lua por mod. O script recebe apenas a API construída nesta classe. */
 public final class LuaRuntime {
     private static final Set<String> EVENTS = Set.of(
-            "loader_ready", "server_started", "server_stopped", "player_joined", "tick"
+            "loader_ready", "server_started", "server_stopped", "player_joined", "tick",
+            "block_used", "block_attacked"
     );
 
     private final Logger logger;
     private final Map<String, LoadedScript> scripts = new LinkedHashMap<>();
+    private GameBridge bridge = GameBridge.DETACHED;
 
     public LuaRuntime(Logger logger) {
         this.logger = logger;
+    }
+
+    /** Conecta o adaptador de plataforma. Chamado pelo bootstrap antes de disparar eventos. */
+    public void attach(GameBridge bridge) {
+        this.bridge = bridge == null ? GameBridge.DETACHED : bridge;
     }
 
     public void load(ModLoader.LoadedMod mod) throws IOException {
@@ -74,15 +78,29 @@ public final class LuaRuntime {
         return scripts.values().stream().anyMatch(script -> script.callbacks().containsKey(event));
     }
 
-    public void triggerAll(String event, ServerPlayerEntity player, MinecraftServer server) {
+    public void triggerAll(String event, PlayerHandle player) {
+        trigger(event, player, null);
+    }
+
+    /** Dispara um evento originado por uma interação com um bloco declarativo. */
+    public void triggerBlock(String event, PlayerHandle player, BlockEventData block) {
+        trigger(event, player, block);
+    }
+
+    private void trigger(String event, PlayerHandle player, BlockEventData block) {
         if (!EVENTS.contains(event)) return;
         for (LoadedScript script : scripts.values()) {
             LuaFunction callback = script.callbacks().get(event);
             if (callback == null) continue;
+            // Um evento de bloco pertence ao mod que declarou o bloco. Sem esta checagem,
+            // qualquer mod receberia interacoes com o conteudo de todos os outros.
+            if (block != null && !ownsBlock(script.mod(), block)) continue;
             try {
-                callback.call(context(script.mod(), player, server));
+                callback.call(context(script.mod(), player, block));
             } catch (LuaError error) {
                 logger.error("Erro Lua no mod {} durante {}: {}", script.mod().manifest().id, event, error.getMessage());
+            } catch (BridgeException error) {
+                logger.error("Erro de plataforma no mod {} durante {}: {}", script.mod().manifest().id, event, error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}", script.mod().manifest().id, event, error);
             }
@@ -158,7 +176,15 @@ public final class LuaRuntime {
         };
     }
 
-    private LuaTable context(ModLoader.LoadedMod mod, ServerPlayerEntity player, MinecraftServer server) {
+    /** Indica se o bloco do evento pertence ao mod, comparando o namespace com o id do mod. */
+    private static boolean ownsBlock(ModLoader.LoadedMod mod, BlockEventData block) {
+        String blockId = block.blockId();
+        int separator = blockId.indexOf(':');
+        if (separator <= 0) return false;
+        return blockId.substring(0, separator).equals(mod.manifest().id);
+    }
+
+    private LuaTable context(ModLoader.LoadedMod mod, PlayerHandle player, BlockEventData block) {
         LuaTable context = createLogApi(mod.manifest().id);
         context.set("time", LuaValue.valueOf(System.currentTimeMillis()));
 
@@ -167,7 +193,7 @@ public final class LuaRuntime {
             @Override
             public LuaValue call(LuaValue value) {
                 requirePermission(mod.manifest(), "chat.send");
-                if (server != null) server.getPlayerManager().broadcast(Text.literal(value.tojstring()), false);
+                bridge.broadcast(value.tojstring());
                 return LuaValue.NIL;
             }
         });
@@ -175,25 +201,11 @@ public final class LuaRuntime {
             @Override
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "world.write");
-                if (server == null || LuaLoaderMod.blockRegistrar() == null || args.narg() < 5) {
-                    throw new LuaError("set_block_variant exige id, x, y, z e variant");
-                }
-                Identifier id = parseIdentifier(args.arg(1).tojstring());
-                var block = LuaLoaderMod.blockRegistrar().get(id);
-                if (!(block instanceof DeclarativeBlock declarativeBlock)) {
-                    throw new LuaError("bloco não é declarativo ou não foi encontrado: " + id);
-                }
-                int x = args.arg(2).checkint();
-                int y = args.arg(3).checkint();
-                int z = args.arg(4).checkint();
+                if (args.narg() < 5) throw new LuaError("set_block_variant exige id, x, y, z e variant");
+                String id = requireIdentifier(args.arg(1).tojstring());
                 int variant = args.arg(5).checkint();
                 if (variant < 0 || variant > 15) throw new LuaError("variant deve estar entre 0 e 15");
-                BlockPos pos = new BlockPos(x, y, z);
-                server.getOverworld().setBlockState(
-                        pos,
-                        declarativeBlock.getDefaultState().with(DeclarativeBlock.LUA_VARIANT, variant),
-                        3
-                );
+                bridge.setBlockVariant(id, args.arg(2).checkint(), args.arg(3).checkint(), args.arg(4).checkint(), variant);
                 return LuaValue.NIL;
             }
         });
@@ -201,21 +213,11 @@ public final class LuaRuntime {
             @Override
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "world.write");
-                if (args.narg() < 3 || LuaLoaderMod.blockRegistrar() == null) {
-                    throw new LuaError("set_block_property exige id, nome e valor");
-                }
-                Identifier id = parseIdentifier(args.arg(1).tojstring());
-                var block = LuaLoaderMod.blockRegistrar().get(id);
-                if (!(block instanceof DeclarativeBlock declarativeBlock)) {
-                    throw new LuaError("bloco não é declarativo ou não foi encontrado: " + id);
-                }
+                if (args.narg() < 3) throw new LuaError("set_block_property exige id, nome e valor");
+                String id = requireIdentifier(args.arg(1).tojstring());
                 float value = (float) args.arg(3).checkdouble();
                 if (value < 0 || value > 100) throw new LuaError("valor físico fora do intervalo 0..100");
-                try {
-                    declarativeBlock.setDynamicProperty(args.arg(2).tojstring(), value);
-                } catch (IllegalArgumentException error) {
-                    throw new LuaError(error.getMessage());
-                }
+                bridge.setBlockProperty(id, args.arg(2).tojstring(), value);
                 return LuaValue.NIL;
             }
         });
@@ -223,39 +225,38 @@ public final class LuaRuntime {
             @Override
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "world.write");
-                if (server == null || LuaLoaderMod.blockRegistrar() == null || args.narg() < 5) {
-                    throw new LuaError("set_block_luminance exige id, x, y, z e valor");
-                }
-                Identifier id = parseIdentifier(args.arg(1).tojstring());
-                var block = LuaLoaderMod.blockRegistrar().get(id);
-                if (!(block instanceof DeclarativeBlock declarativeBlock)) {
-                    throw new LuaError("bloco não é declarativo ou não foi encontrado: " + id);
-                }
-                int x = args.arg(2).checkint();
-                int y = args.arg(3).checkint();
-                int z = args.arg(4).checkint();
+                if (args.narg() < 5) throw new LuaError("set_block_luminance exige id, x, y, z e valor");
+                String id = requireIdentifier(args.arg(1).tojstring());
                 int luminance = args.arg(5).checkint();
                 if (luminance < 0 || luminance > 15) throw new LuaError("luminosidade deve estar entre 0 e 15");
-                BlockPos pos = new BlockPos(x, y, z);
-                var current = server.getOverworld().getBlockState(pos);
-                var state = current.isOf(declarativeBlock)
-                        ? current.with(DeclarativeBlock.LUA_LUMINANCE, luminance)
-                        : declarativeBlock.getDefaultState().with(DeclarativeBlock.LUA_LUMINANCE, luminance);
-                server.getOverworld().setBlockState(pos, state, 3);
+                bridge.setBlockLuminance(id, args.arg(2).checkint(), args.arg(3).checkint(), args.arg(4).checkint(), luminance);
                 return LuaValue.NIL;
             }
         });
         context.set("server", serverApi);
 
+        if (block != null) {
+            LuaTable blockApi = new LuaTable();
+            blockApi.set("id", LuaValue.valueOf(block.blockId()));
+            blockApi.set("x", LuaValue.valueOf(block.x()));
+            blockApi.set("y", LuaValue.valueOf(block.y()));
+            blockApi.set("z", LuaValue.valueOf(block.z()));
+            blockApi.set("variant", LuaValue.valueOf(block.variant()));
+            blockApi.set("variant_count", LuaValue.valueOf(block.variantCount()));
+            context.set("block", blockApi);
+        } else {
+            context.set("block", LuaValue.NIL);
+        }
+
         if (player != null) {
             LuaTable playerApi = new LuaTable();
-            playerApi.set("name", LuaValue.valueOf(player.getName().getString()));
-            playerApi.set("uuid", LuaValue.valueOf(player.getUuidAsString()));
+            playerApi.set("name", LuaValue.valueOf(player.name()));
+            playerApi.set("uuid", LuaValue.valueOf(player.uuid()));
             playerApi.set("send_message", new OneArgFunction() {
                 @Override
                 public LuaValue call(LuaValue value) {
                     requirePermission(mod.manifest(), "chat.send");
-                    player.sendMessage(Text.literal(value.tojstring()), false);
+                    player.sendMessage(value.tojstring());
                     return LuaValue.NIL;
                 }
             });
@@ -266,12 +267,12 @@ public final class LuaRuntime {
         return context;
     }
 
-    private static Identifier parseIdentifier(String value) {
+    private static String requireIdentifier(String value) {
         int separator = value.indexOf(':');
         if (separator <= 0 || separator == value.length() - 1) {
             throw new LuaError("identificador inválido: " + value);
         }
-        return Identifier.of(value.substring(0, separator), value.substring(separator + 1));
+        return value;
     }
 
     private static void requirePermission(ModManifest manifest, String permission) {

@@ -10,6 +10,17 @@ repositories {
 loom {
     splitEnvironmentSourceSets()
 
+    // Servidor headless que executa os @GameTest e escreve um relatorio JUnit.
+    runs {
+        gametest {
+            server()
+            name = "Game Test"
+            vmArg "-Dfabric-api.gametest"
+            vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.get().asFile}/gametest-results.xml"
+            runDir "build/gametest"
+        }
+    }
+
     mods {
         "lua_loader" {
             sourceSet sourceSets.main
@@ -19,6 +30,9 @@ loom {
 }
 
 dependencies {
+    // Nucleo agnostico de plataforma; este modulo e o adaptador Fabric.
+    implementation project(':core')
+    include project(':core')
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"

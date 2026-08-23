@@ -1,0 +1,407 @@
+package dev.lualoader.resources;
+
+import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.manifest.ModManifest;
+import org.slf4j.Logger;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+/** Gera um resource pack do loader a partir das declarações de bloco. */
+public final class ResourcePackAssembler {
+    private static final String NEWLINE = System.lineSeparator();
+    private static final String QUOTE = String.valueOf((char) 34);
+    private static final String BACKSLASH = String.valueOf((char) 92);
+
+    private final Logger logger;
+    private final RemoteResourceManager remoteResources;
+
+    public ResourcePackAssembler(Logger logger, Path cacheDirectory) throws IOException {
+        this.logger = logger;
+        this.remoteResources = new RemoteResourceManager(cacheDirectory);
+    }
+
+    public void assemble(List<ModLoader.LoadedMod> mods, Path generatedRoot) throws IOException {
+        deleteContents(generatedRoot);
+        Files.createDirectories(generatedRoot);
+
+        // Tags de vários mods podem apontar para a mesma tag vanilla; são acumuladas e
+        // escritas uma única vez no fim.
+        Map<String, Set<String>> tagEntries = new LinkedHashMap<>();
+
+        for (ModLoader.LoadedMod mod : mods) {
+            if (mod.manifest().blocks == null) continue;
+            for (ModManifest.BlockDefinition block : mod.manifest().blocks) {
+                assembleBlock(mod, block, generatedRoot);
+                assembleBlockLoot(mod, block, generatedRoot);
+                collectBlockTags(mod, block, tagEntries);
+            }
+        }
+
+        for (ModLoader.LoadedMod mod : mods) {
+            if (mod.manifest().items == null) continue;
+            for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
+                assembleItem(mod, item, generatedRoot);
+            }
+        }
+
+        for (ModLoader.LoadedMod mod : mods) {
+            assembleLanguage(mod, generatedRoot);
+        }
+
+        writeTags(tagEntries, generatedRoot);
+    }
+
+    /**
+     * Gera o arquivo de traducao do mod a partir dos nomes declarados no manifesto.
+     *
+     * <p>Sem ele o jogo exibe a chave crua, como {@code block.hello_lua.ruby_block}, em vez do
+     * nome escrito pelo criador. O arquivo e gravado em {@code en_us}, que o Minecraft usa como
+     * idioma de fallback para qualquer idioma selecionado.
+     */
+    private void assembleLanguage(ModLoader.LoadedMod mod, Path generatedRoot) throws IOException {
+        String namespace = mod.manifest().id;
+        Map<String, String> entries = new LinkedHashMap<>();
+
+        if (mod.manifest().blocks != null) {
+            for (ModManifest.BlockDefinition block : mod.manifest().blocks) {
+                if (block == null || block.id == null || block.name == null) continue;
+                entries.put("block." + namespace + "." + block.id, block.name);
+                if (block.item == null || block.item.register) {
+                    // O item do bloco usa a chave de bloco; nada extra a declarar.
+                    entries.putIfAbsent("item." + namespace + "." + block.id, block.name);
+                }
+            }
+        }
+        if (mod.manifest().items != null) {
+            for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
+                if (item == null || item.id == null || item.name == null) continue;
+                entries.put("item." + namespace + "." + item.id, item.name);
+            }
+        }
+        ModManifest.CreativeTabDefinition tab = mod.manifest().creativeTab;
+        if (tab != null && tab.register) {
+            String tabId = tab.id == null ? "main" : tab.id;
+            String title = tab.name == null || tab.name.isBlank() ? mod.manifest().name : tab.name;
+            if (title != null) entries.put("itemGroup." + namespace + "." + tabId, title);
+        }
+
+        if (entries.isEmpty()) return;
+
+        List<String> lines = new ArrayList<>();
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            lines.add("  " + quote(entry.getKey()) + ": " + quote(entry.getValue()));
+        }
+        write(generatedRoot.resolve("assets").resolve(namespace).resolve("lang/en_us.json"),
+                "{" + NEWLINE + String.join("," + NEWLINE, lines) + NEWLINE + "}" + NEWLINE);
+        logger.info("Traducoes geradas para {}: {} chave(s)", namespace, entries.size());
+    }
+
+    /** Escapa um texto para uso como string JSON. */
+    private static String quote(String value) {
+        StringBuilder out = new StringBuilder(QUOTE);
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (character == 34) {
+                out.append(BACKSLASH).append(QUOTE);
+            } else if (character == 92) {
+                out.append(BACKSLASH).append(BACKSLASH);
+            } else if (character == 10) {
+                out.append(BACKSLASH).append("n");
+            } else if (character == 13) {
+                out.append(BACKSLASH).append("r");
+            } else if (character == 9) {
+                out.append(BACKSLASH).append("t");
+            } else if (character < 0x20) {
+                out.append(BACKSLASH).append(String.format("u%04x", (int) character));
+            } else {
+                out.append(character);
+            }
+        }
+        return out.append(QUOTE).toString();
+    }
+
+    /** Gera textura e modelo de um item declarado que nao pertence a um bloco. */
+    private void assembleItem(ModLoader.LoadedMod mod,
+                              ModManifest.ItemEntryDefinition item,
+                              Path generatedRoot) throws IOException {
+        String namespace = mod.manifest().id;
+        String textureReference = item.texture != null && item.texture.fallback != null
+                && !item.texture.fallback.isBlank()
+                ? item.texture.fallback
+                : "minecraft:item/stick";
+
+        if (item.texture != null && item.texture.path != null && !item.texture.path.isBlank()) {
+            Path target = generatedRoot.resolve("assets").resolve(namespace)
+                    .resolve("textures/item").resolve(item.id + ".png");
+            try {
+                RemoteResourceManager.ResolvedTexture resolved =
+                        remoteResources.resolveTexture(mod.directory(), item.texture);
+                copyAsPng(resolved.path(), target);
+                textureReference = namespace + ":item/" + item.id;
+                logger.info("Textura {} preparada para item {}",
+                        resolved.remote() ? "remota" : "local", namespace + ":" + item.id);
+            } catch (IOException error) {
+                logger.warn("Textura do item {} indisponivel; usando fallback {}: {}",
+                        namespace + ":" + item.id, textureReference, error.getMessage());
+            }
+        }
+
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                        .resolve("models/item").resolve(item.id + ".json"),
+                """
+                        {
+                          "parent": "minecraft:item/generated",
+                          "textures": {"layer0": "%s"}
+                        }
+                        """.formatted(textureReference));
+    }
+
+    /** Gera a loot table declarada em {@code loot}, dentro do data pack virtual. */
+    private void assembleBlockLoot(ModLoader.LoadedMod mod,
+                                   ModManifest.BlockDefinition block,
+                                   Path generatedRoot) throws IOException {
+        String namespace = mod.manifest().id;
+        String blockId = namespace + ":" + block.id;
+        ModManifest.LootDefinition loot = block.loot == null ? new ModManifest.LootDefinition() : block.loot;
+        String mode = loot.mode == null ? "self" : loot.mode.trim().toLowerCase(java.util.Locale.ROOT);
+
+        // Uma tabela externa e responsabilidade de quem a declarou; o loader nao a gera.
+        if ("table".equals(mode)) {
+            if (loot.table == null || loot.table.isBlank()) {
+                logger.warn("Bloco {} declara loot.mode=table sem loot.table; nada sera dropado", blockId);
+            }
+            return;
+        }
+
+        String dropped;
+        switch (mode) {
+            case "none" -> dropped = null;
+            case "item" -> {
+                if (loot.item == null || loot.item.isBlank()) {
+                    logger.warn("Bloco {} declara loot.mode=item sem loot.item; usando o proprio bloco", blockId);
+                    dropped = blockId;
+                } else {
+                    dropped = loot.item;
+                }
+            }
+            case "self" -> dropped = blockId;
+            default -> {
+                logger.warn("Bloco {} declara loot.mode desconhecido: {}; usando self", blockId, loot.mode);
+                dropped = blockId;
+            }
+        }
+
+        Path table = generatedRoot.resolve("data").resolve(namespace)
+                .resolve("loot_table/blocks").resolve(block.id + ".json");
+
+        if (dropped == null) {
+            write(table, """
+                    {
+                      "type": "minecraft:block",
+                      "pools": []
+                    }
+                    """);
+            return;
+        }
+
+        int count = Math.max(1, loot.count);
+        String countFunction = count > 1
+                ? """
+                              ,
+                              "functions": [
+                                {"function": "minecraft:set_count", "count": %d}
+                              ]""".formatted(count)
+                : "";
+
+        write(table, """
+                {
+                  "type": "minecraft:block",
+                  "pools": [
+                    {
+                      "rolls": 1,
+                      "entries": [
+                        {
+                          "type": "minecraft:item",
+                          "name": "%s"
+                        }
+                      ],
+                      "conditions": [
+                        {"condition": "minecraft:survives_explosion"}
+                      ]%s
+                    }
+                  ]
+                }
+                """.formatted(dropped, countFunction));
+    }
+
+    /** Acumula as tags declaradas no bloco, validando o formato do identificador. */
+    private void collectBlockTags(ModLoader.LoadedMod mod,
+                                  ModManifest.BlockDefinition block,
+                                  Map<String, Set<String>> tagEntries) {
+        if (block.tags == null || block.tags.isEmpty()) return;
+        String blockId = mod.manifest().id + ":" + block.id;
+
+        for (String tag : block.tags) {
+            if (tag == null || tag.isBlank()) continue;
+            String normalized = tag.trim();
+            int separator = normalized.indexOf(':');
+            if (separator <= 0 || separator == normalized.length() - 1) {
+                logger.warn("Tag ignorada em {}: identificador invalido {}", blockId, tag);
+                continue;
+            }
+            tagEntries.computeIfAbsent(normalized, key -> new TreeSet<>()).add(blockId);
+        }
+    }
+
+    /** Escreve cada tag de bloco acumulada como um arquivo do data pack. */
+    private void writeTags(Map<String, Set<String>> tagEntries, Path generatedRoot) throws IOException {
+        for (Map.Entry<String, Set<String>> entry : tagEntries.entrySet()) {
+            String tag = entry.getKey();
+            int separator = tag.indexOf(':');
+            String namespace = tag.substring(0, separator);
+            String path = tag.substring(separator + 1);
+
+            List<String> quoted = new ArrayList<>();
+            for (String value : entry.getValue()) quoted.add("\"" + value + "\"");
+
+            // "replace": false preserva o conteúdo vanilla da tag.
+            write(generatedRoot.resolve("data").resolve(namespace).resolve("tags/block")
+                            .resolve(path + ".json"),
+                    """
+                            {
+                              "replace": false,
+                              "values": [
+                                %s
+                              ]
+                            }
+                            """.formatted(String.join(",\n    ", quoted)));
+            logger.info("Tag {} recebeu {} bloco(s) do loader", tag, entry.getValue().size());
+        }
+    }
+
+    private void assembleBlock(ModLoader.LoadedMod mod,
+                               ModManifest.BlockDefinition block,
+                               Path generatedRoot) throws IOException {
+        String namespace = mod.manifest().id;
+        String blockId = block.id;
+        Map<String, ModManifest.TextureDefinition> variants = new LinkedHashMap<>();
+
+        if (block.render != null && block.render.variantTextures != null) {
+            variants.putAll(block.render.variantTextures);
+        }
+        if (variants.isEmpty()) {
+            variants.put("0", block.render == null ? null : block.render.texture);
+        }
+
+        Map<Integer, String> models = new LinkedHashMap<>();
+        for (Map.Entry<String, ModManifest.TextureDefinition> entry : variants.entrySet()) {
+            int variant = parseVariant(entry.getKey());
+            if (variant < 0) {
+                logger.warn("Variante ignorada em {}: {}", namespace + ":" + blockId, entry.getKey());
+                continue;
+            }
+            String suffix = "_v" + variant;
+            Path blockTexture = generatedRoot.resolve("assets").resolve(namespace)
+                    .resolve("textures/block").resolve(blockId + suffix + ".png");
+            Files.createDirectories(blockTexture.getParent());
+
+            String textureReference = fallbackTexture(block);
+            ModManifest.TextureDefinition definition = entry.getValue();
+            if (definition != null) {
+                try {
+                    RemoteResourceManager.ResolvedTexture resolved = remoteResources.resolveTexture(
+                            mod.directory(), definition);
+                    copyAsPng(resolved.path(), blockTexture);
+                    textureReference = namespace + ":block/" + blockId + suffix;
+                    logger.info("Textura {} preparada para {} variante {}",
+                            resolved.remote() ? "remota" : "local", namespace + ":" + blockId, variant);
+                } catch (IOException error) {
+                    logger.warn("Textura da variante {} indisponível; usando fallback {}: {}",
+                            variant, definition.fallback, error.getMessage());
+                }
+            }
+
+            String modelId = namespace + ":block/" + blockId + suffix;
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                            .resolve("models/block").resolve(blockId + suffix + ".json"),
+                    "{\n  \"parent\": \"minecraft:block/cube_all\",\n  \"textures\": {\"all\": \"" + textureReference + "\"}\n}\n");
+            models.put(variant, modelId);
+        }
+
+        if (models.isEmpty()) {
+            models.put(0, "minecraft:block/stone");
+        }
+        String fallbackModel = models.getOrDefault(0, models.values().iterator().next());
+        StringBuilder blockstate = new StringBuilder("{\n  \"variants\": {\n");
+        for (int variant = 0; variant <= 15; variant++) {
+            if (variant > 0) blockstate.append(",\n");
+            blockstate.append("    \"lua_variant=").append(variant).append("\": {\"model\": \"")
+                    .append(models.getOrDefault(variant, fallbackModel)).append("\"}");
+        }
+        blockstate.append("\n  }\n}\n");
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                        .resolve("blockstates").resolve(blockId + ".json"), blockstate.toString());
+
+        if (block.item == null || block.item.register) {
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                            .resolve("models/item").resolve(blockId + ".json"),
+                    "{\n  \"parent\": \"" + fallbackModel + "\"\n}\n");
+        }
+    }
+
+    private static int parseVariant(String value) {
+        try {
+            int parsed = Integer.parseInt(value);
+            return parsed >= 0 && parsed <= 15 ? parsed : -1;
+        } catch (NumberFormatException error) {
+            return -1;
+        }
+    }
+
+    private static String fallbackTexture(ModManifest.BlockDefinition block) {
+        if (block.render != null && block.render.texture != null
+                && block.render.texture.fallback != null
+                && !block.render.texture.fallback.isBlank()) {
+            return block.render.texture.fallback;
+        }
+        return "minecraft:block/stone";
+    }
+
+    private static void copyAsPng(Path input, Path output) throws IOException {
+        Files.createDirectories(output.getParent());
+        BufferedImage image;
+        try (var stream = Files.newInputStream(input)) {
+            image = ImageIO.read(stream);
+        }
+        if (image == null) throw new IOException("recurso não é uma imagem");
+        if (!ImageIO.write(image, "png", output.toFile())) {
+            throw new IOException("não foi possível codificar PNG");
+        }
+    }
+
+    private static void write(Path path, String content) throws IOException {
+        Files.createDirectories(path.getParent());
+        Files.writeString(path, content, StandardCharsets.UTF_8);
+    }
+
+    private static void deleteContents(Path root) throws IOException {
+        if (!Files.exists(root)) return;
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                if (!path.equals(root)) Files.deleteIfExists(path);
+            }
+        }
+    }
+}

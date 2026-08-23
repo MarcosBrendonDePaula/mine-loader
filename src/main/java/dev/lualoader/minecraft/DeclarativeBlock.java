@@ -4,11 +4,36 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.IntProperty;
+import net.minecraft.state.property.Property;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Bloco base do loader: estados visuais e alguns getters físicos podem ser alterados pelo Lua. */
 public class DeclarativeBlock extends Block {
     public static final IntProperty LUA_VARIANT = IntProperty.of("lua_variant", 0, 15);
     public static final IntProperty LUA_LUMINANCE = IntProperty.of("lua_luminance", 0, 15);
+
+    /**
+     * Propriedades declaradas no manifesto para o bloco que esta sendo construido.
+     *
+     * <p>O Minecraft chama {@link #appendProperties} de dentro do construtor de {@code Block},
+     * antes de qualquer campo de instancia existir, entao as propriedades precisam ser
+     * publicadas por fora. O registro e sequencial e o valor e limpo logo apos o construtor.
+     */
+    private static final ThreadLocal<DeclarativeStateProperties> PENDING = new ThreadLocal<>();
+
+    /** Publica as propriedades declaradas antes de instanciar o bloco. */
+    public static void beginConstruction(DeclarativeStateProperties declared) {
+        PENDING.set(declared);
+    }
+
+    /** Limpa a publicacao feita por {@link #beginConstruction}. */
+    public static void endConstruction() {
+        PENDING.remove();
+    }
+
+    private final Map<String, Property<?>> declaredProperties = new LinkedHashMap<>();
 
     private volatile float dynamicHardness;
     private volatile float dynamicBlastResistance;
@@ -28,11 +53,44 @@ public class DeclarativeBlock extends Block {
         this.dynamicSlipperiness = slipperiness;
         this.dynamicVelocityMultiplier = velocityMultiplier;
         this.dynamicJumpVelocityMultiplier = jumpVelocityMultiplier;
+
+        DeclarativeStateProperties declared = PENDING.get();
+        if (declared != null) {
+            this.declaredProperties.putAll(declared.properties());
+            setDefaultState(applyDefaults(getDefaultState(), declared));
+        }
+    }
+
+    private BlockState applyDefaults(BlockState state, DeclarativeStateProperties declared) {
+        BlockState result = state;
+        for (Map.Entry<String, String> entry : declared.defaults().entrySet()) {
+            Property<?> property = declaredProperties.get(entry.getKey());
+            if (property == null) continue;
+            result = withParsed(result, property, entry.getValue());
+        }
+        return result;
+    }
+
+    private static <T extends Comparable<T>> BlockState withParsed(BlockState state,
+                                                                   Property<T> property,
+                                                                   String rawValue) {
+        return property.parse(rawValue).map(value -> state.with(property, value)).orElse(state);
+    }
+
+    /** Propriedades declaradas no manifesto, por nome. */
+    public Map<String, Property<?>> declaredProperties() {
+        return Map.copyOf(declaredProperties);
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         builder.add(LUA_VARIANT, LUA_LUMINANCE);
+
+        DeclarativeStateProperties declared = PENDING.get();
+        if (declared == null) return;
+        for (Property<?> property : declared.properties().values()) {
+            builder.add(property);
+        }
     }
 
     @Override
