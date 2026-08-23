@@ -79,5 +79,10 @@ introduza operação que bloqueie — rede, disco síncrono — dentro de um cal
 quase toda lógica é verificável. `src/main/java/dev/lualoader/gametest/` sobe um servidor de verdade
 para o que depende do jogo.
 
-O teste `ScreenTest.catalogExampleRunsEndToEnd` carrega `examples/catalogo` do repositório e percorre
-o fluxo inteiro. Ao mudar a API de UI, ele é o que avisa que os exemplos pararam de funcionar.
+Alguns testes carregam mods de `examples/` em tempo de execução — `catalogExampleRunsEndToEnd` e os
+outros que citam `Path.of("..", "examples", ...)`. Eles percorrem o fluxo inteiro de um mod real, e
+são o que avisa quando uma mudança de API quebra os exemplos.
+
+**Ao editar um `.lua` de `examples/`, rode `./gradlew :core:test --rerun-tasks`.** O Gradle não
+enxerga esses arquivos como entrada da tarefa de teste, então um `./gradlew test` comum reporta
+sucesso sem ter executado nada — o pior resultado possível, porque parece verificação.

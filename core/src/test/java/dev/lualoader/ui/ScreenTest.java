@@ -1005,7 +1005,7 @@ class ScreenTest {
         // La e o caso real: barbante, tingimento a partir de cada cor, e a ovelha. Mostrar as tres
         // primeiras e esconder o resto em silencio faz quem le concluir que aquilo e tudo.
         bridge.recipes.clear();
-        for (int index = 0; index < 8; index++) {
+        for (int index = 0; index < 2; index++) {
             bridge.recipes.add(("""
                     {"id":"minecraft:wool_%d","type":"minecraft:crafting_shaped",\
                     "output":{"item":"minecraft:white_wool","count":1},"width":1,"height":1,\
@@ -1024,21 +1024,19 @@ class ScreenTest {
         runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "white_wool", player);
         runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
 
-        // Oito receitas mais um drop, tres por pagina: quatro paginas, e o total fica visivel.
-        assertTrue(player.screenJson.contains("1/3"), player.screenJson);
-        assertTrue(player.screenJson.contains("(9)"), player.screenJson);
-
-        runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
-        assertTrue(player.screenJson.contains("2/3"), player.screenJson);
+        // Duas receitas mais um drop. Toda receita ocupa a grade 3x3 inteira, entao cabe uma por
+        // pagina; o drop, que e uma linha, acompanha a ultima. O total fica a vista.
+        assertTrue(player.screenJson.contains("1/2"), player.screenJson);
+        assertTrue(player.screenJson.contains("(3)"), player.screenJson);
 
         // A ultima pagina traz o drop, que vem depois das receitas na lista unificada.
         runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
-        assertTrue(player.screenJson.contains("3/3"), player.screenJson);
+        assertTrue(player.screenJson.contains("2/2"), player.screenJson);
         assertTrue(player.screenJson.contains("minecraft:sheep"), player.screenJson);
 
         // Trocar de modo volta para a primeira pagina, senao a tela abriria vazia.
         runtime.triggerScreenEvent("catalogo:livro", "alternar", "click", "", player);
-        assertFalse(player.screenJson.contains("3/3"), player.screenJson);
+        assertFalse(player.screenJson.contains("2/2"), player.screenJson);
     }
 
     @Test

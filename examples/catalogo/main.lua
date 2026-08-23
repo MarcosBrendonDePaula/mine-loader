@@ -181,77 +181,61 @@ end
 -- direita. Uma receita sem forma -- width zero -- vira uma fila unica, porque nao ha posicao.
 local function desenhar_receita(receita, x, y)
     local elementos = {}
-    local colunas = receita.width > 0 and receita.width or #receita.ingredients
 
+    -- A grade e sempre 3x3, como a mesa de trabalho. Desenhar so as posicoes ocupadas encolheria a
+    -- grade e esconderia a forma: um machado e uma picareta usam as mesmas tres tabuas e dois
+    -- gravetos, e o que os distingue e onde as pecas ficam. Com a grade inteira a vista, a forma se
+    -- le de relance.
+    local colunas_da_receita = receita.width > 0 and receita.width or 3
     local celulas = {}
+
     for posicao, alternativas in ipairs(receita.ingredients) do
+        if posicao > 9 then break end
+
+        -- Uma receita 2x2 tem quatro ingredientes em sequencia, mas eles ocupam as posicoes 1, 2,
+        -- 4 e 5 de uma grade de tres colunas. Sem esta conversao, uma receita estreita apareceria
+        -- esticada pela linha.
+        local indice = posicao - 1
+        local linha = math.floor(indice / colunas_da_receita)
+        local coluna = indice % colunas_da_receita
+        local destino = linha * 3 + coluna + 1
+
         -- Uma posicao pode aceitar varios itens, quando a receita usa uma tag. Mostrar o primeiro
         -- e a leitura honesta enquanto nao houver como alternar entre eles na tela.
-        -- Uma tag grande tem dezenas de itens, e a lista inteira estoura o teto de texto do
-        -- protocolo. Mostrar as primeiras e dizer quantas faltam cabe e continua informando.
         local mostrados = {}
-        for indice = 1, math.min(6, #alternativas) do mostrados[indice] = alternativas[indice] end
+        for i = 1, math.min(6, #alternativas) do mostrados[i] = alternativas[i] end
         if #alternativas > 6 then
             mostrados[#mostrados + 1] = "e mais " .. (#alternativas - 6) .. "..."
         end
 
-        celulas[posicao] = { item = alternativas[1] or "minecraft:air",
-                             tooltip = table.concat(mostrados, "\n") }
+        if destino <= 9 then
+            celulas[destino] = { item = alternativas[1] or "minecraft:air",
+                                 tooltip = table.concat(mostrados, "\n") }
+        end
     end
 
-    local linhas = math.ceil(#celulas / math.max(1, colunas))
-    for _, caixa in ipairs(slots(x, y, math.max(1, colunas), linhas)) do
+    -- As posicoes vazias precisam existir na lista: uma grade e uma sequencia, e um buraco no meio
+    -- faria as celulas seguintes andarem para tras.
+    for posicao = 1, 9 do
+        celulas[posicao] = celulas[posicao] or { item = "" }
+    end
+
+    for _, caixa in ipairs(slots(x, y, 3, 3)) do
         elementos[#elementos + 1] = caixa
     end
     elementos[#elementos + 1] = { type = "grid", id = "entrada", x = x, y = y,
-                                  columns = math.max(1, colunas), cell = CELULA, items = celulas }
-    elementos[#elementos + 1] = { type = "label", x = x + math.max(1, colunas) * CELULA + 6,
-                                  y = y + 4, text = "->", color = "#404040", shadow = false }
+                                  columns = 3, cell = CELULA, items = celulas }
+
+    local direita = x + 3 * CELULA
+    elementos[#elementos + 1] = { type = "label", x = direita + 6, y = y + 22, text = "->",
+                                  color = "#404040", shadow = false }
     elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
-                                  x = x + math.max(1, colunas) * CELULA + 22, y = y,
-                                  w = 16, h = 16 }
-    elementos[#elementos + 1] = { type = "item",
-                                  x = x + math.max(1, colunas) * CELULA + 22, y = y,
+                                  x = direita + 22, y = y + 18, w = 16, h = 16 }
+    elementos[#elementos + 1] = { type = "item", x = direita + 22, y = y + 18,
                                   item = receita.output.item, count = receita.output.count }
 
-    -- A altura ocupada volta junto: uma receita 3x3 tem 54 px e uma sem forma tem 18, entao um
-    -- passo fixo empilharia uma sobre a outra. Quem desenha a proxima soma isto ao y.
-    return elementos, math.max(CELULA, linhas * CELULA)
-end
-
--- Um processo desenha como uma receita: entradas a esquerda, resultado a direita. O formato foi
--- escolhido proximo de proposito, para o catalogo nao precisar de dois desenhos paralelos.
-local function desenhar_processo(processo, x, y)
-    local elementos = {}
-    local celulas = {}
-    for posicao, item in ipairs(processo.inputs) do
-        celulas[posicao] = { item = item, tooltip = item }
-    end
-
-    local colunas = math.max(1, #celulas)
-    for _, caixa in ipairs(slots(x, y, colunas, 1)) do
-        elementos[#elementos + 1] = caixa
-    end
-    elementos[#elementos + 1] = { type = "grid", id = "processo", x = x, y = y,
-                                  columns = colunas, cell = CELULA, items = celulas }
-
-    local direita = x + colunas * CELULA
-    elementos[#elementos + 1] = { type = "label", x = direita + 6, y = y + 4, text = "->",
-                                  color = "#404040", shadow = false }
-    elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
-                                  x = direita + 22, y = y, w = 16, h = 16 }
-    elementos[#elementos + 1] = { type = "item", x = direita + 22, y = y,
-                                  item = processo.output.item, count = processo.output.count }
-
-    -- A chance so aparece quando nao e certa: escrever "100%" em tudo seria ruido.
-    local rotulo = processo.title
-    if processo.output.chance < 1 then
-        rotulo = rotulo .. " (" .. math.floor(processo.output.chance * 100) .. "%)"
-    end
-    elementos[#elementos + 1] = { type = "label", x = x, y = y - 10, text = rotulo,
-                                  color = "#404040", shadow = false }
-
-    return elementos, CELULA + 12
+    -- A altura e constante agora: toda receita ocupa a mesma grade.
+    return elementos, 3 * CELULA
 end
 
 -- Um drop desenha como uma linha: o bloco, a seta e o item. Para a maior parte do jogo esta e a
@@ -278,10 +262,8 @@ end
 -- alturas.
 local function altura_da_fonte(fonte)
     if fonte.tipo == "receita" then
-        local receita = fonte.dados
-        local colunas = receita.width > 0 and receita.width or #receita.ingredients
-        local linhas = math.ceil(#receita.ingredients / math.max(1, colunas))
-        return math.max(CELULA, linhas * CELULA) + 8
+        -- Constante: toda receita desenha a grade 3x3 inteira, com os buracos a mostra.
+        return 3 * CELULA + 8
     elseif fonte.tipo == "processo" then
         -- O rotulo do processo fica acima da grade, e por isso ele comeca 10 px mais abaixo.
         return CELULA + 22
