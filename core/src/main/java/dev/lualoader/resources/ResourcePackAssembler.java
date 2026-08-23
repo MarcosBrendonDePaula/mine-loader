@@ -58,9 +58,83 @@ public final class ResourcePackAssembler {
 
         for (ModLoader.LoadedMod mod : mods) {
             assembleLanguage(mod, generatedRoot);
+            assembleRecipes(mod, generatedRoot);
         }
 
         writeTags(tagEntries, generatedRoot);
+    }
+
+    /**
+     * Gera as receitas declaradas, dentro do data pack virtual.
+     *
+     * <p>Sem receitas, todo item novo so chega ao jogador por comando, drop de bloco ou script.
+     */
+    private void assembleRecipes(ModLoader.LoadedMod mod, Path generatedRoot) throws IOException {
+        if (mod.manifest().recipes == null) return;
+        String namespace = mod.manifest().id;
+
+        for (ModManifest.RecipeDefinition recipe : mod.manifest().recipes) {
+            if (recipe == null || recipe.id == null || recipe.result == null) continue;
+
+            String tipo = recipe.type == null ? "shaped" : recipe.type.trim().toLowerCase(java.util.Locale.ROOT);
+            String json = switch (tipo) {
+                case "shapeless" -> shapelessRecipe(recipe);
+                case "shaped" -> shapedRecipe(recipe);
+                default -> null;
+            };
+            if (json == null) {
+                logger.warn("Receita {} do mod {} tem tipo desconhecido: {}", recipe.id, namespace, recipe.type);
+                continue;
+            }
+
+            write(generatedRoot.resolve("data").resolve(namespace).resolve("recipe")
+                    .resolve(recipe.id + ".json"), json);
+            logger.info("Receita {}:{} gerada ({})", namespace, recipe.id, tipo);
+        }
+    }
+
+    private String shapedRecipe(ModManifest.RecipeDefinition recipe) {
+        List<String> linhas = new ArrayList<>();
+        for (String linha : recipe.pattern) linhas.add(quote(linha));
+
+        List<String> chaves = new ArrayList<>();
+        for (Map.Entry<String, String> entry : recipe.key.entrySet()) {
+            chaves.add("    " + quote(entry.getKey()) + ": {" + quote("item") + ": "
+                    + quote(entry.getValue()) + "}");
+        }
+
+        return "{" + NEWLINE
+                + "  " + quote("type") + ": " + quote("minecraft:crafting_shaped") + "," + NEWLINE
+                + groupLine(recipe)
+                + "  " + quote("pattern") + ": [" + String.join(", ", linhas) + "]," + NEWLINE
+                + "  " + quote("key") + ": {" + NEWLINE + String.join("," + NEWLINE, chaves) + NEWLINE
+                + "  }," + NEWLINE
+                + resultLine(recipe) + NEWLINE
+                + "}" + NEWLINE;
+    }
+
+    private String shapelessRecipe(ModManifest.RecipeDefinition recipe) {
+        List<String> itens = new ArrayList<>();
+        for (String ingrediente : recipe.ingredients) {
+            itens.add("{" + quote("item") + ": " + quote(ingrediente) + "}");
+        }
+
+        return "{" + NEWLINE
+                + "  " + quote("type") + ": " + quote("minecraft:crafting_shapeless") + "," + NEWLINE
+                + groupLine(recipe)
+                + "  " + quote("ingredients") + ": [" + String.join(", ", itens) + "]," + NEWLINE
+                + resultLine(recipe) + NEWLINE
+                + "}" + NEWLINE;
+    }
+
+    private String groupLine(ModManifest.RecipeDefinition recipe) {
+        if (recipe.group == null || recipe.group.isBlank()) return "";
+        return "  " + quote("group") + ": " + quote(recipe.group) + "," + NEWLINE;
+    }
+
+    private String resultLine(ModManifest.RecipeDefinition recipe) {
+        return "  " + quote("result") + ": {" + quote("id") + ": " + quote(recipe.result)
+                + ", " + quote("count") + ": " + Math.max(1, recipe.count) + "}";
     }
 
     /**

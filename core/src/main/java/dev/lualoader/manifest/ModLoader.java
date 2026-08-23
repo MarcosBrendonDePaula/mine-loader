@@ -136,6 +136,7 @@ public final class ModLoader {
         validateDependencies(manifest);
         validateItems(manifest);
         validateStructures(manifest);
+        validateRecipes(manifest);
         validateCreativeTab(manifest);
 
         Set<String> blockIds = new HashSet<>();
@@ -163,6 +164,53 @@ public final class ModLoader {
             require(item.maxDamage == 0 || item.maxStackSize == 1,
                     "item com durabilidade precisa de max_stack_size igual a 1: " + item.id);
             require(RARITIES.contains(rarityOf(item.rarity)), "rarity de item desconhecida: " + item.rarity);
+        }
+    }
+
+    private void validateRecipes(ModManifest manifest) {
+        if (manifest.recipes == null) return;
+        Set<String> ids = new HashSet<>();
+
+        for (ModManifest.RecipeDefinition recipe : manifest.recipes) {
+            require(recipe != null && recipe.id != null && MOD_ID.matcher(recipe.id).matches(),
+                    "id de receita invalido");
+            require(ids.add(recipe.id), "receita duplicada no mod: " + recipe.id);
+            require(recipe.result != null && recipe.result.indexOf(':') > 0,
+                    "receita " + recipe.id + " precisa de result no formato mod:item");
+            require(recipe.count >= 1 && recipe.count <= 64,
+                    "count da receita " + recipe.id + " deve estar entre 1 e 64");
+
+            String type = recipe.type == null ? "shaped" : recipe.type.trim().toLowerCase(java.util.Locale.ROOT);
+            require(Set.of("shaped", "shapeless").contains(type),
+                    "tipo de receita desconhecido em " + recipe.id + ": " + recipe.type);
+
+            if ("shaped".equals(type)) {
+                require(recipe.pattern != null && !recipe.pattern.isEmpty() && recipe.pattern.size() <= 3,
+                        "receita " + recipe.id + " precisa de 1 a 3 linhas em pattern");
+                for (String linha : recipe.pattern) {
+                    require(linha != null && !linha.isEmpty() && linha.length() <= 3,
+                            "linha de pattern invalida em " + recipe.id + ": " + linha);
+                    for (char simbolo : linha.toCharArray()) {
+                        // Espaco significa slot vazio e nao precisa estar na chave.
+                        require(simbolo == ' ' || recipe.key.containsKey(String.valueOf(simbolo)),
+                                "simbolo fora da key em " + recipe.id + ": " + simbolo);
+                    }
+                }
+                for (Map.Entry<String, String> entry : recipe.key.entrySet()) {
+                    require(entry.getKey().length() == 1,
+                            "simbolo de key precisa ter um caractere em " + recipe.id + ": " + entry.getKey());
+                    require(entry.getValue() != null && entry.getValue().indexOf(':') > 0,
+                            "ingrediente precisa do formato mod:item em " + recipe.id);
+                }
+            } else {
+                require(recipe.ingredients != null && !recipe.ingredients.isEmpty()
+                                && recipe.ingredients.size() <= 9,
+                        "receita " + recipe.id + " precisa de 1 a 9 ingredientes");
+                for (String ingrediente : recipe.ingredients) {
+                    require(ingrediente != null && ingrediente.indexOf(':') > 0,
+                            "ingrediente precisa do formato mod:item em " + recipe.id);
+                }
+            }
         }
     }
 

@@ -22,6 +22,7 @@ public final class ModManifest {
     public List<ItemEntryDefinition> items = new ArrayList<>();
     public CreativeTabDefinition creativeTab;
     public List<StructureDefinition> structures = new ArrayList<>();
+    public List<RecipeDefinition> recipes = new ArrayList<>();
     /**
      * Mods necessarios para este funcionar, no formato {@code id -> versao minima}.
      *
@@ -228,5 +229,22 @@ public final class ModManifest {
         public String origin = "bottom_center";
         public Map<String, String> palette = new LinkedHashMap<>();
         public List<List<String>> layers = new ArrayList<>();
+    }
+
+    /**
+     * Receita declarada pelo mod, gerada no data pack virtual.
+     *
+     * <p>{@code shaped} usa {@code pattern} e {@code key}; {@code shapeless} usa {@code ingredients}.
+     */
+    public static final class RecipeDefinition {
+        public String id;
+        public String type = "shaped";
+        public List<String> pattern = new ArrayList<>();
+        public Map<String, String> key = new LinkedHashMap<>();
+        public List<String> ingredients = new ArrayList<>();
+        public String result;
+        public int count = 1;
+        /** Grupo do livro de receitas, opcional. */
+        public String group;
     }
 }

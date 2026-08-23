@@ -791,4 +791,85 @@ class PlatformBridgeTest {
         assertEquals(List.of("broadcast:eu rodei"), bridge.calls,
                 "o erro de uma tarefa nao pode impedir a seguinte");
     }
+
+    @Test
+    void modCanRegisterAndRunCommand(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"server.command.register\"", """
+                mod.command("saudacao", function(ctx)
+                    ctx.player.send_message("ola, argumentos: " .. ctx.args)
+                end)
+                """));
+
+        assertTrue(runtime.commandNames().contains("saudacao"));
+        assertTrue(runtime.runCommand("saudacao", player, "mundo"));
+        assertEquals(List.of("ola, argumentos: mundo"), player.received);
+    }
+
+    @Test
+    void unknownCommandIsReported(@TempDir Path root) throws IOException {
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(new RecordingBridge());
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("tick", function(ctx) end)
+                """));
+
+        assertFalse(runtime.runCommand("nao_existe", null, ""),
+                "um comando nao registrado precisa ser reportado, nao ignorado");
+    }
+
+    @Test
+    void registeringCommandNeedsPermission(@TempDir Path root) throws IOException {
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(new RecordingBridge());
+
+        // server.command.register era uma permissao sem uso; agora protege o registro.
+        // Registrar no corpo do script sem permissao derruba a carga do mod, que e o certo:
+        // o manifesto promete algo que o codigo nao pode fazer.
+        var mod = writeMod(root, "\"chat.send\"", """
+                mod.command("proibido", function(ctx) end)
+                """);
+
+        assertThrows(IOException.class, () -> runtime.load(mod),
+                "sem a permissao a carga do mod deve falhar");
+        assertTrue(runtime.commandNames().isEmpty(),
+                "e nenhum comando pode ficar registrado");
+    }
+
+    @Test
+    void twoModsCannotShareACommandName(@TempDir Path root) throws IOException {
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(new RecordingBridge());
+
+        for (String modId : List.of("alpha_mod", "beta_mod")) {
+            Path dir = root.resolve(modId);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("mod.json"), """
+                    {
+                      "schema": 1,
+                      "id": "%s",
+                      "name": "%s",
+                      "version": "0.1.0",
+                      "entrypoint": "main.lua",
+                      "permissions": ["server.command.register"]
+                    }
+                    """.formatted(modId, modId), StandardCharsets.UTF_8);
+            Files.writeString(dir.resolve("main.lua"), """
+                    mod.command("duplicado", function(ctx) end)
+                    """, StandardCharsets.UTF_8);
+        }
+
+        for (ModLoader.LoadedMod mod : new ModLoader(LoggerFactory.getLogger("test")).discover(root)) {
+            try {
+                runtime.load(mod);
+            } catch (IOException expected) {
+                // O segundo mod falha ao registrar um nome ja tomado.
+            }
+        }
+        assertEquals(1, runtime.commandNames().size(), "o nome pertence a quem registrou primeiro");
+    }
 }

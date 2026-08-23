@@ -74,6 +74,14 @@ public final class LuaRuntime {
      * {@code tick}, que e global e caro. O relogio avanca uma vez por tick do servidor.
      */
     private final java.util.List<ScheduledTask> scheduled = new java.util.ArrayList<>();
+
+    /**
+     * Comandos registrados por mod, por nome.
+     *
+     * <p>O adaptador consulta este mapa ao montar a arvore de comandos do jogo, e chama de volta
+     * quando o comando e executado.
+     */
+    private final Map<String, RegisteredCommand> commands = new LinkedHashMap<>();
     private long currentTick;
     private final Path remoteCache;
     private final StateStore stateStore;
@@ -135,6 +143,39 @@ public final class LuaRuntime {
                 logger.error("Erro Java em tarefa agendada do mod {}", task.modId(), error);
             }
         }
+    }
+
+    /** Nomes de comando registrados pelos mods. */
+    public java.util.Set<String> commandNames() {
+        return java.util.Set.copyOf(commands.keySet());
+    }
+
+    /**
+     * Executa um comando registrado por um mod.
+     *
+     * @param arguments texto digitado depois do nome do comando
+     * @return {@code false} quando o comando nao existe
+     */
+    public boolean runCommand(String name, PlayerHandle player, String arguments) {
+        RegisteredCommand command = commands.get(name);
+        if (command == null) return false;
+
+        LoadedScript script = scripts.get(command.modId());
+        if (script == null) return false;
+
+        try {
+            LuaTable context = context(script.mod(), player, null);
+            context.set("args", LuaValue.valueOf(arguments == null ? "" : arguments));
+            command.callback().call(context);
+        } catch (LuaError error) {
+            logger.error("Erro Lua no comando {} do mod {}: {}", name, command.modId(), error.getMessage());
+        } catch (BridgeException error) {
+            logger.error("Erro de plataforma no comando {} do mod {}: {}",
+                    name, command.modId(), error.getMessage());
+        } catch (RuntimeException error) {
+            logger.error("Erro Java no comando {} do mod {}", name, command.modId(), error);
+        }
+        return true;
     }
 
     /** Quantidade de tarefas ainda pendentes, usada em diagnostico e testes. */
@@ -324,6 +365,27 @@ public final class LuaRuntime {
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
         modApi.set("server", serverApiFor(mod));
+
+        modApi.set("command", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.command.register");
+                if (args.narg() < 2) throw new LuaError("command exige nome e uma funcao");
+
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("nome de comando invalido: " + name);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("command exige uma funcao");
+
+                RegisteredCommand existente = commands.get(name);
+                if (existente != null && !existente.modId().equals(mod.manifest().id)) {
+                    throw new LuaError("comando " + name + " ja registrado pelo mod " + existente.modId());
+                }
+                commands.put(name, new RegisteredCommand(mod.manifest().id, (LuaFunction) args.arg(2)));
+                return LuaValue.NIL;
+            }
+        });
 
         modApi.set("after", new VarArgFunction() {
             @Override
@@ -984,6 +1046,10 @@ public final class LuaRuntime {
      * @param exports tabela devolvida pelo entrypoint, que e a API publica do mod para
      *                {@code mod.require}
      */
+    /** Comando registrado por um mod. */
+    private record RegisteredCommand(String modId, LuaFunction callback) {
+    }
+
     /** Tarefa agendada por {@code mod.after}. */
     private record ScheduledTask(String modId, long dueTick, LuaFunction callback) {
     }

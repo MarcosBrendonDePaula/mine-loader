@@ -13,6 +13,8 @@ public final class LuaLoaderCommands {
     }
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+        registerModCommands(dispatcher);
+
         dispatcher.register(CommandManager.literal("lua")
                 .requires(source -> source.hasPermissionLevel(2))
                 .then(CommandManager.literal("list")
@@ -25,6 +27,44 @@ public final class LuaLoaderCommands {
                                 .executes(context -> reloadOne(
                                         context.getSource(),
                                         StringArgumentType.getString(context, "mod_id"))))));
+    }
+
+    /**
+     * Publica os comandos registrados pelos mods sob {@code /mod <nome> [argumentos]}.
+     *
+     * <p>Ficam sob um prefixo proprio para nao colidirem com comandos do jogo nem entre si, e
+     * porque a arvore de comandos e montada uma vez, antes de o servidor aceitar jogadores.
+     */
+    private static void registerModCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null || runtime.commandNames().isEmpty()) return;
+
+        var raiz = CommandManager.literal("mod");
+        for (String nome : runtime.commandNames()) {
+            raiz = raiz.then(CommandManager.literal(nome)
+                    .executes(context -> runModCommand(context.getSource(), nome, ""))
+                    .then(CommandManager.argument("args", StringArgumentType.greedyString())
+                            .executes(context -> runModCommand(context.getSource(), nome,
+                                    StringArgumentType.getString(context, "args")))));
+        }
+        dispatcher.register(raiz);
+        LuaLoaderMod.LOGGER.info("Comandos de mod publicados: {}", runtime.commandNames());
+    }
+
+    private static int runModCommand(ServerCommandSource source, String nome, String argumentos) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) return 0;
+
+        var player = source.getPlayer();
+        boolean existe = runtime.runCommand(nome,
+                player == null ? null : new dev.lualoader.minecraft.FabricPlayerHandle(player),
+                argumentos);
+
+        if (!existe) {
+            source.sendError(Text.literal("Comando de mod desconhecido: " + nome));
+            return 0;
+        }
+        return 1;
     }
 
     private static int list(ServerCommandSource source) {

@@ -11,6 +11,9 @@
   "permissions": [
     "chat.send",
     "player.read",
+    "player.inventory",
+    "player.move",
+    "server.command.register",
     "world.read",
     "world.write"
   ],
@@ -35,5 +38,30 @@
       "$import": "parts/blocks/ruby_block.json"
     }
   ],
-  "enabled": true
+  "enabled": true,
+  "recipes": [
+    {
+      "id": "ruby_block_from_rubies",
+      "type": "shaped",
+      "pattern": [
+        "RRR",
+        "RRR",
+        "RRR"
+      ],
+      "key": {
+        "R": "hello_lua:ruby"
+      },
+      "result": "hello_lua:ruby_block",
+      "count": 1
+    },
+    {
+      "id": "rubies_from_block",
+      "type": "shapeless",
+      "ingredients": [
+        "hello_lua:ruby_block"
+      ],
+      "result": "hello_lua:ruby",
+      "count": 9
+    }
+  ]
 }
