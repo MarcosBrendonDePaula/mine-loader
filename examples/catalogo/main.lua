@@ -472,6 +472,47 @@ local function desenhar_fonte(fonte, x, y)
     return (desenhar_drop(fonte.de, fonte.para, x, y))
 end
 
+-- As categorias presentes na lista, na ordem em que aparecem, com quantas fontes cada uma tem.
+--
+-- Nao ha lista fixa de categorias: elas saem do que o item realmente tem. Um item so fabricavel
+-- nao mostra aba de fornalha, e um mod que declara um processo novo ganha aba sem ninguem
+-- registrar nada.
+local function categorias(lista)
+    local ordem = {}
+    local por_nome = {}
+
+    for _, fonte in ipairs(lista) do
+        local nome = acao_de(fonte)
+        if not por_nome[nome] then
+            por_nome[nome] = 0
+            ordem[#ordem + 1] = nome
+        end
+        por_nome[nome] = por_nome[nome] + 1
+    end
+
+    local resultado = {}
+    for indice, nome in ipairs(ordem) do
+        resultado[indice] = { nome = nome, total = por_nome[nome] }
+    end
+    return resultado
+end
+
+local function somente_da_aba(lista, aba)
+    if not aba then return lista end
+
+    local filtrada = {}
+    for _, fonte in ipairs(lista) do
+        if acao_de(fonte) == aba then filtrada[#filtrada + 1] = fonte end
+    end
+    return filtrada
+end
+
+-- Largura de um botao de aba. A fonte do jogo tem seis pixels por caractere na maioria das letras,
+-- e o resto e folga: uma aba curta demais corta o nome, e o nome e o que a aba serve para dizer.
+local function largura_da_aba(texto)
+    return 14 + #texto * 6
+end
+
 local function livro(ctx)
     local estado = meu(ctx)
     local itens = filtrar(ctx, estado.busca)
@@ -512,11 +553,42 @@ local function livro(ctx)
                                       x = largura + 24, y = 36, w = 80, h = 18,
                                       text = estado.modo == "produz" and "Ver usos" or "Ver receita" }
 
-        local lista = fontes(ctx, estado.item, estado.modo)
+        local todas = fontes(ctx, estado.item, estado.modo)
+        local abas = categorias(todas)
+        local lista = somente_da_aba(todas, estado.aba)
+
         local painel_x = largura + 24
         local disponivel_w = janela_w - painel_x - 8
-        local disponivel_h = rodape - 70
 
+        -- Uma aba so nao e escolha: mostrar "Bancada" sozinha ocuparia uma linha para nao dizer
+        -- nada que o rotulo da propria receita ja diz.
+        local topo_das_fontes = 66
+        if #abas > 1 then
+            local aba_x = 0
+            elementos[#elementos + 1] = { type = "button", id = "aba_0",
+                                          x = painel_x, y = 62,
+                                          w = largura_da_aba("Tudo"), h = 16, text = "Tudo" }
+            aba_x = largura_da_aba("Tudo") + 4
+
+            for indice, aba in ipairs(abas) do
+                local texto = aba.nome .. " " .. aba.total
+                local w = largura_da_aba(texto)
+
+                -- Quebra de linha quando as abas nao cabem, pelo mesmo motivo das receitas.
+                if aba_x + w > disponivel_w then
+                    aba_x = 0
+                    topo_das_fontes = topo_das_fontes + 18
+                end
+
+                elementos[#elementos + 1] = { type = "button", id = "aba_" .. indice,
+                                              x = painel_x + aba_x, y = topo_das_fontes - 4,
+                                              w = w, h = 16, text = texto }
+                aba_x = aba_x + w + 4
+            end
+            topo_das_fontes = topo_das_fontes + 22
+        end
+
+        local disponivel_h = rodape - topo_das_fontes - 4
         local paginas = paginar(lista, disponivel_w, disponivel_h)
         local pagina_atual = math.min(estado.pagina_receita or 1, #paginas)
         local mostrou = false
@@ -524,7 +596,7 @@ local function livro(ctx)
         for _, posicionado in ipairs(paginas[pagina_atual]) do
             for _, elemento in ipairs(desenhar_fonte(posicionado.fonte,
                                                      painel_x + posicionado.x,
-                                                     66 + posicionado.y)) do
+                                                     topo_das_fontes + posicionado.y)) do
                 elementos[#elementos + 1] = elemento
             end
             mostrou = true
@@ -577,6 +649,7 @@ mod.screen("hud", function(ctx)
         estado.modo = "produz"
         estado.pagina_busca = 1
         estado.pagina_receita = 1
+        estado.aba = nil
         ctx.player.open_screen("livro", livro(ctx))
         return
     elseif ctx.ui.element == "proxima" then
@@ -609,16 +682,25 @@ mod.screen("livro", function(ctx)
         estado.item = itens[primeiro + tonumber(ctx.ui.value)]
         estado.modo = "produz"
         estado.pagina_receita = 1
+        estado.aba = nil
     elseif ctx.ui.element == "alternar" then
         estado.modo = estado.modo == "produz" and "usa" or "produz"
+        estado.pagina_receita = 1
+        estado.aba = nil
+    elseif ctx.ui.element:match("^aba_%d+$") then
+        local indice = tonumber(ctx.ui.element:match("%d+"))
+        local abas = categorias(fontes(ctx, estado.item, estado.modo))
+
+        -- Zero e "Tudo": sem filtro. Os demais apontam para a categoria de mesmo indice.
+        estado.aba = indice > 0 and abas[indice] and abas[indice].nome or nil
         estado.pagina_receita = 1
     elseif ctx.ui.element == "receita_proxima" or ctx.ui.element == "receita_anterior" then
         -- O mesmo empacotamento que livro() faz, senao a navegacao andaria para paginas que a
         -- tela nao mostra.
         local janela_w, janela_h = janela_do_livro(ctx)
         local painel_x = colunas * CELULA + 24
-        local paginas = #paginar(fontes(ctx, estado.item, estado.modo),
-                                 janela_w - painel_x - 8, janela_h - 96)
+        local lista = somente_da_aba(fontes(ctx, estado.item, estado.modo), estado.aba)
+        local paginas = #paginar(lista, janela_w - painel_x - 8, janela_h - 96)
         local passo = ctx.ui.element == "receita_proxima" and 1 or -1
 
         estado.pagina_receita =

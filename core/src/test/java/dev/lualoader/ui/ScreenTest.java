@@ -1159,6 +1159,104 @@ class ScreenTest {
     }
 
     @Test
+    void tabsComeFromWhatTheItemActuallyHas(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.items.add("minecraft:iron_ingot");
+        bridge.drops.put("minecraft:iron_ore", List.of("minecraft:iron_ingot"));
+
+        // Tres origens diferentes para o mesmo item: fornalha, bancada e mineracao.
+        bridge.recipes.clear();
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_ore","type":"minecraft:smelting",\
+                "output":{"item":"minecraft:iron_ingot","count":1},"width":0,"height":0,\
+                "ingredients":[["minecraft:raw_iron"]]}\
+                """);
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_block","type":"minecraft:crafting_shapeless",\
+                "output":{"item":"minecraft:iron_ingot","count":9},"width":0,"height":0,\
+                "ingredients":[["minecraft:iron_block"]]}\
+                """);
+
+        TestPlayer player = new TestPlayer();
+        player.screenSize = new int[]{854, 480};
+
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "iron_ingot", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+
+        // As abas saem do que o item tem: nao ha lista fixa de categorias.
+        assertTrue(player.screenJson.contains("Fornalha 1"), player.screenJson);
+        assertTrue(player.screenJson.contains("Derruba 1"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"id\":\"aba_0\""), player.screenJson);
+
+        // Sem filtro, as tres origens estao na tela.
+        assertTrue(player.screenJson.contains("Qualquer combustivel"), player.screenJson);
+        assertTrue(player.screenJson.contains("minecraft:iron_ore"), player.screenJson);
+
+        // A primeira aba e a fornalha, e escolhe-la esconde as outras origens.
+        runtime.triggerScreenEvent("catalogo:livro", "aba_1", "click", "", player);
+        assertTrue(player.screenJson.contains("Qualquer combustivel"), player.screenJson);
+        assertFalse(player.screenJson.contains("minecraft:iron_ore"),
+                "a aba da fornalha nao deveria mostrar o drop: " + player.screenJson);
+
+        // Voltar para "Tudo" traz as tres de volta.
+        runtime.triggerScreenEvent("catalogo:livro", "aba_0", "click", "", player);
+        assertTrue(player.screenJson.contains("minecraft:iron_ore"), player.screenJson);
+    }
+
+    @Test
+    void changingItemForgetsTheChosenTab(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.items.clear();
+        bridge.items.add("minecraft:iron_ingot");
+        bridge.items.add("minecraft:stick");
+        bridge.drops.put("minecraft:iron_ore", List.of("minecraft:iron_ingot"));
+
+        bridge.recipes.clear();
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_ore","type":"minecraft:smelting",\
+                "output":{"item":"minecraft:iron_ingot","count":1},"width":0,"height":0,\
+                "ingredients":[["minecraft:raw_iron"]]}\
+                """);
+
+        TestPlayer player = new TestPlayer();
+        player.screenSize = new int[]{854, 480};
+
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+        runtime.triggerScreenEvent("catalogo:livro", "aba_1", "click", "", player);
+
+        // Trocar de item precisa largar a aba: ela pode nem existir no item novo, e a tela abriria
+        // filtrada por uma categoria vazia.
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "2", player);
+        assertTrue(player.screenJson.contains("minecraft:stick"), player.screenJson);
+        assertTrue(player.screenJson.contains("Nada encontrado."),
+                "sem aba presa, o item sem receita mostra a mensagem: " + player.screenJson);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);
