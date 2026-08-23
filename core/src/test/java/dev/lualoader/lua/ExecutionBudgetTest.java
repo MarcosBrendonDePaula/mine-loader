@@ -109,11 +109,13 @@ class ExecutionBudgetTest {
         LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
         runtime.attach(bridge);
 
-        // Trabalho real, porem curto: nao pode ser interrompido pelo limite.
+        // O trabalho e pequeno de proposito. Uma versao anterior deste teste usava vinte mil
+        // iteracoes e passava aqui, mas era interrompida na maquina do CI, mais lenta: o teste
+        // media a velocidade da maquina em vez do comportamento do limite.
         runtime.load(writeMod(root, """
                 mod.on("block_used", function(ctx)
                     local soma = 0
-                    for i = 1, 20000 do
+                    for i = 1, 500 do
                         soma = soma + i
                     end
                     ctx.server.broadcast("soma " .. soma)
@@ -122,7 +124,7 @@ class ExecutionBudgetTest {
 
         runtime.triggerBlock("block_used", null, new BlockEventData("budget_mod:b", 0, 0, 0, 0, 1));
 
-        assertEquals(List.of("soma 200010000"), bridge.calls,
+        assertEquals(List.of("soma 125250"), bridge.calls,
                 "um script comum precisa terminar sem ser cortado");
     }
 }
