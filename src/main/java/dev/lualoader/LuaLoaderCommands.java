@@ -21,6 +21,8 @@ public final class LuaLoaderCommands {
                         .executes(context -> list(context.getSource())))
                 .then(CommandManager.literal("blocks")
                         .executes(context -> blocks(context.getSource())))
+                .then(CommandManager.literal("commands")
+                        .executes(context -> commands(context.getSource())))
                 .then(CommandManager.literal("reload")
                         .executes(context -> reloadAll(context.getSource()))
                         .then(CommandManager.argument("mod_id", StringArgumentType.word())
@@ -65,6 +67,29 @@ public final class LuaLoaderCommands {
             return 0;
         }
         return 1;
+    }
+
+    /**
+     * Lista os comandos publicados pelos mods.
+     *
+     * <p>Sem isto nao havia como descobrir o que existe: os comandos ficam sob {@code /mod}, e
+     * quem nao leu o codigo do mod nao tem como adivinhar o nome.
+     */
+    private static int commands(ServerCommandSource source) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null || runtime.commandNames().isEmpty()) {
+            source.sendFeedback(() -> Text.literal("Nenhum mod registrou comandos."), false);
+            return 0;
+        }
+
+        var nomes = new java.util.ArrayList<>(runtime.commandNames());
+        java.util.Collections.sort(nomes);
+
+        source.sendFeedback(() -> Text.literal("Comandos de mod (" + nomes.size() + "):"), false);
+        for (String nome : nomes) {
+            source.sendFeedback(() -> Text.literal("  /mod " + nome), false);
+        }
+        return nomes.size();
     }
 
     private static int list(ServerCommandSource source) {

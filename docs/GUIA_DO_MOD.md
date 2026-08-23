@@ -251,7 +251,11 @@ Comandos úteis de diagnóstico:
 |---|---|
 | `/lua list` | Mods carregados |
 | `/lua blocks` | Blocos registrados |
+| `/lua commands` | Comandos publicados pelos mods |
 | `/lua reload` | Recarrega todos os scripts |
+
+Os comandos de mod ficam sob `/mod <nome>`, e não no nível raiz, para não colidirem com o jogo nem
+entre si. Use `/lua commands` para ver quais existem.
 
 ## Erros comuns
 
