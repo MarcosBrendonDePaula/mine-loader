@@ -17,6 +17,7 @@ que trata de quando o código roda; aqui a pergunta é o que o código consegue 
 | Jogador | `name`, `uuid`, `send_message`, `position`, `health`, `teleport` |
 | Inventário | `count_item`, `give_item`, `take_item`, `held_item` |
 | Menu | `open_menu`, `close_menu` |
+| Leitura do servidor | `players`, `time_of_day`, `world_name` |
 | Entidades | `spawn_entity`, `entities_near`, `remove_entity`, `damage_entity` |
 | Agendamento | `mod.after` |
 | Comandos | `mod.command`, publicado em `/mod <nome>` |
@@ -142,8 +143,11 @@ Dimensões próprias e geração de mundo seguem inteiramente fora do alcance.
 | `entity.spawn` | Invocar entidades |
 | `entity.modify` | Remover e machucar entidades |
 | `server.command.register` | Registrar comandos |
+| `entity.read`, `entity.spawn`, `entity.modify` | Entidades |
 
-`server.read` continua sem proteger operação alguma e deve ser removida ou passar a cobrir algo.
+| `server.read` | Ler jogadores conectados, hora do dia e dimensão |
+
+Nenhuma permissão declarável fica sem uso: todas protegem uma operação real.
 
 ## Estudo de caso: recriar o Aether II
 
@@ -243,3 +247,22 @@ parametros, como `dust` e `block`, sao recusados com mensagem clara em vez de fa
 
 Um script comum nao percebe o limite. Um script que passa dele e interrompido com erro no log,
 identificando o mod.
+
+### Continuacao da revisao
+
+Os dois itens deixados em aberto na primeira passagem foram fechados, e a revisao do ciclo de
+recarga encontrou mais um problema.
+
+**`server.read` sem uso.** Era a ultima permissao declarada que nao protegia nada. Passou a cobrir
+tres leituras que faltavam de qualquer forma: jogadores conectados, hora do dia e dimensao corrente.
+Agora toda permissao declaravel protege uma operacao real.
+
+**Estado so gravado ao desligar.** Uma queda do servidor perdia tudo que os mods acumularam desde o
+inicio. Foi acrescentado salvamento automatico a cada cinco minutos, que limita a perda sem gravar a
+cada tick.
+
+**Recarga deixava restos do script antigo.** Uma tarefa agendada por `mod.after` e um comando
+registrado antes da recarga continuavam apontando para funcoes do ambiente descartado. A tarefa
+rodaria com codigo velho, e o comando executaria a versao anterior mesmo depois de o arquivo mudar.
+Agora `/lua reload` descarta as tarefas pendentes e os comandos daquele mod antes de recompilar, e
+informa quantas tarefas foram descartadas.

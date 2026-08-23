@@ -55,6 +55,14 @@ public final class LuaRuntime {
      */
     private static final long CALLBACK_LIMIT_MILLIS = 20;
 
+    /**
+     * Intervalo do salvamento automatico, em ticks.
+     *
+     * <p>Ate aqui o estado so era gravado ao desligar: uma queda do servidor perdia tudo que os
+     * mods acumularam desde o inicio. Cinco minutos limita a perda sem gravar a cada tick.
+     */
+    private static final int AUTOSAVE_TICKS = 6_000;
+
     private static final Set<String> EVENTS = Set.of(
             "loader_ready", "server_started", "server_stopped", "player_joined", "player_left",
             "tick", "mod_reloaded",
@@ -128,6 +136,11 @@ public final class LuaRuntime {
      */
     public void advanceScheduler() {
         currentTick++;
+
+        // O estado passa a ser gravado periodicamente, e nao apenas no desligamento.
+        if (stateStore.isEnabled() && currentTick % AUTOSAVE_TICKS == 0) {
+            saveAllStates();
+        }
         if (scheduled.isEmpty()) return;
 
         java.util.List<ScheduledTask> vencidas = new java.util.ArrayList<>();
@@ -220,9 +233,23 @@ public final class LuaRuntime {
     public boolean reload(String modId) throws IOException {
         LoadedScript previous = scripts.get(modId);
         if (previous == null) return false;
+
+        // O ambiente antigo e descartado, entao o que aponta para ele precisa sair junto: uma
+        // tarefa agendada ou um comando do script anterior chamaria uma funcao orfa.
+        int descartadas = 0;
+        for (var iterator = scheduled.iterator(); iterator.hasNext(); ) {
+            if (iterator.next().modId().equals(modId)) {
+                iterator.remove();
+                descartadas++;
+            }
+        }
+        commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+
         LoadedScript replacement = compile(previous.mod());
         scripts.put(modId, replacement);
-        logger.info("Script Lua recarregado: {}", modId);
+
+        logger.info("Script Lua recarregado: {}{}", modId,
+                descartadas == 0 ? "" : " (" + descartadas + " tarefa(s) pendente(s) descartada(s))");
         return true;
     }
 
@@ -751,6 +778,30 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "chat.send");
                 bridge.broadcast(value.tojstring());
                 return LuaValue.NIL;
+            }
+        });
+        serverApi.set("players", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "server.read");
+                LuaTable lista = new LuaTable();
+                int indice = 1;
+                for (String nome : bridge.onlinePlayers()) lista.set(indice++, LuaValue.valueOf(nome));
+                return lista;
+            }
+        });
+        serverApi.set("time_of_day", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "server.read");
+                return LuaValue.valueOf(bridge.timeOfDay());
+            }
+        });
+        serverApi.set("world_name", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "server.read");
+                return LuaValue.valueOf(bridge.worldName());
             }
         });
         serverApi.set("spawn_entity", new VarArgFunction() {

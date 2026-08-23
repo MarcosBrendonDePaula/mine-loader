@@ -30,6 +30,21 @@ public abstract class TestBridge implements GameBridge {
     }
 
     @Override
+    public java.util.List<String> onlinePlayers() {
+        return java.util.List.of();
+    }
+
+    @Override
+    public long timeOfDay() {
+        return 0L;
+    }
+
+    @Override
+    public String worldName() {
+        return "minecraft:overworld";
+    }
+
+    @Override
     public String getBlock(int x, int y, int z) {
         return "minecraft:air";
     }

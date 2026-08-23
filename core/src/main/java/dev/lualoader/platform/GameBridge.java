@@ -24,6 +24,19 @@ public interface GameBridge {
     /** Indica se há um mundo ativo capaz de receber operações de escrita. */
     boolean isWorldAvailable();
 
+    /** Nomes dos jogadores conectados. */
+    java.util.List<String> onlinePlayers();
+
+    /**
+     * Hora do dia no mundo corrente, em ticks de 0 a 23999.
+     *
+     * <p>Zero é o amanhecer e 13000 é o anoitecer, a mesma escala usada pelo comando {@code /time}.
+     */
+    long timeOfDay();
+
+    /** Identificador da dimensão em que as operações estão agindo. */
+    String worldName();
+
     /**
      * Lê o identificador do bloco na posição indicada.
      *
@@ -130,6 +143,21 @@ public interface GameBridge {
         @Override
         public boolean isWorldAvailable() {
             return false;
+        }
+
+        @Override
+        public java.util.List<String> onlinePlayers() {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public long timeOfDay() {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public String worldName() {
+            throw new BridgeException("nenhuma plataforma conectada");
         }
 
         @Override

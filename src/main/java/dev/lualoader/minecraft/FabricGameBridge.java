@@ -72,6 +72,25 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public java.util.List<String> onlinePlayers() {
+        java.util.List<String> nomes = new java.util.ArrayList<>();
+        for (var player : requireServer().getPlayerManager().getPlayerList()) {
+            nomes.add(player.getName().getString());
+        }
+        return nomes;
+    }
+
+    @Override
+    public long timeOfDay() {
+        return requireWorld().getTimeOfDay() % 24000L;
+    }
+
+    @Override
+    public String worldName() {
+        return requireWorld().getRegistryKey().getValue().toString();
+    }
+
+    @Override
     public void broadcast(String message) {
         requireServer().getPlayerManager().broadcast(Text.literal(message), false);
     }
