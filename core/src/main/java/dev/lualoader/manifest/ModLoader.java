@@ -32,9 +32,20 @@ public final class ModLoader {
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
             .create();
     private final Logger logger;
+    private final Path importCache;
 
+    /** Loader apenas local: imports remotos serao recusados. Usado em validacao offline e testes. */
     public ModLoader(Logger logger) {
+        this(logger, null);
+    }
+
+    /**
+     * @param importCache diretorio onde guardar pedacos de manifesto baixados;
+     *                    {@code null} desabilita import remoto
+     */
+    public ModLoader(Logger logger, Path importCache) {
         this.logger = logger;
+        this.importCache = importCache;
     }
 
     public List<LoadedMod> discover(Path root) throws IOException {
@@ -69,14 +80,16 @@ public final class ModLoader {
             }
         }
 
-        return List.copyOf(result);
+        // A ordem alfabetica de diretorio nao serve quando ha bibliotecas: quem e usado por
+        // outro precisa carregar antes.
+        return new ModDependencies(logger).resolve(result);
     }
 
     private ModManifest readManifest(Path path, Path modRoot) throws IOException {
         try {
             // Os imports sao resolvidos antes da conversao, entao o resto do loader nao
             // precisa saber que o manifesto pode estar dividido em varios arquivos.
-            var resolved = new ManifestImports(modRoot).readResolved(path);
+            var resolved = new ManifestImports(modRoot, importCache).readResolved(path);
             ModManifest manifest = gson.fromJson(resolved, ModManifest.class);
             if (manifest == null) throw new JsonParseException("manifesto vazio");
             return manifest;
@@ -90,14 +103,19 @@ public final class ModLoader {
         require(manifest.id != null && MOD_ID.matcher(manifest.id).matches(), "id inválido");
         require(manifest.name != null && !manifest.name.isBlank(), "name é obrigatório");
         require(manifest.version != null && !manifest.version.isBlank(), "version é obrigatória");
-        require(manifest.entrypoint != null && LUA_FILE.matcher(manifest.entrypoint).matches(), "entrypoint Lua inválido");
+        // O entrypoint deixou de ser obrigatorio: um mod pode declarar apenas scripts por bloco.
+        if (manifest.entrypoint != null && !manifest.entrypoint.isBlank()) {
+            require(LUA_FILE.matcher(manifest.entrypoint).matches(), "entrypoint Lua inválido");
+        }
         require(directory.getFileName().toString().equals(manifest.id), "o nome da pasta deve ser igual ao id");
         require(!ids.contains(manifest.id), "id duplicado: " + manifest.id);
 
         Path root = directory.toAbsolutePath().normalize();
-        Path entrypoint = directory.resolve(manifest.entrypoint).toAbsolutePath().normalize();
-        require(entrypoint.startsWith(root), "entrypoint sai da pasta do mod");
-        require(Files.isRegularFile(entrypoint), "entrypoint não encontrado: " + manifest.entrypoint);
+        if (manifest.entrypoint != null && !manifest.entrypoint.isBlank()) {
+            Path entrypoint = directory.resolve(manifest.entrypoint).toAbsolutePath().normalize();
+            require(entrypoint.startsWith(root), "entrypoint sai da pasta do mod");
+            require(Files.isRegularFile(entrypoint), "entrypoint não encontrado: " + manifest.entrypoint);
+        }
 
         if (manifest.permissions != null) {
             Set<String> knownPermissions = Set.of("chat.send", "player.read", "server.read", "server.command.register", "world.read", "world.write");
@@ -111,6 +129,7 @@ public final class ModLoader {
             }
         }
 
+        validateDependencies(manifest);
         validateItems(manifest);
         validateStructures(manifest);
         validateCreativeTab(manifest);
@@ -122,6 +141,7 @@ public final class ModLoader {
                 require(block.name != null && !block.name.isBlank(), "name de bloco é obrigatório");
                 require(blockIds.add(block.id), "bloco duplicado no mod: " + block.id);
                 validateBlock(block);
+                validateBehaviorScripts(block, directory);
             }
         }
     }
@@ -138,6 +158,15 @@ public final class ModLoader {
             require(item.maxDamage == 0 || item.maxStackSize == 1,
                     "item com durabilidade precisa de max_stack_size igual a 1: " + item.id);
             require(RARITIES.contains(rarityOf(item.rarity)), "rarity de item desconhecida: " + item.rarity);
+        }
+    }
+
+    private void validateDependencies(ModManifest manifest) {
+        if (manifest.dependencies == null) return;
+        for (Map.Entry<String, String> entry : manifest.dependencies.entrySet()) {
+            require(entry.getKey() != null && MOD_ID.matcher(entry.getKey()).matches(),
+                    "id de dependencia invalido: " + entry.getKey());
+            require(!entry.getKey().equals(manifest.id), "um mod nao pode depender de si mesmo");
         }
     }
 
@@ -196,6 +225,47 @@ public final class ModLoader {
 
     private static String rarityOf(String value) {
         return value == null || value.isBlank() ? "common" : value.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * Valida os scripts declarados em {@code behavior}.
+     *
+     * <p>Um valor terminado em {@code .lua} aponta para um arquivo; qualquer outro texto e o nome
+     * de uma funcao devolvida pelo entrypoint. O arquivo e checado aqui para que um caminho errado
+     * apareca na carga, e nao no primeiro clique do jogador.
+     */
+    private void validateBehaviorScripts(ModManifest.BlockDefinition block, Path directory) {
+        if (block.behavior == null) return;
+        Path root = directory.toAbsolutePath().normalize();
+
+        for (Map.Entry<String, String> entry : behaviorHandlers(block.behavior).entrySet()) {
+            String handler = entry.getValue();
+            if (handler == null || handler.isBlank()) continue;
+            if (!handler.toLowerCase(java.util.Locale.ROOT).endsWith(".lua")) continue;
+
+            require(LUA_FILE.matcher(handler).matches(),
+                    "caminho de script invalido em behavior." + entry.getKey() + ": " + handler);
+            Path script = directory.resolve(handler).toAbsolutePath().normalize();
+            require(script.startsWith(root),
+                    "script de behavior." + entry.getKey() + " sai da pasta do mod: " + handler);
+            require(Files.isRegularFile(script),
+                    "script de behavior." + entry.getKey() + " nao encontrado: " + handler);
+        }
+    }
+
+    /** Handlers declarados, por nome de evento. */
+    public static java.util.Map<String, String> behaviorHandlers(ModManifest.BehaviorDefinition behavior) {
+        java.util.Map<String, String> handlers = new java.util.LinkedHashMap<>();
+        if (behavior == null) return handlers;
+        if (behavior.onUse != null) handlers.put("on_use", behavior.onUse);
+        if (behavior.onAttack != null) handlers.put("on_attack", behavior.onAttack);
+        if (behavior.onBreak != null) handlers.put("on_break", behavior.onBreak);
+        if (behavior.onPlaced != null) handlers.put("on_placed", behavior.onPlaced);
+        if (behavior.onBroken != null) handlers.put("on_broken", behavior.onBroken);
+        if (behavior.onRandomTick != null) handlers.put("on_random_tick", behavior.onRandomTick);
+        if (behavior.onNeighborUpdate != null) handlers.put("on_neighbor_update", behavior.onNeighborUpdate);
+        if (behavior.onPlace != null) handlers.put("on_place", behavior.onPlace);
+        return handlers;
     }
 
     private void validateBlock(ModManifest.BlockDefinition block) {

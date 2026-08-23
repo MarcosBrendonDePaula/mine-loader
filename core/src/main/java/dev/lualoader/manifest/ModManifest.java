@@ -22,6 +22,13 @@ public final class ModManifest {
     public List<ItemEntryDefinition> items = new ArrayList<>();
     public CreativeTabDefinition creativeTab;
     public List<StructureDefinition> structures = new ArrayList<>();
+    /**
+     * Mods necessarios para este funcionar, no formato {@code id -> versao minima}.
+     *
+     * <p>Uma dependencia declarada garante duas coisas: o mod so carrega se ela existir, e ela
+     * carrega antes dele, para que {@code mod.require} ja encontre a API pronta.
+     */
+    public Map<String, String> dependencies = new LinkedHashMap<>();
     public boolean enabled = true;
 
     public static final class BlockDefinition {
@@ -39,6 +46,8 @@ public final class ModManifest {
         public List<String> tags = new ArrayList<>();
         public ItemDefinition item = new ItemDefinition();
         public BehaviorDefinition behavior = new BehaviorDefinition();
+        /** Fixa a versao dos scripts remotos declarados em {@code behavior}. Opcional. */
+        public String behaviorSha256;
     }
 
     public static final class MaterialDefinition {
@@ -141,12 +150,25 @@ public final class ModManifest {
         public boolean fireResistant = false;
     }
 
+    /** Logica associada a um bloco. Cada campo aponta um arquivo .lua, uma URL ou uma funcao. */
     public static final class BehaviorDefinition {
-        public String onPlace;
-        public String onBreak;
         public String onUse;
+        /** Jogador bateu no bloco, sem necessariamente quebra-lo. */
+        public String onAttack;
+        /** Nome antigo de {@link #onAttack}; mantido para nao quebrar mods ja escritos. */
+        public String onBreak;
+        public String onPlaced;
+        public String onBroken;
         public String onRandomTick;
         public String onNeighborUpdate;
+        /** Campo antigo, nunca implementado; use {@link #onPlaced}. */
+        public String onPlace;
+    }
+
+    /** Logica associada a um item. */
+    public static final class ItemBehaviorAdvanced {
+        public String onUse;
+        public String onUseOnBlock;
     }
 
     /** Item declarado pelo manifesto que nao pertence a um bloco. */

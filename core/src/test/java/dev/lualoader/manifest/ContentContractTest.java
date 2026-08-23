@@ -189,7 +189,7 @@ class ContentContractTest {
                       "id": "gem_block",
                       "name": "Gem Block",
                       "placement": {"waterloggable": true},
-                      "behavior": {"on_random_tick": "on_tick"},
+                      "behavior": {"on_place": "antigo", "on_random_tick": "on_tick"},
                       "render": {"emissive": true}
                     }
                   ]
@@ -203,7 +203,11 @@ class ContentContractTest {
                 .collectIgnored(mods.get(0).manifest());
 
         assertTrue(ignored.stream().anyMatch(f -> f.contains("placement.waterloggable")));
-        assertTrue(ignored.stream().anyMatch(f -> f.contains("behavior.on_random_tick")));
+        // on_place e o campo antigo, substituido por on_placed: continua avisado.
+        assertTrue(ignored.stream().anyMatch(f -> f.contains("behavior.on_place")));
+        // on_use e on_random_tick passaram a ser aplicados, entao saem da lista de ignorados.
+        assertFalse(ignored.stream().anyMatch(f -> f.contains("behavior.on_use")));
+        assertFalse(ignored.stream().anyMatch(f -> f.contains("behavior.on_random_tick")));
         assertTrue(ignored.stream().anyMatch(f -> f.contains("render.emissive")));
     }
 

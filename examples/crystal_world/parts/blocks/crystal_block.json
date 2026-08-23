@@ -47,5 +47,8 @@
   "item": {
     "register": true,
     "rarity": "uncommon"
+  },
+  "behavior": {
+    "on_use": "scripts/crystal_block/on_use.lua"
   }
 }

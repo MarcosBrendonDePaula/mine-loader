@@ -37,27 +37,31 @@ public final class BlockInteractionEvents {
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
             // Clicar segurando um bloco significa posicionar, nao usar o bloco alvo.
             if (player.getStackInHand(hand).getItem() instanceof BlockItem) return ActionResult.PASS;
-            dispatch("block_used", world, hit.getBlockPos(), player);
-            return ActionResult.PASS;
+            // Um script que devolve false impede a acao padrao do jogo para este clique.
+            return dispatch("block_used", world, hit.getBlockPos(), player)
+                    ? ActionResult.FAIL
+                    : ActionResult.PASS;
         });
 
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
-            dispatch("block_attacked", world, pos, player);
-            return ActionResult.PASS;
+            return dispatch("block_attacked", world, pos, player)
+                    ? ActionResult.FAIL
+                    : ActionResult.PASS;
         });
     }
 
-    private void dispatch(String event, World world, BlockPos pos, net.minecraft.entity.player.PlayerEntity player) {
+    /** @return {@code true} se um script pediu para cancelar a acao padrao */
+    private boolean dispatch(String event, World world, BlockPos pos, net.minecraft.entity.player.PlayerEntity player) {
         // Interações também chegam no cliente; o loader só reage no lado servidor.
-        if (world.isClient()) return;
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) return;
+        if (world.isClient()) return false;
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) return false;
 
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DeclarativeBlock declarativeBlock)) return;
+        if (!(state.getBlock() instanceof DeclarativeBlock declarativeBlock)) return false;
 
         Identifier id = Registries.BLOCK.getId(declarativeBlock);
-        if (id == null) return;
+        if (id == null) return false;
 
         BlockEventData data = new BlockEventData(
                 id.toString(),
@@ -67,6 +71,6 @@ public final class BlockInteractionEvents {
                 state.get(DeclarativeBlock.LUA_VARIANT),
                 registrar.variantCount(id)
         );
-        runtime.triggerBlock(event, new FabricPlayerHandle(serverPlayer), data);
+        return runtime.triggerBlock(event, new FabricPlayerHandle(serverPlayer), data);
     }
 }

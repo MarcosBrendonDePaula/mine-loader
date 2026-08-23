@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -366,5 +367,113 @@ class PlatformBridgeTest {
         runtime.triggerAll("server_started", null);
 
         assertTrue(bridge.calls.isEmpty(), "coordenada fora do mundo deve ser barrada");
+    }
+
+    @Test
+    void scriptCanCancelTheDefaultAction(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("block_used", function(ctx)
+                    return false
+                end)
+                """));
+
+        boolean cancelled = runtime.triggerBlock("block_used", null,
+                new BlockEventData("test_mod:bloco", 0, 0, 0, 0, 1));
+
+        assertTrue(cancelled, "devolver false deve cancelar a acao padrao");
+    }
+
+    @Test
+    void observingScriptDoesNotCancel(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // Um script que so observa nao devolve nada; o jogo precisa seguir normalmente.
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("block_used", function(ctx)
+                    ctx.server.broadcast("vi o clique")
+                end)
+                """));
+
+        boolean cancelled = runtime.triggerBlock("block_used", null,
+                new BlockEventData("test_mod:bloco", 0, 0, 0, 0, 1));
+
+        assertFalse(cancelled, "nao devolver nada nao pode cancelar");
+        assertEquals(List.of("broadcast:vi o clique"), bridge.calls);
+    }
+
+    @Test
+    void stateIsSharedBetweenCallbacksAndSurvivesReload(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        var mod = writeMod(root, "\"chat.send\"", """
+                mod.state.cliques = mod.state.cliques or 0
+
+                mod.on("block_used", function(ctx)
+                    ctx.state.cliques = ctx.state.cliques + 1
+                    ctx.server.broadcast("cliques: " .. ctx.state.cliques)
+                end)
+                """);
+        runtime.load(mod);
+
+        var evento = new BlockEventData("test_mod:bloco", 0, 0, 0, 0, 1);
+        runtime.triggerBlock("block_used", null, evento);
+        runtime.triggerBlock("block_used", null, evento);
+
+        // Recarregar o script nao pode apagar o que o mod acumulou.
+        runtime.reload("test_mod");
+        runtime.triggerBlock("block_used", null, evento);
+
+        assertEquals(List.of(
+                "broadcast:cliques: 1",
+                "broadcast:cliques: 2",
+                "broadcast:cliques: 3"
+        ), bridge.calls);
+    }
+
+    @Test
+    void stateIsNotSharedBetweenMods(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        for (String modId : List.of("alpha_mod", "beta_mod")) {
+            Path dir = root.resolve(modId);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("mod.json"), """
+                    {
+                      "schema": 1,
+                      "id": "%s",
+                      "name": "%s",
+                      "version": "0.1.0",
+                      "entrypoint": "main.lua",
+                      "permissions": ["chat.send"]
+                    }
+                    """.formatted(modId, modId), StandardCharsets.UTF_8);
+            Files.writeString(dir.resolve("main.lua"), """
+                    mod.state.marca = "%s"
+
+                    mod.on("server_started", function(ctx)
+                        ctx.server.broadcast("%s vê " .. tostring(ctx.state.marca))
+                    end)
+                    """.formatted(modId, modId), StandardCharsets.UTF_8);
+        }
+
+        for (ModLoader.LoadedMod mod : new ModLoader(LoggerFactory.getLogger("test")).discover(root)) {
+            runtime.load(mod);
+        }
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of(
+                "broadcast:alpha_mod vê alpha_mod",
+                "broadcast:beta_mod vê beta_mod"
+        ), bridge.calls, "cada mod so pode enxergar o proprio estado");
     }
 }

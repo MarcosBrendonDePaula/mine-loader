@@ -3,21 +3,16 @@
   "id": "crystal_world",
   "name": "Crystal World",
   "version": "0.1.0",
-  "description": "Exemplo de mod dividido em arquivos, com estrutura declarada em JSON.",
+  "description": "Mod sem main.lua: o manifesto e o indice e cada bloco aponta seu proprio script.",
   "authors": [
     "Minecraft Lua Loader"
   ],
-  "entrypoint": "main.lua",
   "permissions": [
     "chat.send",
     "player.read",
     "world.read",
     "world.write"
   ],
-  "events": {
-    "loader_ready": "on_loader_ready",
-    "block_used": "on_block_used"
-  },
   "creative_tab": {
     "register": true,
     "id": "main",

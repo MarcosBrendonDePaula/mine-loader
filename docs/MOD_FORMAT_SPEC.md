@@ -366,3 +366,138 @@ Regras do import:
 | Arquivo ausente e erro, nao silencio | Um pedaco faltando mudaria o mod sem aviso. |
 
 Uma falha de import invalida apenas o mod afetado; os demais continuam carregando normalmente.
+
+### Import por URL
+
+Um pedaco do manifesto tambem pode vir da rede, para compartilhar conteudo entre mods ou distribuir partes separadamente:
+
+```json
+{
+  "blocks": [
+    {
+      "$import": "https://exemplo.com/pacotes/blocos-comuns.json",
+      "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+  ]
+}
+```
+
+O campo `sha256` e **obrigatorio** em import remoto, e nao por formalidade. O manifesto define blocos, itens e as permissoes do mod. Sem fixar o conteudo, um servidor comprometido, ou apenas um arquivo editado depois, mudaria o comportamento do mod sem que ninguem percebesse. Com o hash, o autor declara exatamente qual conteudo aceita, e qualquer divergencia impede a carga.
+
+| Regra do import remoto | Motivo |
+|---|---|
+| Somente `https` | Conteudo em texto puro pode ser trocado no caminho. |
+| Redirecionamento precisa terminar em `https` | Um redirect anularia a regra anterior. |
+| `sha256` obrigatorio e conferido antes do uso | O conteudo remoto e mutavel; o hash o torna fixo. |
+| Maximo de 256 KB | Um pedaco de manifesto nao precisa ser maior que isso. |
+| Timeout de 15 segundos | A carga do mod nao pode ficar presa em um servidor lento. |
+| Desabilitado quando nao ha cache configurado | Validacao offline e testes nao devem acessar a rede. |
+
+O conteudo baixado e guardado em cache indexado pelo proprio hash, entao o mesmo pedaco nao volta a rede em cargas seguintes. Como o nome do arquivo em cache e o hash verificado, o loader confia no cache local sem baixar de novo.
+
+`sha256` e o unico campo aceito ao lado de `$import`. Qualquer outro e recusado, para nao haver duvida sobre o que vence entre o objeto local e o importado.
+
+## Logica por bloco
+
+O manifesto e o indice: cada bloco aponta onde mora a logica que responde a cada evento.
+
+```json
+{
+  "blocks": [
+    {
+      "id": "ruby_block",
+      "name": "Bloco de Rubi",
+      "behavior": {
+        "on_use": "scripts/ruby_block/on_use.lua",
+        "on_broken": "scripts/ruby_block/on_broken.lua"
+      }
+    }
+  ]
+}
+```
+
+O valor de cada campo pode ser de tres formas:
+
+| Forma | Exemplo | Significado |
+|---|---|---|
+| Arquivo | `scripts/x.lua` | Arquivo dentro da pasta do mod, que devolve uma funcao. |
+| URL | `https://exemplo.com/x.lua` | Script remoto, sujeito as mesmas regras do import por URL. |
+| Funcao | `on_ruby_used` | Nome de uma funcao devolvida pelo entrypoint. |
+
+Um script de comportamento devolve a funcao que sera chamada:
+
+```lua
+-- Chamado apenas para este bloco: nao e preciso checar qual bloco recebeu o evento.
+return function(ctx)
+    ctx.log.info("clicaram em " .. ctx.block.id)
+end
+```
+
+O `entrypoint` e opcional. Um mod pode ter apenas manifesto e scripts por bloco, sem `main.lua`.
+
+A lista de eventos disponiveis, o cancelamento e o estado compartilhado estao no [catalogo de eventos](EVENTS.md).
+
+## Mods como biblioteca
+
+Um mod pode usar outro como biblioteca. Nao existe tipo especial: uma biblioteca e um mod que
+exporta funcoes e normalmente nao declara conteudo proprio.
+
+```json
+{
+  "id": "app_mod",
+  "dependencies": { "ui_lib": "1.0.0" }
+}
+```
+
+```lua
+-- ui_lib/main.lua: o que o entrypoint devolve e a API publica do mod.
+local function titulo(texto)
+    return "[ " .. texto .. " ]"
+end
+return { titulo = titulo }
+```
+
+```lua
+-- app_mod/main.lua
+local ui = mod.require("ui_lib")
+```
+
+`mod.require` so alcanca mods declarados em `dependencies`. Isso mantem visivel no manifesto de quem
+depende de quem, em vez de a dependencia aparecer escondida no meio do codigo.
+
+### Ordem de carga
+
+Uma dependencia declarada carrega antes de quem a consome. A ordem deixou de ser alfabetica por
+diretorio justamente porque, com bibliotecas, carregar na ordem errada faria `mod.require` encontrar
+nada, com uma falha dificil de diagnosticar.
+
+| Situacao | Resultado |
+|---|---|
+| Dependencia ausente | O mod dependente nao carrega; os demais continuam. |
+| Versao menor que a exigida | O mod dependente nao carrega. |
+| Dependencia circular | Nenhum dos mods do ciclo carrega. |
+
+A versao e comparada no formato `maior.menor.correcao`, e o valor declarado e a versao minima
+aceita.
+
+### Permissoes entre mods
+
+Uma biblioteca roda com as **proprias** permissoes, nao com as de quem a chamou. Para isso ela usa
+`mod.server`, criado com o manifesto dela:
+
+```lua
+-- Dentro da lib: funciona mesmo que o mod que chamou nao tenha chat.send.
+local function anunciar(texto)
+    mod.server.broadcast(texto)
+end
+```
+
+| API | Permissoes verificadas |
+|---|---|
+| `mod.server` | Do mod onde o script esta escrito |
+| `ctx.server` | Do mod que recebeu o evento |
+
+A consequencia precisa ser conhecida por quem administra um servidor: instalar uma biblioteca da a
+todos os mods que a declararem acesso indireto ao que ela faz. Por isso `mod.require` exige a
+declaracao em `dependencies`, de modo que esse alcance fique registrado no manifesto e possa ser
+auditado antes da instalacao.

@@ -40,10 +40,10 @@ public final class LuaLoaderMod implements ModInitializer {
         Path modsDirectory = gameDirectory.resolve("mods-lua");
         Path generatedPack = gameDirectory.resolve("lua-loader/generated-pack");
         Path resourceCache = gameDirectory.resolve("lua-loader/cache");
-        ModLoader manifestLoader = new ModLoader(LOGGER);
+        ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"));
         blockRegistrar = new BlockRegistrar(LOGGER);
         contentRegistrar = new ContentRegistrar(LOGGER);
-        luaRuntime = new LuaRuntime(LOGGER);
+        luaRuntime = new LuaRuntime(LOGGER, resourceCache.resolve("scripts"));
         gameBridge = new FabricGameBridge(blockRegistrar);
         luaRuntime.attach(gameBridge);
 
@@ -91,6 +91,8 @@ public final class LuaLoaderMod implements ModInitializer {
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player)));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                luaRuntime.triggerAll("player_left", new FabricPlayerHandle(handler.player)));
         ServerTickEvents.END_SERVER_TICK.register(server -> luaRuntime.triggerAll("tick", null));
     }
 

@@ -1,0 +1,105 @@
+{
+  "id": "ruby_block",
+  "name": "Bloco de Rubi",
+  "type": "generic",
+  "material": {
+    "map_color": "red",
+    "sound": "stone",
+    "instrument": "harp",
+    "piston_behavior": "normal",
+    "burnable": false,
+    "replaceable": false,
+    "solid": true,
+    "opaque": true
+  },
+  "settings": {
+    "hardness": 5.0,
+    "resistance": 6.0,
+    "requires_tool": true,
+    "collidable": true,
+    "random_ticks": false,
+    "luminance": 0,
+    "slipperiness": 0.6,
+    "velocity_multiplier": 1.0,
+    "jump_velocity_multiplier": 1.0,
+    "block_break_particles": true,
+    "dynamic_bounds": false,
+    "solid": true,
+    "non_opaque": false,
+    "break_instantly": false,
+    "offset": "none",
+    "drops_nothing": false
+  },
+  "state": {
+    "properties": [
+      {
+        "name": "polished",
+        "type": "bool",
+        "values": [
+          "false",
+          "true"
+        ]
+      }
+    ],
+    "default": {
+      "polished": "false"
+    }
+  },
+  "shape": {
+    "collision": "full_cube",
+    "outline": "full_cube",
+    "visual": "full_cube",
+    "dynamic": false
+  },
+  "placement": {
+    "can_replace": false,
+    "can_place_at": true,
+    "facing": "none",
+    "waterloggable": false,
+    "rotate_with_player": false
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/hello_lua/textures/block/ruby_block.png",
+      "fallback": "minecraft:block/stone"
+    },
+    "variant_textures": {
+      "0": {
+        "source": "local",
+        "path": "assets/hello_lua/textures/block/ruby_block.png",
+        "fallback": "minecraft:block/stone"
+      },
+      "1": {
+        "source": "local",
+        "path": "assets/hello_lua/textures/block/ruby_block_alt.png",
+        "fallback": "minecraft:block/stone"
+      }
+    },
+    "render_layer": "solid",
+    "translucent": false,
+    "cutout": false,
+    "emissive": false
+  },
+  "loot": {
+    "mode": "item",
+    "item": "hello_lua:ruby",
+    "count": 2
+  },
+  "tags": [
+    "minecraft:mineable/pickaxe",
+    "minecraft:needs_iron_tool"
+  ],
+  "item": {
+    "register": true,
+    "max_stack_size": 64,
+    "max_damage": 0,
+    "rarity": "common",
+    "fire_resistant": false
+  },
+  "behavior": {
+    "on_use": "scripts/ruby_block/on_use.lua",
+    "on_break": "scripts/ruby_block/on_break.lua"
+  }
+}

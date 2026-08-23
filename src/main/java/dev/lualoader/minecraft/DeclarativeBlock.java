@@ -1,7 +1,17 @@
 package dev.lualoader.minecraft;
 
+import dev.lualoader.LuaLoaderMod;
+import dev.lualoader.platform.BlockEventData;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.random.Random;
+import net.minecraft.world.World;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.IntProperty;
 import net.minecraft.state.property.Property;
@@ -116,6 +126,54 @@ public class DeclarativeBlock extends Block {
     @Override
     public float getJumpVelocityMultiplier() {
         return dynamicJumpVelocityMultiplier;
+    }
+
+    @Override
+    public void onPlaced(World world, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
+        super.onPlaced(world, pos, state, placer, stack);
+        notifyLoader("block_placed", world, pos, state,
+                placer instanceof ServerPlayerEntity player ? player : null);
+    }
+
+    @Override
+    public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
+        // Trocar de variante tambem substitui o estado; so avisa quando o bloco deixa de existir.
+        if (!moved && !newState.isOf(this)) {
+            notifyLoader("block_broken", world, pos, state, null);
+        }
+        super.onStateReplaced(state, world, pos, newState, moved);
+    }
+
+    @Override
+    protected void randomTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
+        notifyLoader("block_random_tick", world, pos, state, null);
+    }
+
+    @Override
+    protected void neighborUpdate(BlockState state, World world, BlockPos pos, Block sourceBlock,
+                                  BlockPos sourcePos, boolean notify) {
+        super.neighborUpdate(state, world, pos, sourceBlock, sourcePos, notify);
+        notifyLoader("block_neighbor_update", world, pos, state, null);
+    }
+
+    /** Entrega ao runtime um evento originado pelo proprio bloco. */
+    private void notifyLoader(String event, World world, BlockPos pos, BlockState state,
+                              ServerPlayerEntity player) {
+        if (world == null || world.isClient()) return;
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) return;
+
+        var id = Registries.BLOCK.getId(this);
+        if (id == null) return;
+
+        int variant = state.contains(LUA_VARIANT) ? state.get(LUA_VARIANT) : 0;
+        int variantCount = LuaLoaderMod.blockRegistrar() == null
+                ? 1
+                : LuaLoaderMod.blockRegistrar().variantCount(id);
+
+        runtime.triggerBlock(event,
+                player == null ? null : new FabricPlayerHandle(player),
+                new BlockEventData(id.toString(), pos.getX(), pos.getY(), pos.getZ(), variant, variantCount));
     }
 
     public void setDynamicProperty(String property, float value) {

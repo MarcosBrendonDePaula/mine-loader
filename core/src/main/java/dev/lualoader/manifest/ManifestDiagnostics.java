@@ -47,11 +47,12 @@ public final class ManifestDiagnostics {
                 ignored.add(prefix + "base");
             }
             if (block.behavior != null) {
-                addIfPresent(ignored, prefix + "behavior.on_place", block.behavior.onPlace);
-                addIfPresent(ignored, prefix + "behavior.on_break", block.behavior.onBreak);
-                addIfPresent(ignored, prefix + "behavior.on_use", block.behavior.onUse);
-                addIfPresent(ignored, prefix + "behavior.on_random_tick", block.behavior.onRandomTick);
-                addIfPresent(ignored, prefix + "behavior.on_neighbor_update", block.behavior.onNeighborUpdate);
+                if (block.behavior.onPlace != null && !block.behavior.onPlace.isBlank()) {
+                    ignored.add(prefix + "behavior.on_place: campo antigo, use on_placed");
+                }
+                if (block.behavior.onBreak != null && !block.behavior.onBreak.isBlank()) {
+                    ignored.add(prefix + "behavior.on_break: nome antigo de on_attack, ainda aceito");
+                }
             }
             if (block.placement != null) {
                 ModManifest.PlacementDefinition placement = block.placement;

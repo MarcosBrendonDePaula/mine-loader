@@ -109,6 +109,16 @@
           }
         ]
       }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Mods necessarios, no formato id -> versao minima.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"
+      }
     }
   },
   "$defs": {
@@ -613,26 +623,33 @@
     "behavior": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Logica do bloco. Cada valor e um arquivo .lua, uma URL https ou o nome de uma funcao exportada pelo entrypoint.",
       "properties": {
-        "on_place": {
-          "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        "on_use": {
+          "type": "string"
+        },
+        "on_attack": {
+          "type": "string"
         },
         "on_break": {
           "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          "description": "Nome antigo de on_attack; ainda aceito."
         },
-        "on_use": {
-          "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        "on_placed": {
+          "type": "string"
+        },
+        "on_broken": {
+          "type": "string"
         },
         "on_random_tick": {
-          "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          "type": "string"
         },
         "on_neighbor_update": {
+          "type": "string"
+        },
+        "on_place": {
           "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          "description": "Campo antigo, nunca implementado; use on_placed."
         }
       }
     },
@@ -728,7 +745,12 @@
       "properties": {
         "$import": {
           "type": "string",
-          "description": "Caminho relativo a pasta do mod. O objeto e substituido pelo conteudo do arquivo."
+          "description": "Caminho relativo a pasta do mod, ou URL https. O objeto e substituido pelo conteudo apontado."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "Obrigatorio quando $import e uma URL. Fixa o conteudo aceito."
         }
       }
     },

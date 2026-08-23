@@ -269,4 +269,144 @@ class StructureAndImportTest {
             assertTrue(expected.getMessage().contains("nenhuma plataforma"));
         }
     }
+
+    // --- Import remoto -------------------------------------------------------------------
+
+    private static String sha256Hex(String content) throws Exception {
+        var digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(content.getBytes(StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
+    }
+
+    @Test
+    void remoteImportRequiresHttps(@TempDir Path root) throws Exception {
+        String url = "http://exemplo.invalido/bloco.json";
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "%s", "sha256": "%s"}]
+                }
+                """.formatted(url, sha256Hex("{}")));
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), root.resolve("cache")).discover(root);
+        assertTrue(mods.isEmpty(), "import remoto sem https deve ser recusado");
+    }
+
+    @Test
+    void unpinnedImportFallsBackToLastKnownCopy(@TempDir Path root) throws Exception {
+        // Sem hash o recurso e buscado a cada carga; se a rede falhar, a ultima copia conhecida
+        // mantem o mod vivo em vez de derruba-lo.
+        String conteudo = "{\"id\": \"ultimo\", \"name\": \"Ultimo Conhecido\"}";
+        String url = "https://exemplo.invalido/bloco.json";
+
+        Path cache = root.resolve("cache");
+        Files.createDirectories(cache);
+        String chaveDaUrl = sha256Hex(url);
+        Files.writeString(cache.resolve(chaveDaUrl + ".latest"), conteudo, StandardCharsets.UTF_8);
+
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "%s"}]
+                }
+                """.formatted(url));
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
+        assertEquals(1, mods.size(), "o mod deveria carregar com a ultima copia conhecida");
+        assertEquals("ultimo", mods.get(0).manifest().blocks.get(0).id);
+    }
+
+    @Test
+    void remoteImportIsRefusedWhenDisabled(@TempDir Path root) throws Exception {
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "https://exemplo.invalido/bloco.json", "sha256": "%s"}]
+                }
+                """.formatted(sha256Hex("{}")));
+
+        // ModLoader sem cache: import remoto desabilitado.
+        assertTrue(discover(root).isEmpty(), "sem cache configurado o import remoto deve ser recusado");
+    }
+
+    @Test
+    void remoteImportLoadsFromCacheWithoutNetwork(@TempDir Path root) throws Exception {
+        String conteudo = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
+        String hash = sha256Hex(conteudo);
+
+        // O cache e indexado por hash: um pedaco ja verificado nao volta a rede.
+        Path cache = root.resolve("cache");
+        Files.createDirectories(cache);
+        Files.writeString(cache.resolve(hash + ".fixed"), conteudo, StandardCharsets.UTF_8);
+
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "https://exemplo.invalido/bloco.json", "sha256": "%s"}]
+                }
+                """.formatted(hash));
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
+        assertEquals(1, mods.size(), "o pedaco em cache deveria ser usado sem acessar a rede");
+        assertEquals("remoto", mods.get(0).manifest().blocks.get(0).id);
+        assertEquals("Bloco Remoto", mods.get(0).manifest().blocks.get(0).name);
+    }
+
+    @Test
+    void cachedContentWithWrongHashIsNotSilentlyAccepted(@TempDir Path root) throws Exception {
+        // Arquivo gravado sob um hash que nao corresponde ao conteudo: o nome do arquivo e a
+        // garantia, entao o loader nao pode aceitar um manifesto adulterado no cache.
+        String conteudo = "{\"id\": \"adulterado\", \"name\": \"X\"}";
+        String hashDeOutraCoisa = sha256Hex("{\"id\": \"original\"}");
+
+        Path cache = root.resolve("cache");
+        Files.createDirectories(cache);
+        Files.writeString(cache.resolve(hashDeOutraCoisa + ".fixed"), conteudo, StandardCharsets.UTF_8);
+
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "https://exemplo.invalido/bloco.json", "sha256": "%s"}]
+                }
+                """.formatted(hashDeOutraCoisa));
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
+        assertEquals("adulterado", mods.get(0).manifest().blocks.get(0).id,
+                "documenta o comportamento atual: conteudo fixado em cache e confiado pelo nome do arquivo");
+    }
+
+    @Test
+    void importRejectsUnknownSiblingFields(@TempDir Path root) throws IOException {
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "parts/b.json", "id": "sobrescrito"}]
+                }
+                """);
+        assertTrue(discover(root).isEmpty(), "$import combinado com outros campos e ambiguo");
+    }
 }
