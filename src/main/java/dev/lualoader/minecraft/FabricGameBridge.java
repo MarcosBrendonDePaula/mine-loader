@@ -3,7 +3,11 @@ package dev.lualoader.minecraft;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
 import net.minecraft.block.Block;
+import net.minecraft.particle.ParticleEffect;
+import net.minecraft.particle.ParticleType;
 import net.minecraft.registry.Registries;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -123,6 +127,29 @@ public final class FabricGameBridge implements GameBridge {
             throw new BridgeException("bloco desconhecido: " + id);
         }
         return Registries.BLOCK.get(id);
+    }
+
+    @Override
+    public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
+        Identifier id = parseIdentifier(soundId);
+        SoundEvent sound = Registries.SOUND_EVENT.get(id);
+        if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
+
+        requireServer().getOverworld().playSound(
+                null, new BlockPos(x, y, z), sound, SoundCategory.BLOCKS, volume, pitch);
+    }
+
+    @Override
+    public void spawnParticles(String particleId, double x, double y, double z,
+                               int count, double spread) {
+        Identifier id = parseIdentifier(particleId);
+        ParticleType<?> type = Registries.PARTICLE_TYPE.get(id);
+        if (!(type instanceof ParticleEffect effect)) {
+            throw new BridgeException("particula desconhecida ou com parametros: " + particleId);
+        }
+        // A dispersao vale para os tres eixos; a velocidade fica em zero para a particula
+        // apenas aparecer, sem ser lancada em uma direcao.
+        requireServer().getOverworld().spawnParticles(effect, x, y, z, count, spread, spread, spread, 0.0);
     }
 
     private MinecraftServer requireServer() {

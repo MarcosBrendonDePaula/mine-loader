@@ -1,7 +1,7 @@
 package dev.lualoader.manifest;
 
 import dev.lualoader.lua.LuaRuntime;
-import dev.lualoader.platform.GameBridge;
+import dev.lualoader.platform.TestBridge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Um mod usado como biblioteca por outro: ordem de carga, exportação e permissões. */
 class ModLibraryTest {
 
-    private static final class RecordingBridge implements GameBridge {
+    private static final class RecordingBridge extends TestBridge {
         final List<String> calls = new ArrayList<>();
 
         @Override
@@ -33,32 +33,6 @@ class ModLibraryTest {
             calls.add("set:" + blockId);
         }
 
-        @Override
-        public String getBlock(int x, int y, int z) {
-            return "minecraft:air";
-        }
-
-        @Override
-        public int fillBlocks(String id, int x1, int y1, int z1, int x2, int y2, int z2) {
-            return 0;
-        }
-
-        @Override
-        public void setBlockVariant(String blockId, int x, int y, int z, int variant) {
-        }
-
-        @Override
-        public void setBlockProperty(String blockId, String property, float value) {
-        }
-
-        @Override
-        public void setBlockLuminance(String blockId, int x, int y, int z, int luminance) {
-        }
-
-        @Override
-        public boolean isWorldAvailable() {
-            return true;
-        }
     }
 
     private void writeMod(Path root, String id, String permissions, String dependencies, String lua)

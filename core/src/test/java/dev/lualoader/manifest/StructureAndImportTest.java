@@ -2,6 +2,7 @@ package dev.lualoader.manifest;
 
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
+import dev.lualoader.platform.TestBridge;
 import dev.lualoader.structure.StructurePlacer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class StructureAndImportTest {
 
     /** Mundo simulado: registra o que foi escrito, sem Minecraft. */
-    private static final class FakeWorld implements GameBridge {
+    private static final class FakeWorld extends TestBridge {
         final Map<String, String> blocks = new HashMap<>();
 
         @Override
@@ -36,31 +37,6 @@ class StructureAndImportTest {
             return blocks.getOrDefault(x + "," + y + "," + z, "minecraft:air");
         }
 
-        @Override
-        public int fillBlocks(String id, int x1, int y1, int z1, int x2, int y2, int z2) {
-            return 0;
-        }
-
-        @Override
-        public void broadcast(String message) {
-        }
-
-        @Override
-        public void setBlockVariant(String blockId, int x, int y, int z, int variant) {
-        }
-
-        @Override
-        public void setBlockProperty(String blockId, String property, float value) {
-        }
-
-        @Override
-        public void setBlockLuminance(String blockId, int x, int y, int z, int luminance) {
-        }
-
-        @Override
-        public boolean isWorldAvailable() {
-            return true;
-        }
     }
 
     private Path writeMod(Path root, String manifest) throws IOException {

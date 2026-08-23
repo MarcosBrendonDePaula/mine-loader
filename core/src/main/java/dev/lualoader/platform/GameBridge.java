@@ -49,6 +49,23 @@ public interface GameBridge {
      */
     int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2);
 
+    /**
+     * Toca um som na posição indicada.
+     *
+     * @param soundId identificador do som, por exemplo {@code minecraft:block.anvil.use}
+     * @param volume  1.0 é o volume normal
+     * @param pitch   1.0 é o tom normal
+     */
+    void playSound(String soundId, int x, int y, int z, float volume, float pitch);
+
+    /**
+     * Emite partículas na posição indicada.
+     *
+     * @param particleId identificador, por exemplo {@code minecraft:happy_villager}
+     * @param spread     dispersão em blocos ao redor do ponto
+     */
+    void spawnParticles(String particleId, double x, double y, double z, int count, double spread);
+
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {
         @Override
@@ -88,6 +105,17 @@ public interface GameBridge {
 
         @Override
         public int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public void spawnParticles(String particleId, double x, double y, double z,
+                                   int count, double spread) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
     };

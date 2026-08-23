@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlatformBridgeTest {
 
     /** Bridge de teste: registra as chamadas em vez de tocar em um jogo real. */
-    private static final class RecordingBridge implements GameBridge {
+    private static final class RecordingBridge extends TestBridge {
         final List<String> calls = new ArrayList<>();
 
         @Override
@@ -53,8 +53,14 @@ class PlatformBridgeTest {
         }
 
         @Override
-        public boolean isWorldAvailable() {
-            return true;
+        public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
+            calls.add("sound:" + soundId + "@" + x + "," + y + "," + z);
+        }
+
+        @Override
+        public void spawnParticles(String particleId, double x, double y, double z,
+                                   int count, double spread) {
+            calls.add("particles:" + particleId + "x" + count);
         }
 
         /** Mundo simulado: so guarda o que foi escrito, o resto e ar. */
@@ -713,5 +719,76 @@ class PlatformBridgeTest {
         assertEquals(10, player.position()[0]);
         assertEquals(70, player.position()[1]);
         assertEquals(-20, player.position()[2]);
+    }
+
+    @Test
+    void scriptCanGiveFeedbackWithSoundAndParticles(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.read\"", """
+                mod.on("block_used", function(ctx)
+                    ctx.server.play_sound("minecraft:block.note_block.bell", ctx.block.x, ctx.block.y, ctx.block.z)
+                    ctx.server.spawn_particles("minecraft:happy_villager", ctx.block.x, ctx.block.y, ctx.block.z, 12)
+                end)
+                """));
+
+        runtime.triggerBlock("block_used", null, new BlockEventData("test_mod:bloco", 1, 2, 3, 0, 1));
+
+        assertEquals(List.of(
+                "sound:minecraft:block.note_block.bell@1,2,3",
+                "particles:minecraft:happy_villagerx12"
+        ), bridge.calls);
+    }
+
+    @Test
+    void scheduledTaskRunsAfterTheRequestedTicks(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    mod.after(3, function(ctx2)
+                        ctx2.server.broadcast("passaram 3 ticks")
+                    end)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+        assertEquals(1, runtime.pendingTasks(), "a tarefa deveria estar agendada");
+
+        runtime.advanceScheduler();
+        runtime.advanceScheduler();
+        assertTrue(bridge.calls.isEmpty(), "ainda nao venceu");
+
+        runtime.advanceScheduler();
+        assertEquals(List.of("broadcast:passaram 3 ticks"), bridge.calls);
+        assertEquals(0, runtime.pendingTasks(), "a tarefa nao pode repetir");
+    }
+
+    @Test
+    void failingScheduledTaskDoesNotStopTheOthers(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    mod.after(1, function(ctx2)
+                        error("falhei de proposito")
+                    end)
+                    mod.after(1, function(ctx2)
+                        ctx2.server.broadcast("eu rodei")
+                    end)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+        runtime.advanceScheduler();
+
+        assertEquals(List.of("broadcast:eu rodei"), bridge.calls,
+                "o erro de uma tarefa nao pode impedir a seguinte");
     }
 }

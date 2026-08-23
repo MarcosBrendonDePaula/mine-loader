@@ -96,7 +96,11 @@ public final class LuaLoaderMod implements ModInitializer {
                 luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player)));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 luaRuntime.triggerAll("player_left", new FabricPlayerHandle(handler.player)));
-        ServerTickEvents.END_SERVER_TICK.register(server -> luaRuntime.triggerAll("tick", null));
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            // O agendador avanca antes do evento, para uma tarefa marcada neste tick rodar aqui.
+            luaRuntime.advanceScheduler();
+            luaRuntime.triggerAll("tick", null);
+        });
     }
 
     public static List<ModLoader.LoadedMod> loadedMods() {

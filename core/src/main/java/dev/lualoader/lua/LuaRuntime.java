@@ -44,6 +44,9 @@ public final class LuaRuntime {
     /** Limite de coordenada aceito, para evitar posicoes absurdas vindas do script. */
     private static final int MAX_COORDINATE = 30_000_000;
 
+    /** Teto de tarefas agendadas simultaneas, para um laco de agendamento nao consumir a memoria. */
+    private static final int MAX_SCHEDULED = 4_096;
+
     private static final Set<String> EVENTS = Set.of(
             "loader_ready", "server_started", "server_stopped", "player_joined", "player_left",
             "tick", "mod_reloaded",
@@ -63,6 +66,15 @@ public final class LuaRuntime {
      * tabela.
      */
     private final Map<String, LuaTable> states = new LinkedHashMap<>();
+
+    /**
+     * Tarefas agendadas por {@code mod.after}, ordenadas por tick de disparo.
+     *
+     * <p>Sem isto, qualquer coisa com duracao precisava contar ticks a mao dentro do evento
+     * {@code tick}, que e global e caro. O relogio avanca uma vez por tick do servidor.
+     */
+    private final java.util.List<ScheduledTask> scheduled = new java.util.ArrayList<>();
+    private long currentTick;
     private final Path remoteCache;
     private final StateStore stateStore;
     private GameBridge bridge = GameBridge.DETACHED;
@@ -91,6 +103,43 @@ public final class LuaRuntime {
         LoadedScript script = compile(mod);
         scripts.put(mod.manifest().id, script);
         logger.info("Script Lua carregado: {}", mod.manifest().id);
+    }
+
+    /**
+     * Avanca o relogio do agendador e executa o que venceu.
+     *
+     * <p>Chamado uma vez por tick do servidor, antes do evento {@code tick}.
+     */
+    public void advanceScheduler() {
+        currentTick++;
+        if (scheduled.isEmpty()) return;
+
+        java.util.List<ScheduledTask> vencidas = new java.util.ArrayList<>();
+        scheduled.removeIf(task -> {
+            if (task.dueTick() > currentTick) return false;
+            vencidas.add(task);
+            return true;
+        });
+
+        for (ScheduledTask task : vencidas) {
+            LoadedScript script = scripts.get(task.modId());
+            if (script == null) continue;
+            try {
+                task.callback().call(context(script.mod(), null, null));
+            } catch (LuaError error) {
+                logger.error("Erro Lua em tarefa agendada do mod {}: {}", task.modId(), error.getMessage());
+            } catch (BridgeException error) {
+                logger.error("Erro de plataforma em tarefa agendada do mod {}: {}",
+                        task.modId(), error.getMessage());
+            } catch (RuntimeException error) {
+                logger.error("Erro Java em tarefa agendada do mod {}", task.modId(), error);
+            }
+        }
+    }
+
+    /** Quantidade de tarefas ainda pendentes, usada em diagnostico e testes. */
+    public int pendingTasks() {
+        return scheduled.size();
     }
 
     /** Grava em disco o estado de todos os mods. Chamado quando o servidor para. */
@@ -275,6 +324,26 @@ public final class LuaRuntime {
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
         modApi.set("server", serverApiFor(mod));
+
+        modApi.set("after", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                if (args.narg() < 2) throw new LuaError("after exige ticks e uma funcao");
+                int ticks = args.arg(1).checkint();
+                if (ticks < 0 || ticks > 1_728_000) {
+                    // 1.728.000 ticks equivalem a um dia real: alem disso e quase certamente erro.
+                    throw new LuaError("ticks fora do intervalo permitido: " + ticks);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("after exige uma funcao");
+
+                if (scheduled.size() >= MAX_SCHEDULED) {
+                    throw new LuaError("limite de " + MAX_SCHEDULED + " tarefas agendadas atingido");
+                }
+                scheduled.add(new ScheduledTask(mod.manifest().id, currentTick + ticks,
+                        (LuaFunction) args.arg(2)));
+                return LuaValue.NIL;
+            }
+        });
 
         modApi.set("require", new OneArgFunction() {
             @Override
@@ -596,6 +665,38 @@ public final class LuaRuntime {
                 return LuaValue.NIL;
             }
         });
+        serverApi.set("play_sound", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 4) throw new LuaError("play_sound exige id, x, y e z");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                float volume = args.narg() >= 5 ? (float) args.arg(5).checkdouble() : 1.0f;
+                float pitch = args.narg() >= 6 ? (float) args.arg(6).checkdouble() : 1.0f;
+                if (volume < 0 || volume > 10) throw new LuaError("volume deve estar entre 0 e 10");
+                if (pitch < 0.5 || pitch > 2.0) throw new LuaError("pitch deve estar entre 0.5 e 2.0");
+
+                bridge.playSound(id, requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
+                        requireCoordinate(args.arg(4)), volume, pitch);
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("spawn_particles", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 4) throw new LuaError("spawn_particles exige id, x, y e z");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int count = args.narg() >= 5 ? args.arg(5).checkint() : 8;
+                double spread = args.narg() >= 6 ? args.arg(6).checkdouble() : 0.5;
+                if (count < 1 || count > 512) throw new LuaError("count deve estar entre 1 e 512");
+                if (spread < 0 || spread > 16) throw new LuaError("spread deve estar entre 0 e 16");
+
+                bridge.spawnParticles(id, requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
+                        requireCoordinate(args.arg(4)), count, spread);
+                return LuaValue.NIL;
+            }
+        });
         serverApi.set("get_block", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -883,6 +984,10 @@ public final class LuaRuntime {
      * @param exports tabela devolvida pelo entrypoint, que e a API publica do mod para
      *                {@code mod.require}
      */
+    /** Tarefa agendada por {@code mod.after}. */
+    private record ScheduledTask(String modId, long dueTick, LuaFunction callback) {
+    }
+
     private record LoadedScript(ModLoader.LoadedMod mod,
                                 Map<String, LuaFunction> callbacks,
                                 Map<String, Map<String, LuaFunction>> blockHandlers,
