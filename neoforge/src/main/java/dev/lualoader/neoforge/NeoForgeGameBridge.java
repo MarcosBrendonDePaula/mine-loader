@@ -37,6 +37,8 @@ public class NeoForgeGameBridge implements GameBridge {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
+        // Um servidor novo traz datapacks novos, e com eles outras tabelas de loot.
+        this.dropIndex = null;
     }
 
     /** Define em que dimensão as operações seguintes agem. */
@@ -219,8 +221,6 @@ public class NeoForgeGameBridge implements GameBridge {
         return BuiltInRegistries.ITEM.get(id);
     }
 
-    // ------------------------------------------------------------------ ainda nao implementado
-
     /**
      * Operações que este adaptador ainda não cobre.
      *
@@ -246,64 +246,329 @@ public class NeoForgeGameBridge implements GameBridge {
         throw pending("set_block_luminance");
     }
 
+    // ------------------------------------------------------------------ feedback
+
     @Override
     public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
-        throw pending("play_sound");
+        ResourceLocation id = parse(soundId);
+        var sound = BuiltInRegistries.SOUND_EVENT.get(id);
+        if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
+
+        requireLevel().playSound(null, new BlockPos(x, y, z), sound,
+                net.minecraft.sounds.SoundSource.BLOCKS, volume, pitch);
     }
 
     @Override
     public void spawnParticles(String particleId, double x, double y, double z,
                                int count, double spread) {
-        throw pending("spawn_particles");
+        ResourceLocation id = parse(particleId);
+        var type = BuiltInRegistries.PARTICLE_TYPE.get(id);
+        if (type == null) throw new BridgeException("particula desconhecida: " + particleId);
+
+        // Uma particula com parametro -- dust, block -- nao e um ParticleOptions sozinha, e
+        // recusar e melhor que emitir a errada em silencio.
+        if (!(type instanceof net.minecraft.core.particles.ParticleOptions options)) {
+            throw new BridgeException("particula exige parametros e nao e suportada: " + particleId);
+        }
+
+        requireLevel().sendParticles(options, x, y, z, count, spread, spread, spread, 0.0);
+    }
+
+    // ------------------------------------------------------------------ dados por bloco
+
+    /**
+     * Chave onde os dados de um bloco ficam guardados.
+     *
+     * <p>Os dados vivem no BlockEntity do loader quando o bloco e declarativo. Enquanto o registro
+     * declarativo nao existe neste adaptador, guardar em memoria por posicao mantem a operacao
+     * utilizavel e honesta: some ao desligar, e isso esta dito.
+     */
+    private final java.util.Map<String, String> blockData = new java.util.HashMap<>();
+
+    private static String at(int x, int y, int z) {
+        return x + "," + y + "," + z;
     }
 
     @Override
     public String getBlockData(int x, int y, int z) {
-        throw pending("get_block_data");
+        return blockData.getOrDefault(at(x, y, z), "{}");
     }
 
     @Override
     public void setBlockData(int x, int y, int z, String json) {
-        throw pending("set_block_data");
+        blockData.put(at(x, y, z), json);
     }
+
+    // ------------------------------------------------------------------ entidades
 
     @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
-        throw pending("spawn_entity");
+        ResourceLocation id = parse(entityId);
+        var type = BuiltInRegistries.ENTITY_TYPE.getOptional(id)
+                .orElseThrow(() -> new BridgeException("entidade desconhecida: " + entityId));
+
+        ServerLevel level = requireLevel();
+        var entity = type.create(level);
+        if (entity == null) throw new BridgeException("entidade nao pode ser criada: " + entityId);
+
+        entity.moveTo(x, y, z, entity.getYRot(), entity.getXRot());
+        level.addFreshEntity(entity);
+        return entity.getUUID().toString();
     }
 
     @Override
     public List<String> entitiesNear(double x, double y, double z, double radius) {
-        throw pending("entities_near");
+        var caixa = new net.minecraft.world.phys.AABB(
+                x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
+
+        List<String> found = new ArrayList<>();
+        for (var entity : requireLevel().getEntities((net.minecraft.world.entity.Entity) null, caixa,
+                e -> true)) {
+            found.add(entity.getUUID() + ";"
+                    + BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()) + ";"
+                    + entity.getBlockX() + ";" + entity.getBlockY() + ";" + entity.getBlockZ());
+        }
+        return found;
+    }
+
+    private net.minecraft.world.entity.Entity findEntity(String entityUuid) {
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(entityUuid);
+        } catch (IllegalArgumentException error) {
+            throw new BridgeException("identificador de entidade invalido: " + entityUuid);
+        }
+
+        for (ServerLevel level : requireServer().getAllLevels()) {
+            var entity = level.getEntity(uuid);
+            if (entity != null) return entity;
+        }
+        return null;
     }
 
     @Override
     public boolean removeEntity(String entityUuid) {
-        throw pending("remove_entity");
+        var entity = findEntity(entityUuid);
+        if (entity == null) return false;
+
+        entity.discard();
+        return true;
     }
 
     @Override
     public boolean damageEntity(String entityUuid, float amount) {
-        throw pending("damage_entity");
+        var entity = findEntity(entityUuid);
+        if (entity == null) return false;
+
+        return entity.hurt(requireLevel().damageSources().magic(), amount);
     }
+
+    // ------------------------------------------------------------------ ainda nao implementado
+
+    // ------------------------------------------------------------------ receitas
+
+    /** Teto de itens por posicao de ingrediente, para uma tag grande nao inchar a resposta. */
+    private static final int MAX_ALTERNATIVES = 32;
 
     @Override
     public List<String> recipesFor(String itemId, int limit) {
-        throw pending("recipes_for");
+        ResourceLocation wanted = parse(itemId);
+        return collectRecipes(limit, recipe -> {
+            ItemStack result = recipe.getResultItem(requireServer().registryAccess());
+            return result != null && BuiltInRegistries.ITEM.getKey(result.getItem()).equals(wanted);
+        });
     }
 
     @Override
     public List<String> recipesUsing(String itemId, int limit) {
-        throw pending("recipes_using");
+        ResourceLocation wanted = parse(itemId);
+        return collectRecipes(limit, recipe -> {
+            for (var ingredient : recipe.getIngredients()) {
+                for (ItemStack stack : ingredient.getItems()) {
+                    if (BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(wanted)) return true;
+                }
+            }
+            return false;
+        });
     }
+
+    private List<String> collectRecipes(int limit,
+                                        java.util.function.Predicate<
+                                                net.minecraft.world.item.crafting.Recipe<?>> filter) {
+        List<String> found = new ArrayList<>();
+
+        for (var entry : requireServer().getRecipeManager().getRecipes()) {
+            if (found.size() >= limit) break;
+
+            var recipe = entry.value();
+            try {
+                if (!filter.test(recipe)) continue;
+                found.add(describeRecipe(entry.id(), recipe));
+            } catch (RuntimeException ignored) {
+                // Uma receita de outro mod pode recusar responder fora do contexto de craft.
+                // Pular uma e melhor que derrubar a consulta inteira.
+            }
+        }
+        return found;
+    }
+
+    private String describeRecipe(ResourceLocation id,
+                                  net.minecraft.world.item.crafting.Recipe<?> recipe) {
+        var json = new com.google.gson.JsonObject();
+        json.addProperty("id", id.toString());
+        json.addProperty("type",
+                BuiltInRegistries.RECIPE_TYPE.getKey(recipe.getType()).toString());
+
+        ItemStack result = recipe.getResultItem(requireServer().registryAccess());
+        var output = new com.google.gson.JsonObject();
+        output.addProperty("item", BuiltInRegistries.ITEM.getKey(result.getItem()).toString());
+        output.addProperty("count", result.getCount());
+        json.add("output", output);
+
+        // A forma so existe em receita com padrao; zero diz ao mod que nao ha grade.
+        if (recipe instanceof net.minecraft.world.item.crafting.ShapedRecipe shaped) {
+            json.addProperty("width", shaped.getWidth());
+            json.addProperty("height", shaped.getHeight());
+        } else {
+            json.addProperty("width", 0);
+            json.addProperty("height", 0);
+        }
+
+        var ingredients = new com.google.gson.JsonArray();
+        for (var ingredient : recipe.getIngredients()) {
+            var alternatives = new com.google.gson.JsonArray();
+            int total = 0;
+            for (ItemStack stack : ingredient.getItems()) {
+                if (total++ >= MAX_ALTERNATIVES) break;
+                alternatives.add(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+            }
+            ingredients.add(alternatives);
+        }
+        json.add("ingredients", ingredients);
+
+        return json.toString();
+    }
+
+    // ------------------------------------------------------------------ drops
+
+    /** Fonte para itens, montado uma vez a partir das tabelas de loot carregadas. */
+    private java.util.Map<String, java.util.Set<String>> dropIndex;
 
     @Override
     public List<String> dropsOf(String sourceId, int limit) {
-        throw pending("drops_of");
+        ResourceLocation id = parse(sourceId);
+        if (!BuiltInRegistries.BLOCK.containsKey(id)
+                && !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
+            throw new BridgeException("bloco ou entidade desconhecido: " + sourceId);
+        }
+
+        List<String> found = new ArrayList<>(
+                dropIndex().getOrDefault(id.toString(), java.util.Set.of()));
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
     }
 
     @Override
     public List<String> droppedBy(String itemId, int limit) {
-        throw pending("dropped_by");
+        String wanted = parse(itemId).toString();
+
+        List<String> found = new ArrayList<>();
+        for (var entry : dropIndex().entrySet()) {
+            if (entry.getValue().contains(wanted)) found.add(entry.getKey());
+        }
+
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    /**
+     * Indice de quem derruba o que, pelo mesmo raciocinio do adaptador Fabric.
+     *
+     * <p>Perguntar a tabela de cada bloco e de cada tipo de entidade erra: a ovelha tem uma tabela
+     * por cor, escolhida dentro da instancia, e o tipo so conhece a generica -- que da carne, e nao
+     * la. Varrer as tabelas carregadas e deduzir o dono pelo nome resolve os dois casos.
+     */
+    private java.util.Map<String, java.util.Set<String>> dropIndex() {
+        if (dropIndex != null) return dropIndex;
+
+        java.util.Map<String, java.util.Set<String>> index = new java.util.HashMap<>();
+        var registries = requireServer().reloadableRegistries();
+
+        for (var id : registries.getKeys(net.minecraft.core.registries.Registries.LOOT_TABLE)) {
+            String owner = ownerOfLootTable(id);
+            if (owner == null) continue;
+
+            var key = net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.LOOT_TABLE, id);
+            java.util.Set<String> items = itemsOfLootTable(key);
+            if (items.isEmpty()) continue;
+
+            index.computeIfAbsent(owner, ignored -> new java.util.LinkedHashSet<>()).addAll(items);
+        }
+
+        dropIndex = index;
+        return index;
+    }
+
+    /**
+     * De quem e uma tabela de loot, a julgar pelo nome dela.
+     *
+     * <p>Tabelas sem dono -- bau de masmorra, pesca, presente de aldeao -- ficam de fora: elas nao
+     * respondem "o que este bloco derruba".
+     */
+    private static String ownerOfLootTable(ResourceLocation tableId) {
+        String path = tableId.getPath();
+        String prefix = path.startsWith("blocks/") ? "blocks/"
+                : path.startsWith("entities/") ? "entities/"
+                : null;
+        if (prefix == null) return null;
+
+        String rest = path.substring(prefix.length());
+        int slash = rest.indexOf('/');
+        String name = slash < 0 ? rest : rest.substring(0, slash);
+
+        ResourceLocation owner = ResourceLocation.fromNamespaceAndPath(tableId.getNamespace(), name);
+        boolean known = prefix.equals("blocks/")
+                ? BuiltInRegistries.BLOCK.containsKey(owner)
+                : BuiltInRegistries.ENTITY_TYPE.containsKey(owner);
+
+        return known ? owner.toString() : null;
+    }
+
+    private java.util.Set<String> itemsOfLootTable(
+            net.minecraft.resources.ResourceKey<
+                    net.minecraft.world.level.storage.loot.LootTable> key) {
+        java.util.Set<String> items = new java.util.LinkedHashSet<>();
+
+        var table = requireServer().reloadableRegistries().getLootTable(key);
+        if (!(table instanceof dev.lualoader.neoforge.mixin.LootTableAccessor accessor)) return items;
+
+        for (var pool : accessor.lua_loader$pools()) {
+            if (!(pool instanceof dev.lualoader.neoforge.mixin.LootPoolAccessor poolAccessor)) {
+                continue;
+            }
+            for (var entry : poolAccessor.lua_loader$entries()) {
+                collectItems(entry, items, 0);
+            }
+        }
+        return items;
+    }
+
+    /** Recolhe os itens de uma entrada, descendo nas compostas. */
+    private static void collectItems(
+            net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer entry,
+            java.util.Set<String> items, int depth) {
+        if (depth > 8) return;
+
+        if (entry instanceof dev.lualoader.neoforge.mixin.LootItemAccessor itemAccessor) {
+            items.add(BuiltInRegistries.ITEM.getKey(itemAccessor.lua_loader$item().value())
+                    .toString());
+            return;
+        }
+        if (entry instanceof dev.lualoader.neoforge.mixin.CompositeEntryAccessor composite) {
+            for (var child : composite.lua_loader$children()) {
+                collectItems(child, items, depth + 1);
+            }
+        }
     }
 }

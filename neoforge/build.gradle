@@ -110,6 +110,15 @@ tasks.register('linkModsLua') {
     }
 }
 
+// Sem isto o servidor sobe surdo: o ModDevGradle nao liga a entrada padrao a tarefa, e o console
+// do servidor -- que e por onde comandos entram -- fica sem ninguem falando. O adaptador Fabric
+// nao precisa porque o Loom ja faz essa ligacao.
+tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
+    if (it instanceof JavaExec) {
+        it.standardInput = System.in
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
     it.options.encoding = 'UTF-8'

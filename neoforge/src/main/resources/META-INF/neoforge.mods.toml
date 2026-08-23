@@ -13,6 +13,9 @@ mesmo nucleo do adaptador Fabric, sem uma linha diferente.
 '''
 authors = "Minecraft Lua Loader"
 
+[[mixins]]
+config = "lua_loader.neoforge.mixins.json"
+
 [[dependencies.lua_loader]]
 modId = "neoforge"
 type = "required"

@@ -10,6 +10,9 @@
 # e conferir o resultado. Sem isto, cada verificacao depende de alguem estar no jogo no momento
 # certo.
 #
+# A plataforma vem da variavel PLATAFORMA, que aceita fabric (padrao) ou neoforge:
+#   PLATAFORMA=neoforge tools/servidor-dirigivel.sh iniciar
+#
 #   tools/servidor-dirigivel.sh iniciar     sobe o servidor
 #   tools/servidor-dirigivel.sh esperar     bloqueia ate ele aceitar comandos
 #   tools/servidor-dirigivel.sh cmd "say oi"    envia um comando
@@ -22,24 +25,61 @@
 set -u
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENTRADA="$RAIZ/build/servidor-comandos"
-SAIDA="$RAIZ/build/servidor-saida.log"
-PID="$RAIZ/build/servidor.pid"
+
+# Qual adaptador subir. Cada um tem os proprios arquivos, para as duas saidas nunca se misturarem
+# -- ja aconteceu, e um log misturado faz a leitura mentir.
+PLATAFORMA="${PLATAFORMA:-fabric}"
+case "$PLATAFORMA" in
+    fabric)   TAREFA="runServer" ;;
+    neoforge) TAREFA=":neoforge:runServer" ;;
+    *) echo "PLATAFORMA deve ser fabric ou neoforge, veio $PLATAFORMA" >&2; exit 1 ;;
+esac
+
+ENTRADA="$RAIZ/build/servidor-$PLATAFORMA-comandos"
+SAIDA="$RAIZ/build/servidor-$PLATAFORMA.log"
+PID="$RAIZ/build/servidor-$PLATAFORMA.pid"
+
+# Processos de servidor desta plataforma que ficaram para tras. O daemon do Gradle nunca entra: ele
+# e reaproveitado entre execucoes e mata-lo custa um build inteiro de volta.
+orfaos_desta_plataforma() {
+    local marca
+    if [ "$PLATAFORMA" = "neoforge" ]; then marca="neoforge"; else marca="fabric"; fi
+
+    wmic process where "name='java.exe'" get processid,commandline 2>/dev/null         | tr -d '
+'         | awk -v marca="$marca" '
+            tolower($0) ~ marca && $0 !~ /GradleDaemon/ && NF > 1 { print $NF }
+        '
+}
 
 iniciar() {
-    if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; then
+    # O PID guardado e do subshell que alimenta a entrada, e nao do servidor: ele sobrevive a morte
+    # do jogo. Exigir tambem o log presente evita recusar subir quando so o inutil restou.
+    if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null && [ -s "$SAIDA" ]; then
         echo "Ja esta rodando (pid $(cat "$PID"))."
         return 0
     fi
+    rm -f "$PID"
 
-    # Um servidor de outra origem -- outra plataforma, outra janela -- escrevendo no mesmo arquivo
-    # mistura as saidas, e a leitura do log passa a mentir. Ja aconteceu, e custou tempo.
-    if pgrep -f "runServer" >/dev/null 2>&1; then
-        echo "Aviso: ja ha um runServer neste computador. Pare-o antes, ou os logs se misturam." >&2
+    # Um servidor anterior que nao morreu segura o session.lock do mundo e o arquivo de log, e o
+    # novo falha com um erro que nao diz isso -- "outro processo bloqueou parte do arquivo".
+    # Acontece sempre que uma execucao e interrompida, entao o script limpa antes de subir.
+    orfaos=$(orfaos_desta_plataforma)
+    if [ -n "$orfaos" ]; then
+        echo "Encerrando servidor anterior de $PLATAFORMA: $orfaos"
+        for pid in $orfaos; do
+            taskkill //PID "$pid" //F >/dev/null 2>&1 || kill -9 "$pid" 2>/dev/null
+        done
+        sleep 3
     fi
 
-    mkdir -p "$RAIZ/build" "$RAIZ/run"
-    echo "eula=true" > "$RAIZ/run/eula.txt"
+    mkdir -p "$RAIZ/build"
+    if [ "$PLATAFORMA" = "neoforge" ]; then
+        mkdir -p "$RAIZ/neoforge/run"
+        echo "eula=true" > "$RAIZ/neoforge/run/eula.txt"
+    else
+        mkdir -p "$RAIZ/run"
+        echo "eula=true" > "$RAIZ/run/eula.txt"
+    fi
 
     # O arquivo precisa existir antes do tail, senao ele sai na hora.
     : > "$ENTRADA"
@@ -47,7 +87,7 @@ iniciar() {
 
     # O tail alimenta a entrada do servidor e nunca termina, entao o servidor nao ve fim de arquivo
     # e continua aceitando comandos.
-    ( tail -n +1 -f "$ENTRADA" | "$RAIZ/gradlew" -p "$RAIZ" runServer --console=plain \
+    ( tail -n +1 -f "$ENTRADA" | "$RAIZ/gradlew" -p "$RAIZ" $TAREFA --console=plain \
         > "$SAIDA" 2>&1 ) &
 
     echo $! > "$PID"

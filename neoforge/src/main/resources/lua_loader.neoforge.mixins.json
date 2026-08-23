@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "dev.lualoader.neoforge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "LootTableAccessor",
+    "LootPoolAccessor",
+    "LootItemAccessor",
+    "CompositeEntryAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

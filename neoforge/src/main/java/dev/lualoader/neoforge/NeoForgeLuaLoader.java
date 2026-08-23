@@ -5,7 +5,6 @@ import dev.lualoader.manifest.ModLoader;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,10 +32,16 @@ public class NeoForgeLuaLoader {
 
     private static LuaRuntime runtime;
     private static NeoForgeGameBridge bridge;
+    private static List<ModLoader.LoadedMod> loadedMods = List.of();
 
     public NeoForgeLuaLoader(IEventBus modBus) {
-        NeoForge.EVENT_BUS.addListener(NeoForgeLuaLoader::onServerStarted);
+        // A carga acontece em ServerAboutToStart, e nao em ServerStarted: a arvore de comandos e
+        // montada entre os dois, e um mod carregado depois dela teria o comando declarado e nao
+        // publicado -- que foi o que aconteceu na primeira tentativa.
+        NeoForge.EVENT_BUS.addListener(NeoForgeLuaLoader::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(NeoForgeLuaLoader::onServerStopping);
+
+
         LOGGER.info("Adaptador NeoForge do Lua Loader carregado");
     }
 
@@ -45,7 +50,13 @@ public class NeoForgeLuaLoader {
         return runtime;
     }
 
-    private static void onServerStarted(ServerStartedEvent event) {
+    /** Mods descobertos na ultima carga. */
+    public static List<ModLoader.LoadedMod> loadedMods() {
+        return loadedMods;
+    }
+
+    private static void onServerAboutToStart(
+            net.neoforged.neoforge.event.server.ServerAboutToStartEvent event) {
         Path gameDirectory = event.getServer().getServerDirectory();
         Path modsDirectory = gameDirectory.resolve("mods-lua");
         Path state = gameDirectory.resolve("lua-loader").resolve("state");
@@ -66,6 +77,7 @@ public class NeoForgeLuaLoader {
 
             List<ModLoader.LoadedMod> mods =
                     new ModLoader(LOGGER).discover(modsDirectory);
+            loadedMods = List.copyOf(mods);
 
             int loaded = 0;
             for (ModLoader.LoadedMod mod : mods) {
@@ -80,6 +92,12 @@ public class NeoForgeLuaLoader {
                 }
             }
             LOGGER.info("Lua Loader no NeoForge: {} de {} mod(s) carregado(s)", loaded, mods.size());
+
+            // Os comandos sao registrados aqui, e nao por RegisterCommandsEvent: aquele evento
+            // acontece durante a carga dos datapacks, antes de existir runtime para consultar --
+            // um mod declarava o comando e nada era publicado. Registrar direto no dispatcher,
+            // depois de carregar, acontece na ordem certa e antes de qualquer jogador entrar.
+            NeoForgeCommands.register(event.getServer().getCommands().getDispatcher());
         } catch (IOException error) {
             LOGGER.error("Falha ao descobrir mods em {}: {}", modsDirectory, error.getMessage());
         }
