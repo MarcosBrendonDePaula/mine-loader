@@ -70,6 +70,45 @@ public interface PlayerHandle {
     /** Identificador do menu aberto, ou {@code null} quando não há nenhum. */
     String openMenuId();
 
+    /**
+     * Indica se o cliente deste jogador entende o protocolo de interface.
+     *
+     * <p>Um cliente vanilla não tem o canal, e nesse caso a tela desenhada não pode ser aberta. O
+     * mod decide o que fazer: a janela de itens continua disponível como alternativa que funciona
+     * em qualquer cliente.
+     */
+    boolean supportsScreens();
+
+    /**
+     * Abre uma tela desenhada pelo mod.
+     *
+     * @param screenId    identificador da tela, devolvido junto com cada evento
+     * @param descriptionJson descrição já validada pelo núcleo
+     * @return {@code false} quando o cliente não entende o protocolo
+     */
+    boolean openScreen(String screenId, String descriptionJson);
+
+    /**
+     * Substitui o conteúdo da tela aberta sem reabri-la.
+     *
+     * @return {@code false} quando não há tela do loader aberta
+     */
+    boolean updateScreen(String descriptionJson);
+
+    /** Fecha a tela do loader, se houver. */
+    void closeScreen();
+
+    /** Identificador da tela aberta, ou {@code null}. */
+    String openScreenId();
+
+    /**
+     * Define os elementos fixos na tela do jogador.
+     *
+     * <p>Diferente de uma tela, o HUD não captura mouse nem pausa o jogo. Uma descrição sem
+     * elementos limpa o que estava sendo desenhado.
+     */
+    void setHud(String descriptionJson);
+
     /** Fecha o menu aberto, se houver. */
     void closeMenu();
 }

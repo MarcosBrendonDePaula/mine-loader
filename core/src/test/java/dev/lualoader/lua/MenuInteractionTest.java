@@ -1,7 +1,6 @@
 package dev.lualoader.lua;
 
 import dev.lualoader.manifest.ModLoader;
-import dev.lualoader.platform.PlayerHandle;
 import dev.lualoader.platform.TestBridge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -34,86 +33,20 @@ class MenuInteractionTest {
         }
     }
 
-    private static final class FakePlayer implements PlayerHandle {
-        final List<String> received = new ArrayList<>();
-        String menuId;
-        List<String> items = List.of();
+    private static final class FakePlayer extends dev.lualoader.platform.TestPlayer {
+        java.util.List<String> items = java.util.List.of();
 
         @Override
-        public String name() {
-            return "Steve";
-        }
-
-        @Override
-        public String uuid() {
-            return "00000000-0000-0000-0000-000000000002";
-        }
-
-        @Override
-        public void sendMessage(String message) {
-            received.add(message);
-        }
-
-        @Override
-        public void sendActionBar(String message) {
-            received.add("[bar] " + message);
-        }
-
-        @Override
-        public String heldItem() {
-            return "minecraft:air";
-        }
-
-        @Override
-        public int countItem(String itemId) {
-            return 0;
-        }
-
-        @Override
-        public int giveItem(String itemId, int count) {
-            return 0;
-        }
-
-        @Override
-        public int takeItem(String itemId, int count) {
-            return 0;
-        }
-
-        @Override
-        public int[] position() {
-            return new int[]{0, 64, 0};
-        }
-
-        @Override
-        public float[] health() {
-            return new float[]{20f, 20f};
-        }
-
-        @Override
-        public void teleport(double x, double y, double z) {
-        }
-
-        @Override
-        public void openMenu(String id, String title, int rows, List<String> items) {
-            this.menuId = id;
+        public void openMenu(String id, String title, int rows, java.util.List<String> items) {
+            super.openMenu(id, title, rows, items);
             this.items = items;
         }
 
         @Override
-        public boolean updateMenu(List<String> items) {
-            if (menuId == null) return false;
-            this.items = items;
-            return true;
-        }
-
-        @Override
-        public String openMenuId() {
-            return menuId;
-        }
-
-        @Override
-        public void closeMenu() {
-            menuId = null;
+        public boolean updateMenu(java.util.List<String> items) {
+            boolean ok = super.updateMenu(items);
+            if (ok) this.items = items;
+            return ok;
         }
     }
 
@@ -271,5 +204,34 @@ class MenuInteractionTest {
         runtime.runCommand("loja", null, "");
 
         assertEquals(List.of("vazio=true n=0"), bridge.calls);
+    }
+
+    @Test
+    void closeMenuIsAvailableToScripts(@TempDir Path root) throws IOException {
+        // Regressao: ao reescrever a API de janela, close_menu foi removido sem que nenhum teste
+        // percebesse, e o script quebrava com "attempt to call nil" so no jogo.
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.menu("painel", function(ctx)
+                    ctx.player.close_menu()
+                    ctx.server.broadcast("fechei")
+                end)
+
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_menu("painel", "Painel", 1, { "minecraft:stone" })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertEquals("ui_mod:painel", player.openMenuId());
+
+        runtime.triggerMenuClick("ui_mod", "ui_mod:painel", 0, 0, "minecraft:stone", player);
+
+        assertEquals(List.of("fechei"), bridge.calls, "o callback precisa ter rodado ate o fim");
+        assertEquals(null, player.openMenuId(), "close_menu deve fechar a janela");
     }
 }

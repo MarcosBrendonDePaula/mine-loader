@@ -82,6 +82,10 @@ public final class LuaLoaderMod implements ModInitializer {
             LOGGER.error("Não foi possível inicializar os mods Lua", error);
         }
 
+        // As cargas precisam existir antes de qualquer envio, e o receptor antes do primeiro clique.
+        dev.lualoader.network.ScreenNetwork.registerPayloads();
+        dev.lualoader.network.ScreenNetwork.registerServerReceiver();
+
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 LuaLoaderCommands.register(dispatcher));
         new BlockInteractionEvents(luaRuntime, blockRegistrar).register();

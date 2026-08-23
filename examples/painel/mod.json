@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "painel",
+  "name": "Painel de Exemplo",
+  "version": "1.0.0",
+  "description": "Tela desenhada e HUD: demonstra a interface customizada do loader.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "player.menu", "server.read", "server.command.register"],
+  "events": { "player_joined": "on_player_joined" },
+  "enabled": true
+}

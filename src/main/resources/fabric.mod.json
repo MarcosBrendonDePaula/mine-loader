@@ -15,6 +15,9 @@
     ],
     "fabric-gametest": [
       "dev.lualoader.gametest.BlockInteractionGameTest"
+    ],
+    "client": [
+      "dev.lualoader.client.LuaLoaderClient"
     ]
   },
   "mixins": [

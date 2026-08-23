@@ -94,106 +94,9 @@ class PlatformBridgeTest {
         }
     }
 
-    private static final class FakePlayer implements PlayerHandle {
-        final List<String> received = new ArrayList<>();
-
-        @Override
-        public String name() {
-            return "Steve";
-        }
-
-        @Override
-        public String uuid() {
-            return "00000000-0000-0000-0000-000000000001";
-        }
-
-        @Override
-        public void sendMessage(String message) {
-            received.add(message);
-        }
-
-        /** Inventario simulado: item -> quantidade. */
-        final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
-        String held = "minecraft:air";
-        int[] where = {0, 64, 0};
-
-        @Override
-        public void sendActionBar(String message) {
-            received.add("[bar] " + message);
-        }
-
-        @Override
-        public String heldItem() {
-            return held;
-        }
-
-        @Override
-        public int countItem(String itemId) {
-            return inventory.getOrDefault(itemId, 0);
-        }
-
-        /** Capacidade simulada: acima disso o item nao cabe e e reportado como derrubado. */
-        int capacity = Integer.MAX_VALUE;
-
-        @Override
-        public int giveItem(String itemId, int count) {
-            int atual = inventory.getOrDefault(itemId, 0);
-            int cabe = Math.max(0, Math.min(count, capacity - atual));
-            if (cabe > 0) inventory.put(itemId, atual + cabe);
-            return count - cabe;
-        }
-
-        @Override
-        public int takeItem(String itemId, int count) {
-            int atual = inventory.getOrDefault(itemId, 0);
-            int retirado = Math.min(atual, count);
-            if (retirado > 0) inventory.put(itemId, atual - retirado);
-            return retirado;
-        }
-
-        @Override
-        public int[] position() {
-            return where;
-        }
-
-        @Override
-        public float[] health() {
-            return new float[]{18.0f, 20.0f};
-        }
-
-        @Override
-        public void teleport(double x, double y, double z) {
-            where = new int[]{(int) x, (int) y, (int) z};
-        }
-
+    /** Jogador de teste: a base cobre o contrato, e aqui ficam apenas os apelidos usados. */
+    private static final class FakePlayer extends TestPlayer {
         String menuTitle;
-        String menuId;
-        java.util.List<String> menuItems = java.util.List.of();
-
-        @Override
-        public void openMenu(String id, String title, int rows, java.util.List<String> items) {
-            menuId = id;
-            menuTitle = title + " (" + rows + " linhas)";
-            menuItems = items;
-        }
-
-        @Override
-        public boolean updateMenu(java.util.List<String> items) {
-            if (menuId == null) return false;
-            menuItems = items;
-            return true;
-        }
-
-        @Override
-        public String openMenuId() {
-            return menuId;
-        }
-
-        @Override
-        public void closeMenu() {
-            menuTitle = null;
-            menuId = null;
-        }
     }
 
     private ModLoader.LoadedMod writeMod(Path root, String permissions, String lua) throws IOException {
@@ -979,7 +882,7 @@ class PlatformBridgeTest {
 
         runtime.triggerAll("player_joined", player);
 
-        assertEquals("Loja (3 linhas)", player.menuTitle);
+        assertTrue(player.received.contains("[menu] Loja (3 linhas)"), player.received.toString());
         assertEquals("test_mod:loja", player.menuId, "o id do menu e prefixado pelo mod");
         assertEquals(List.of("minecraft:diamond;5;", "minecraft:emerald;1;"), player.menuItems);
     }
@@ -998,7 +901,7 @@ class PlatformBridgeTest {
                 """));
 
         runtime.triggerAll("player_joined", player);
-        assertNull(player.menuTitle, "abrir menu exige player.menu");
+        assertNull(player.menuId, "abrir menu exige player.menu");
     }
 
     @Test

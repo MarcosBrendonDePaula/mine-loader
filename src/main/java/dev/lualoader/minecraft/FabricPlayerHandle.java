@@ -136,6 +136,64 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
         player.closeHandledScreen();
     }
 
+    // --- Telas desenhadas ------------------------------------------------------------------
+
+    /** Tela do loader aberta por jogador. O servidor precisa saber o que cada um esta vendo. */
+    private static final java.util.Map<java.util.UUID, String> TELAS_ABERTAS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Override
+    public boolean supportsScreens() {
+        return dev.lualoader.network.ScreenNetwork.supports(player);
+    }
+
+    @Override
+    public boolean openScreen(String screenId, String descriptionJson) {
+        if (!supportsScreens()) return false;
+
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.OpenScreen(
+                        dev.lualoader.ui.ScreenProtocol.VERSION, screenId, descriptionJson));
+        TELAS_ABERTAS.put(player.getUuid(), screenId);
+        return true;
+    }
+
+    @Override
+    public boolean updateScreen(String descriptionJson) {
+        if (!supportsScreens() || TELAS_ABERTAS.get(player.getUuid()) == null) return false;
+
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.UpdateScreen(descriptionJson));
+        return true;
+    }
+
+    @Override
+    public void closeScreen() {
+        TELAS_ABERTAS.remove(player.getUuid());
+        if (!supportsScreens()) return;
+
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.CloseScreen(""));
+    }
+
+    @Override
+    public String openScreenId() {
+        return TELAS_ABERTAS.get(player.getUuid());
+    }
+
+    /** Chamado quando o cliente avisa que fechou a tela. */
+    public static void forgetScreen(java.util.UUID playerId) {
+        TELAS_ABERTAS.remove(playerId);
+    }
+
+    @Override
+    public void setHud(String descriptionJson) {
+        if (!supportsScreens()) return;
+
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.SetHud(descriptionJson));
+    }
+
     private static Item resolveItem(String itemId) {
         int separator = itemId.indexOf(':');
         if (separator <= 0 || separator == itemId.length() - 1) {

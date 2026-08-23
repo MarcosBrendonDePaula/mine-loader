@@ -10,6 +10,8 @@ import dev.lualoader.platform.ItemEventData;
 import dev.lualoader.platform.GameBridge;
 import dev.lualoader.platform.PlayerHandle;
 import dev.lualoader.structure.StructurePlacer;
+import dev.lualoader.ui.ScreenBuilder;
+import dev.lualoader.ui.ScreenProtocol;
 import org.luaj.vm2.Globals;
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaFunction;
@@ -102,6 +104,9 @@ public final class LuaRuntime {
      * o clique com o indice do slot e decide o que fazer, sem precisar de uma tela desenhada.
      */
     private final Map<String, RegisteredMenu> menus = new LinkedHashMap<>();
+
+    /** Callbacks de tela desenhada, por identificador. */
+    private final Map<String, RegisteredMenu> screens = new LinkedHashMap<>();
     private long currentTick;
     private final Path remoteCache;
     private final StateStore stateStore;
@@ -212,6 +217,49 @@ public final class LuaRuntime {
         }
     }
 
+    /**
+     * Entrega ao mod dono um evento vindo de uma tela desenhada.
+     *
+     * <p>A acao chega do cliente e por isso e conferida contra o vocabulario fechado do protocolo:
+     * o cliente nao dita quais acoes existem.
+     */
+    public void triggerScreenEvent(String screenId, String elementId, String action,
+                                   String value, PlayerHandle player) {
+        if (!ScreenProtocol.ACTIONS.contains(action)) {
+            logger.warn("Acao de tela desconhecida ignorada: {}", action);
+            return;
+        }
+
+        RegisteredMenu screen = screens.get(screenId);
+        if (screen == null) return;
+
+        LoadedScript script = scripts.get(screen.modId());
+        if (script == null) return;
+
+        try {
+            script.budget().start();
+            LuaTable context = context(script.mod(), player, null);
+
+            LuaTable ui = new LuaTable();
+            ui.set("screen", LuaValue.valueOf(screenId));
+            ui.set("element", LuaValue.valueOf(elementId == null ? "" : elementId));
+            ui.set("action", LuaValue.valueOf(action));
+            ui.set("value", LuaValue.valueOf(value == null ? "" : value));
+            context.set("ui", ui);
+
+            screen.callback().call(context);
+        } catch (LuaError error) {
+            logger.error("Erro Lua na tela {} do mod {}: {}", screenId, screen.modId(), error.getMessage());
+        } catch (BridgeException error) {
+            logger.error("Erro de plataforma na tela {} do mod {}: {}",
+                    screenId, screen.modId(), error.getMessage());
+        } catch (RuntimeException error) {
+            logger.error("Erro Java na tela {} do mod {}", screenId, screen.modId(), error);
+        } finally {
+            script.budget().stop();
+        }
+    }
+
     /** Nomes de comando registrados pelos mods. */
     public java.util.Set<String> commandNames() {
         return java.util.Set.copyOf(commands.keySet());
@@ -305,6 +353,7 @@ public final class LuaRuntime {
         }
         commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
 
         LoadedScript replacement = compile(previous.mod());
         scripts.put(modId, replacement);
@@ -490,6 +539,24 @@ public final class LuaRuntime {
                 // O id publicado inclui o mod, para dois mods poderem usar o mesmo nome curto.
                 String completo = mod.manifest().id + ":" + nome;
                 menus.put(completo, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
+                return LuaValue.valueOf(completo);
+            }
+        });
+
+        modApi.set("screen", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 2) throw new LuaError("screen exige um id e uma funcao");
+
+                String nome = args.arg(1).tojstring();
+                if (!nome.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de tela invalido: " + nome);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("screen exige uma funcao");
+
+                String completo = mod.manifest().id + ":" + nome;
+                screens.put(completo, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
                 return LuaValue.valueOf(completo);
             }
         });
@@ -1220,6 +1287,70 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.menu");
                 String aberto = player.openMenuId();
                 return aberto == null ? LuaValue.NIL : LuaValue.valueOf(aberto);
+            }
+        });
+        playerApi.set("supports_screens", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.menu");
+                return LuaValue.valueOf(player.supportsScreens());
+            }
+        });
+        playerApi.set("open_screen", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 2 || !args.arg(2).istable()) {
+                    throw new LuaError("open_screen exige um id e uma tabela de tela");
+                }
+                String screenId = qualifiedMenuId(mod, args.arg(1).tojstring());
+                try {
+                    return LuaValue.valueOf(
+                            player.openScreen(screenId, ScreenBuilder.screen((LuaTable) args.arg(2))));
+                } catch (ScreenBuilder.InvalidScreenException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
+        playerApi.set("update_screen", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (!value.istable()) throw new LuaError("update_screen exige uma tabela de tela");
+                try {
+                    return LuaValue.valueOf(player.updateScreen(ScreenBuilder.screen((LuaTable) value)));
+                } catch (ScreenBuilder.InvalidScreenException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
+        playerApi.set("close_screen", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.menu");
+                player.closeScreen();
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("set_hud", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (!value.istable()) throw new LuaError("set_hud exige uma lista de elementos");
+                try {
+                    player.setHud(ScreenBuilder.hud((LuaTable) value));
+                } catch (ScreenBuilder.InvalidScreenException error) {
+                    throw new LuaError(error.getMessage());
+                }
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("close_menu", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.menu");
+                player.closeMenu();
+                return LuaValue.NIL;
             }
         });
         playerApi.set("teleport", new VarArgFunction() {
