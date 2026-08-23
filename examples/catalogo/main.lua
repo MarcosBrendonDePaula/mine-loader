@@ -32,6 +32,20 @@ local function estacao_de(receita)
     return COZIMENTO[receita.type] or UMA_ENTRADA[receita.type]
 end
 
+-- O bloco que executa cada tipo de receita. Uma aba com o icone da fornalha diz o que faz sem
+-- depender de ler o nome, que e o que um icone serve para fazer.
+local ICONE = {
+    ["minecraft:smelting"] = "minecraft:furnace",
+    ["minecraft:blasting"] = "minecraft:blast_furnace",
+    ["minecraft:smoking"] = "minecraft:smoker",
+    ["minecraft:campfire_cooking"] = "minecraft:campfire",
+    ["minecraft:stonecutting"] = "minecraft:stonecutter",
+    ["minecraft:crafting_shaped"] = "minecraft:crafting_table",
+    ["minecraft:crafting_shapeless"] = "minecraft:crafting_table",
+    ["minecraft:smithing_transform"] = "minecraft:smithing_table",
+    ["minecraft:smithing_trim"] = "minecraft:smithing_table"
+}
+
 -- Nomes das receitas que nao sao cozimento nem corte.
 local BANCADA = {
     ["minecraft:crafting_shaped"] = "Bancada",
@@ -52,6 +66,19 @@ local function acao_de(fonte)
         return fonte.dados.title
     end
     return "Derruba"
+end
+
+-- O icone que representa a origem de uma fonte.
+--
+-- Um processo aponta para quem o executa, quando declarado: a aba de ordenha mostra a vaca. Um drop
+-- mostra a picareta, que e o que o jogador faz para consegui-lo.
+local function icone_de(fonte)
+    if fonte.tipo == "receita" then
+        return ICONE[fonte.dados.type] or "minecraft:crafting_table"
+    elseif fonte.tipo == "processo" then
+        return fonte.dados.by or "minecraft:chest"
+    end
+    return "minecraft:iron_pickaxe"
 end
 
 -- Quantas colunas cabem à direita do inventário naquele cliente.
@@ -481,10 +508,13 @@ local function categorias(lista)
     local ordem = {}
     local por_nome = {}
 
+    local icone_por_nome = {}
+
     for _, fonte in ipairs(lista) do
         local nome = acao_de(fonte)
         if not por_nome[nome] then
             por_nome[nome] = 0
+            icone_por_nome[nome] = icone_de(fonte)
             ordem[#ordem + 1] = nome
         end
         por_nome[nome] = por_nome[nome] + 1
@@ -492,7 +522,7 @@ local function categorias(lista)
 
     local resultado = {}
     for indice, nome in ipairs(ordem) do
-        resultado[indice] = { nome = nome, total = por_nome[nome] }
+        resultado[indice] = { nome = nome, total = por_nome[nome], icone = icone_por_nome[nome] }
     end
     return resultado
 end
@@ -512,6 +542,11 @@ end
 local function largura_da_aba(texto)
     return 14 + #texto * 6
 end
+
+-- Uma aba com icone e quadrada: o icone ocupa 16 px e a moldura o resto. O nome vai para o texto
+-- de ajuda, que aparece ao parar o cursor -- assim a fileira de abas nao cresce com o nome de cada
+-- estacao, e continua cabendo mesmo num item com muitas origens.
+local LADO_DA_ABA = 22
 
 local function livro(ctx)
     local estado = meu(ctx)
@@ -567,25 +602,28 @@ local function livro(ctx)
             local aba_x = 0
             elementos[#elementos + 1] = { type = "button", id = "aba_0",
                                           x = painel_x, y = 62,
-                                          w = largura_da_aba("Tudo"), h = 16, text = "Tudo" }
+                                          w = largura_da_aba("Tudo"), h = LADO_DA_ABA,
+                                          text = "Tudo" }
             aba_x = largura_da_aba("Tudo") + 4
 
             for indice, aba in ipairs(abas) do
-                local texto = aba.nome .. " " .. aba.total
-                local w = largura_da_aba(texto)
-
                 -- Quebra de linha quando as abas nao cabem, pelo mesmo motivo das receitas.
-                if aba_x + w > disponivel_w then
+                if aba_x + LADO_DA_ABA > disponivel_w then
                     aba_x = 0
-                    topo_das_fontes = topo_das_fontes + 18
+                    topo_das_fontes = topo_das_fontes + LADO_DA_ABA + 2
                 end
 
                 elementos[#elementos + 1] = { type = "button", id = "aba_" .. indice,
                                               x = painel_x + aba_x, y = topo_das_fontes - 4,
-                                              w = w, h = 16, text = texto }
-                aba_x = aba_x + w + 4
+                                              w = LADO_DA_ABA, h = LADO_DA_ABA,
+                                              item = aba.icone, text = "" }
+                -- O item por cima do botao responde pelo cursor, e diz o nome da categoria.
+                elementos[#elementos + 1] = { type = "item", x = painel_x + aba_x + 3,
+                                              y = topo_das_fontes - 1, item = aba.icone,
+                                              tooltip = aba.nome .. " (" .. aba.total .. ")" }
+                aba_x = aba_x + LADO_DA_ABA + 2
             end
-            topo_das_fontes = topo_das_fontes + 22
+            topo_das_fontes = topo_das_fontes + LADO_DA_ABA + 6
         end
 
         local disponivel_h = rodape - topo_das_fontes - 4

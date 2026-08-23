@@ -234,6 +234,15 @@ public final class ScreenRenderer {
         context.fill(right - thickness, y, right, bottom, dark);
     }
 
+    /** Desenha o ícone de um item, sem quantidade. Usado por elementos que só ilustram. */
+    public static void drawItemIcon(DrawContext context, TextRenderer textRenderer,
+                                    String itemId, int x, int y) {
+        Identifier id = Identifier.tryParse(itemId);
+        if (id == null || !Registries.ITEM.containsId(id)) return;
+
+        context.drawItem(new ItemStack(Registries.ITEM.get(id)), x, y);
+    }
+
     /**
      * Desenha a caixa de ajuda do elemento sob o cursor, se houver.
      *

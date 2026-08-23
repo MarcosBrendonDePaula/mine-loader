@@ -112,6 +112,33 @@ public final class ScreenSurface {
     }
 
     /**
+     * Desenha o ícone dos botões que declaram um item.
+     *
+     * <p>Precisa acontecer depois dos widgets: o botão é desenhado pelo jogo, e um ícone pintado
+     * antes dele ficaria escondido atrás. Por isso não fica no {@link #draw}, que roda antes.
+     *
+     * <p>O botão continua sendo o mesmo elemento; o ícone é um enfeite. Um botão com texto e ícone
+     * mostra os dois, com o ícone à esquerda.
+     */
+    public void drawButtonIcons(DrawContext context, TextRenderer textRenderer,
+                                List<ScreenModel.Element> elements,
+                                ScreenRenderer.Bounds surface, ScreenRenderer.Bounds gui) {
+        for (ScreenModel.Element element : elements) {
+            if (!element.type().equals("button") || element.item().isBlank()) continue;
+
+            int[] position = positionOf(element, elements, surface, gui);
+
+            // Centralizado quando o botão não tem texto, encostado à esquerda quando tem.
+            int x = element.text().isBlank()
+                    ? position[0] + (element.w() - 16) / 2
+                    : position[0] + 3;
+            int y = position[1] + (element.h() - 16) / 2;
+
+            ScreenRenderer.drawItemIcon(context, textRenderer, element.item(), x, y);
+        }
+    }
+
+    /**
      * Trata um clique. Devolve a grade clicada e a célula, ou {@code null}.
      *
      * @return array com o id da grade e o índice da célula, a partir de 1

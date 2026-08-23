@@ -169,6 +169,9 @@ public class LuaScreen extends Screen {
         for (var widget : widgets) {
             widget.render(context, mouseX, mouseY, delta);
         }
+        // O icone de um botao vem depois dele, senao o proprio botao o cobriria.
+        surface.drawButtonIcons(context, textRenderer, model.elements(), window, window);
+
         // O texto de ajuda vem depois de tudo, senao os widgets cobririam a caixa.
         ScreenRenderer.drawTooltip(context, textRenderer, tooltip, mouseX, mouseY);
     }

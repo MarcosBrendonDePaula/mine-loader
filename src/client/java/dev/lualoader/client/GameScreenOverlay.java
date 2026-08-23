@@ -205,6 +205,10 @@ public final class GameScreenOverlay {
                     surface, gui, mouseX, mouseY, true);
             if (found != null) tooltip = found;
         }
+        // O icone de um botao vem depois dele, senao o proprio botao o cobriria.
+        for (Overlay overlay : applicable) {
+            SURFACE.drawButtonIcons(context, textRenderer, overlay.model().elements(), surface, gui);
+        }
         ScreenRenderer.drawTooltip(context, textRenderer, tooltip, mouseX, mouseY);
     }
 

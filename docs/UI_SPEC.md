@@ -101,6 +101,23 @@ distribuir e o cliente baixar uma imagem.
 `border`, `border_light` e `border_dark` ajustam espessura e cores quando o padrao nao serve. Sem
 `color`, `vanilla` e `slot` usam os cinzas do jogo.
 
+## Botao com icone
+
+Um `button` que declara `item` desenha o icone daquele item, alem do texto. Serve a uma fileira de
+abas: um icone de fornalha diz o que a aba faz sem depender de ler o nome, e a fileira nao cresce
+com o tamanho de cada nome.
+
+```lua
+{ type = "button", id = "aba_forno", x = 8, y = 8, w = 22, h = 22,
+  item = "minecraft:furnace", text = "" }
+```
+
+Sem texto, o icone fica centralizado; com texto, encostado a esquerda. O icone e desenhado depois do
+botao, porque o botao e um widget do jogo e cobriria qualquer coisa pintada antes dele.
+
+O botao nao responde por texto de ajuda -- widgets do jogo tem o proprio caminho para isso. Para dar
+nome a uma aba de icone, sobreponha um `item` com `tooltip` na mesma posicao.
+
 ## Sombra do texto
 
 Todo texto era desenhado com sombra. Sobre o mundo isso e o certo -- a sombra e o que separa o texto

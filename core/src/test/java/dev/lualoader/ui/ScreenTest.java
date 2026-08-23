@@ -1195,9 +1195,12 @@ class ScreenTest {
         runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "iron_ingot", player);
         runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
 
-        // As abas saem do que o item tem: nao ha lista fixa de categorias.
-        assertTrue(player.screenJson.contains("Fornalha 1"), player.screenJson);
-        assertTrue(player.screenJson.contains("Derruba 1"), player.screenJson);
+        // As abas saem do que o item tem: nao ha lista fixa de categorias. O nome vai no texto de
+        // ajuda, e a aba mostra o bloco que executa aquela receita.
+        assertTrue(player.screenJson.contains("Fornalha (1)"), player.screenJson);
+        assertTrue(player.screenJson.contains("Derruba (1)"), player.screenJson);
+        assertTrue(player.screenJson.contains("minecraft:furnace"), player.screenJson);
+        assertTrue(player.screenJson.contains("minecraft:crafting_table"), player.screenJson);
         assertTrue(player.screenJson.contains("\"id\":\"aba_0\""), player.screenJson);
 
         // Sem filtro, as tres origens estao na tela.
