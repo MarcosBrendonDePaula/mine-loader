@@ -35,6 +35,12 @@ public final class LoaderEvents {
             "block_neighbor_update"
     );
 
+    /** Eventos originados por uma janela aberta pelo mod. */
+    public static final Set<String> MENU = Set.of(
+            "menu_click",
+            "menu_closed"
+    );
+
     /** Eventos originados por um item declarado. */
     public static final Set<String> ITEM = Set.of(
             "item_used",
@@ -42,7 +48,7 @@ public final class LoaderEvents {
     );
 
     /** Todos os eventos aceitos, usados tanto na validação quanto no disparo. */
-    public static final Set<String> ALL = union(GLOBAL, BLOCK, ITEM);
+    public static final Set<String> ALL = union(GLOBAL, BLOCK, ITEM, MENU);
 
     private static Set<String> union(Set<String>... groups) {
         var all = new java.util.LinkedHashSet<String>();

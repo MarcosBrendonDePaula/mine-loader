@@ -94,6 +94,14 @@ public final class LuaRuntime {
      * quando o comando e executado.
      */
     private final Map<String, RegisteredCommand> commands = new LinkedHashMap<>();
+
+    /**
+     * Callbacks de janela, por identificador de menu.
+     *
+     * <p>E o que permite acoplar logica a uma interface: o mod desenha o estado como itens, recebe
+     * o clique com o indice do slot e decide o que fazer, sem precisar de uma tela desenhada.
+     */
+    private final Map<String, RegisteredMenu> menus = new LinkedHashMap<>();
     private long currentTick;
     private final Path remoteCache;
     private final StateStore stateStore;
@@ -165,6 +173,45 @@ public final class LuaRuntime {
         }
     }
 
+    /**
+     * Entrega um clique de janela ao mod dono.
+     *
+     * @param slot   indice do slot clicado na grade do mod
+     * @param button 0 para o botao esquerdo, 1 para o direito
+     * @param itemId item exibido no slot no momento do clique
+     */
+    public void triggerMenuClick(String modId, String menuId, int slot, int button,
+                                 String itemId, PlayerHandle player) {
+        RegisteredMenu menu = menus.get(menuId);
+        if (menu == null || !menu.modId().equals(modId)) return;
+
+        LoadedScript script = scripts.get(menu.modId());
+        if (script == null) return;
+
+        try {
+            script.budget().start();
+            LuaTable context = context(script.mod(), player, null);
+
+            LuaTable menuApi = new LuaTable();
+            menuApi.set("id", LuaValue.valueOf(menuId));
+            menuApi.set("slot", LuaValue.valueOf(slot));
+            menuApi.set("button", LuaValue.valueOf(button));
+            menuApi.set("item", LuaValue.valueOf(itemId));
+            context.set("menu", menuApi);
+
+            menu.callback().call(context);
+        } catch (LuaError error) {
+            logger.error("Erro Lua no menu {} do mod {}: {}", menuId, menu.modId(), error.getMessage());
+        } catch (BridgeException error) {
+            logger.error("Erro de plataforma no menu {} do mod {}: {}",
+                    menuId, menu.modId(), error.getMessage());
+        } catch (RuntimeException error) {
+            logger.error("Erro Java no menu {} do mod {}", menuId, menu.modId(), error);
+        } finally {
+            script.budget().stop();
+        }
+    }
+
     /** Nomes de comando registrados pelos mods. */
     public java.util.Set<String> commandNames() {
         return java.util.Set.copyOf(commands.keySet());
@@ -186,7 +233,24 @@ public final class LuaRuntime {
         try {
             script.budget().start();
             LuaTable context = context(script.mod(), player, null);
-            context.set("args", LuaValue.valueOf(arguments == null ? "" : arguments));
+
+            String texto = arguments == null ? "" : arguments.trim();
+            context.set("args", LuaValue.valueOf(texto));
+
+            // Alem do texto cru, o script recebe as palavras separadas e o primeiro termo como
+            // subcomando, que e o formato que quase todo comando acaba montando a mao.
+            LuaTable palavras = new LuaTable();
+            String subcomando = "";
+            if (!texto.isEmpty()) {
+                String[] partes = texto.split("\s+");
+                for (int indice = 0; indice < partes.length; indice++) {
+                    palavras.set(indice + 1, LuaValue.valueOf(partes[indice]));
+                }
+                subcomando = partes[0];
+            }
+            context.set("argv", palavras);
+            context.set("subcommand", LuaValue.valueOf(subcomando));
+
             command.callback().call(context);
         } catch (LuaError error) {
             logger.error("Erro Lua no comando {} do mod {}: {}", name, command.modId(), error.getMessage());
@@ -240,6 +304,7 @@ public final class LuaRuntime {
             }
         }
         commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
 
         LoadedScript replacement = compile(previous.mod());
         scripts.put(modId, replacement);
@@ -409,6 +474,25 @@ public final class LuaRuntime {
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
         modApi.set("server", serverApiFor(mod));
+
+        modApi.set("menu", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 2) throw new LuaError("menu exige um id e uma funcao");
+
+                String nome = args.arg(1).tojstring();
+                if (!nome.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de menu invalido: " + nome);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("menu exige uma funcao");
+
+                // O id publicado inclui o mod, para dois mods poderem usar o mesmo nome curto.
+                String completo = mod.manifest().id + ":" + nome;
+                menus.put(completo, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
+                return LuaValue.valueOf(completo);
+            }
+        });
 
         modApi.set("command", new VarArgFunction() {
             @Override
@@ -1109,36 +1193,33 @@ public final class LuaRuntime {
             @Override
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "player.menu");
-                if (args.narg() < 3 || !args.arg(3).istable()) {
-                    throw new LuaError("open_menu exige titulo, linhas e uma lista de itens");
+                if (args.narg() < 4 || !args.arg(4).istable()) {
+                    throw new LuaError("open_menu exige id, titulo, linhas e uma lista de itens");
                 }
-                int rows = args.arg(2).checkint();
+                int rows = args.arg(3).checkint();
                 if (rows < 1 || rows > 6) throw new LuaError("linhas deve estar entre 1 e 6");
 
-                LuaTable lista = (LuaTable) args.arg(3);
-                java.util.List<String> itens = new java.util.ArrayList<>();
-                for (int indice = 1; indice <= lista.length(); indice++) {
-                    LuaValue entrada = lista.get(indice);
-                    if (entrada.istable()) {
-                        LuaValue id = entrada.get("item");
-                        LuaValue count = entrada.get("count");
-                        itens.add(id.tojstring() + ";" + (count.isnumber() ? count.toint() : 1));
-                    } else if (!entrada.isnil()) {
-                        itens.add(entrada.tojstring() + ";1");
-                    } else {
-                        itens.add("");
-                    }
-                }
-                player.openMenu(args.arg(1).tojstring(), rows, itens);
+                String menuId = qualifiedMenuId(mod, args.arg(1).tojstring());
+                player.openMenu(menuId, args.arg(2).tojstring(), rows,
+                        menuItems((LuaTable) args.arg(4)));
                 return LuaValue.NIL;
             }
         });
-        playerApi.set("close_menu", new ZeroArgFunction() {
+        playerApi.set("update_menu", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (!value.istable()) throw new LuaError("update_menu exige uma lista de itens");
+                // Redesenhar sem fechar e o que permite uma janela reagir ao proprio clique.
+                return LuaValue.valueOf(player.updateMenu(menuItems((LuaTable) value)));
+            }
+        });
+        playerApi.set("open_menu_id", new ZeroArgFunction() {
             @Override
             public LuaValue call() {
                 requirePermission(mod.manifest(), "player.menu");
-                player.closeMenu();
-                return LuaValue.NIL;
+                String aberto = player.openMenuId();
+                return aberto == null ? LuaValue.NIL : LuaValue.valueOf(aberto);
             }
         });
         playerApi.set("teleport", new VarArgFunction() {
@@ -1154,6 +1235,37 @@ public final class LuaRuntime {
             }
         });
         return playerApi;
+    }
+
+    /** Prefixa o id do menu com o mod, para dois mods poderem usar o mesmo nome curto. */
+    private static String qualifiedMenuId(ModLoader.LoadedMod mod, String nome) {
+        return nome.contains(":") ? nome : mod.manifest().id + ":" + nome;
+    }
+
+    /**
+     * Converte a lista Lua em linhas {@code item;quantidade;rotulo}.
+     *
+     * <p>Aceita tanto um texto simples quanto uma tabela com {@code item}, {@code count} e
+     * {@code label}, para o caso comum ficar curto sem impedir o caso completo.
+     */
+    private static java.util.List<String> menuItems(LuaTable lista) {
+        java.util.List<String> itens = new java.util.ArrayList<>();
+        for (int indice = 1; indice <= lista.length(); indice++) {
+            LuaValue entrada = lista.get(indice);
+            if (entrada.istable()) {
+                LuaValue id = entrada.get("item");
+                LuaValue count = entrada.get("count");
+                LuaValue label = entrada.get("label");
+                itens.add(id.tojstring()
+                        + ";" + (count.isnumber() ? count.toint() : 1)
+                        + ";" + (label.isnil() ? "" : label.tojstring()));
+            } else if (!entrada.isnil()) {
+                itens.add(entrada.tojstring() + ";1;");
+            } else {
+                itens.add("");
+            }
+        }
+        return itens;
     }
 
     /** Quantidade de itens aceita em uma operacao de inventario. */
@@ -1231,6 +1343,10 @@ public final class LuaRuntime {
      * @param exports tabela devolvida pelo entrypoint, que e a API publica do mod para
      *                {@code mod.require}
      */
+    /** Janela registrada por um mod. */
+    private record RegisteredMenu(String modId, LuaFunction callback) {
+    }
+
     /** Comando registrado por um mod. */
     private record RegisteredCommand(String modId, LuaFunction callback) {
     }

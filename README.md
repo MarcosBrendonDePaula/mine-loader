@@ -3,6 +3,7 @@
 ## Especificações
 
 - [Especificação geral do projeto](docs/SPECIFICATION.md)
+- [Guia de criação de mod](docs/GUIA_DO_MOD.md)
 - [Formato de mods e manifesto JSON](docs/MOD_FORMAT_SPEC.md)
 - [Blocos dinâmicos e Lua](docs/DYNAMIC_BLOCKS.md)
 - [Especificação de segurança](docs/SECURITY_SPEC.md)

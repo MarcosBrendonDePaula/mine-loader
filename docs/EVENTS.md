@@ -40,6 +40,7 @@ do mod não é chamado para aquele bloco.
 | `block_neighbor_update` | Um bloco vizinho mudou | `ctx.block` |
 | `item_used` | Item usado na mão, sem alvo | `ctx.item`, `ctx.player` |
 | `item_used_on_block` | Item usado sobre um bloco | `ctx.item` com `target_block` e posição, `ctx.player` |
+| `menu_click` | Slot clicado em uma janela do mod | `ctx.menu` com `id`, `slot`, `button` e `item`, `ctx.player` |
 
 ### Por objeto (bloco)
 
@@ -52,6 +53,12 @@ do mod não é chamado para aquele bloco.
 | `on_random_tick` | `block_random_tick` |
 | `on_neighbor_update` | `block_neighbor_update` |
 | `on_break` | apelido antigo de `on_attack`, ainda aceito |
+
+### Por janela
+
+Uma janela registra a própria lógica com `mod.menu(id, funcao)`. O callback recebe `ctx.menu` com o
+slot clicado e o item exibido nele, e pode redesenhar com `ctx.player.update_menu(...)` sem fechar a
+tela. Uma janela pertence ao mod que a registrou: um clique nunca alcança o callback de outro mod.
 
 ### Por objeto (item)
 

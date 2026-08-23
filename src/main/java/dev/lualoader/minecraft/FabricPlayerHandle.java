@@ -108,14 +108,27 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
-    public void openMenu(String title, int rows, java.util.List<String> items) {
+    public void openMenu(String menuId, String title, int rows, java.util.List<String> items) {
         int linhas = Math.max(1, Math.min(6, rows));
-        var inventory = ReadOnlyMenu.buildInventory(items, linhas);
+        var conteudo = LuaMenu.build(items, linhas);
+        String modId = menuId.contains(":") ? menuId.substring(0, menuId.indexOf(':')) : menuId;
 
         player.openHandledScreen(new net.minecraft.screen.SimpleNamedScreenHandlerFactory(
                 (syncId, playerInventory, ignored) ->
-                        new ReadOnlyMenu(syncId, playerInventory, inventory, linhas),
+                        new LuaMenu(syncId, playerInventory, conteudo, linhas, menuId, modId),
                 Text.literal(title)));
+    }
+
+    @Override
+    public boolean updateMenu(java.util.List<String> items) {
+        if (!(player.currentScreenHandler instanceof LuaMenu menu)) return false;
+        menu.replaceContents(items);
+        return true;
+    }
+
+    @Override
+    public String openMenuId() {
+        return player.currentScreenHandler instanceof LuaMenu menu ? menu.menuId() : null;
     }
 
     @Override

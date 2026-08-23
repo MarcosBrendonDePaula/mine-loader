@@ -16,7 +16,7 @@ que trata de quando o código roda; aqui a pergunta é o que o código consegue 
 | Feedback | `play_sound`, `spawn_particles`, `send_action_bar` |
 | Jogador | `name`, `uuid`, `send_message`, `position`, `health`, `teleport` |
 | Inventário | `count_item`, `give_item`, `take_item`, `held_item` |
-| Menu | `open_menu`, `close_menu` |
+| Janela | `mod.menu`, `open_menu`, `update_menu`, `close_menu`, `open_menu_id` |
 | Leitura do servidor | `players`, `time_of_day`, `world_name` |
 | Entidades | `spawn_entity`, `entities_near`, `remove_entity`, `damage_entity` |
 | Agendamento | `mod.after` |
@@ -117,9 +117,11 @@ nova, com modelo e comportamento próprios, continua fora: isso exige registrar 
 um modelo e um renderizador no cliente, além de sincronização de rede. Um mod pode usar um Allay como
 guardião; não pode criar o Moa.
 
-**Interface.** O menu usa a tela de container do próprio jogo, o que faz o recurso funcionar em
-qualquer cliente vanilla com o loader instalado. Em troca, é uma grade de itens somente leitura: não
-há HUD, tela desenhada, botões nem campos de texto, e o jogador não retira o que está exposto.
+**Interface.** A janela usa a tela de container do próprio jogo, o que faz o recurso funcionar em
+qualquer cliente vanilla com o loader instalado. Cada slot é um botão: o clique volta ao script com
+o índice, o item e o botão usado, e o mod redesenha sem fechar a tela. O que continua fora é a tela
+desenhada de verdade — HUD, botões próprios, campos de texto — porque isso exige um renderizador no
+cliente e um protocolo de rede próprio.
 
 **Formas de bloco.** Existem lajes, tapetes, painéis, postes, placas, plantas e mesas, definidas como
 caixas de colisão. Escadas, cercas e portões continuam fora, porque dependem de estado direcional e

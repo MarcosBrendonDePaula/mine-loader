@@ -167,17 +167,32 @@ class PlatformBridgeTest {
         }
 
         String menuTitle;
+        String menuId;
         java.util.List<String> menuItems = java.util.List.of();
 
         @Override
-        public void openMenu(String title, int rows, java.util.List<String> items) {
+        public void openMenu(String id, String title, int rows, java.util.List<String> items) {
+            menuId = id;
             menuTitle = title + " (" + rows + " linhas)";
             menuItems = items;
         }
 
         @Override
+        public boolean updateMenu(java.util.List<String> items) {
+            if (menuId == null) return false;
+            menuItems = items;
+            return true;
+        }
+
+        @Override
+        public String openMenuId() {
+            return menuId;
+        }
+
+        @Override
         public void closeMenu() {
             menuTitle = null;
+            menuId = null;
         }
     }
 
@@ -955,7 +970,7 @@ class PlatformBridgeTest {
 
         runtime.load(writeMod(root, "\"player.menu\"", """
                 mod.on("player_joined", function(ctx)
-                    ctx.player.open_menu("Loja", 3, {
+                    ctx.player.open_menu("loja", "Loja", 3, {
                         { item = "minecraft:diamond", count = 5 },
                         "minecraft:emerald"
                     })
@@ -965,7 +980,8 @@ class PlatformBridgeTest {
         runtime.triggerAll("player_joined", player);
 
         assertEquals("Loja (3 linhas)", player.menuTitle);
-        assertEquals(List.of("minecraft:diamond;5", "minecraft:emerald;1"), player.menuItems);
+        assertEquals("test_mod:loja", player.menuId, "o id do menu e prefixado pelo mod");
+        assertEquals(List.of("minecraft:diamond;5;", "minecraft:emerald;1;"), player.menuItems);
     }
 
     @Test
@@ -977,7 +993,7 @@ class PlatformBridgeTest {
 
         runtime.load(writeMod(root, "\"chat.send\"", """
                 mod.on("player_joined", function(ctx)
-                    ctx.player.open_menu("Loja", 3, {})
+                    ctx.player.open_menu("loja", "Loja", 3, {})
                 end)
                 """));
 

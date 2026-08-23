@@ -48,13 +48,27 @@ public interface PlayerHandle {
     /**
      * Abre um menu de itens para o jogador.
      *
-     * <p>Usa a tela de container do próprio jogo, o que dispensa um renderizador novo no cliente:
-     * cada linha é {@code item;quantidade}, e o menu é somente leitura para o jogador não retirar
-     * o que está sendo mostrado.
+     * <p>Usa a tela de container do próprio jogo, o que dispensa um renderizador novo no cliente e
+     * faz o recurso funcionar em qualquer cliente vanilla. Cada linha é {@code item;quantidade;rotulo},
+     * e o jogador não retira o que está exposto: os slots são botões, não armazenamento.
      *
-     * @param rows número de linhas, de 1 a 6
+     * @param menuId identificador do menu, devolvido ao script quando um slot é clicado
+     * @param rows   número de linhas, de 1 a 6
      */
-    void openMenu(String title, int rows, java.util.List<String> items);
+    void openMenu(String menuId, String title, int rows, java.util.List<String> items);
+
+    /**
+     * Substitui o conteúdo do menu aberto sem fechá-lo.
+     *
+     * <p>Sem isto, reagir a um clique exigiria fechar e reabrir a tela, o que pisca e devolve o
+     * cursor ao centro.
+     *
+     * @return {@code false} quando não há menu do loader aberto
+     */
+    boolean updateMenu(java.util.List<String> items);
+
+    /** Identificador do menu aberto, ou {@code null} quando não há nenhum. */
+    String openMenuId();
 
     /** Fecha o menu aberto, se houver. */
     void closeMenu();
