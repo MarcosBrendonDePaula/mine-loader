@@ -57,6 +57,24 @@ run/mods-lua/hello_lua/assets/hello_lua/textures/block/ruby_block.png
 run/mods-lua/hello_lua/assets/hello_lua/textures/block/ruby_block_alt.png
 ```
 
+## Exemplos
+
+A pasta `examples/` traz mods prontos para copiar para `run/mods-lua`. Cada um exercita uma parte
+diferente do loader.
+
+| Exemplo | O que demonstra |
+|---|---|
+| `hello_lua` | Bloco declarativo com variantes, textura local e propriedades dinâmicas |
+| `crystal_world` | Estruturas, dados por bloco e aba criativa |
+| `github_mod` | Mod remoto: manifesto e scripts baixados por URL |
+| `guilda` | Estado persistido, comandos próprios e menu de itens |
+| `loja` | Inventário do jogador: dar, tirar e contar itens |
+| `painel` | Tela desenhada e HUD |
+| `catalogo` | Sobreposição no inventário, grade rolável, busca, receitas, drops e processos |
+
+O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
+serve como referência de como as peças se combinam.
+
 ## Manifesto mínimo
 
 ```json
