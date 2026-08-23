@@ -254,6 +254,24 @@ local abriu = ctx.player.open_screen("forja", desenhar(ctx))
 
 O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `ctx.ui.value`.
 
+## Ordem de desenho
+
+A tela e desenhada em tres camadas, nesta ordem:
+
+| Camada | O que |
+|---|---|
+| 1 | Fundo: desfoque e escurecimento |
+| 2 | Elementos do mod: `panel`, `label`, `image`, `item`, `progress` |
+| 3 | Widgets do jogo: `button` e `input` |
+
+A ordem e explicita porque o metodo de renderizacao do jogo repinta o fundo antes de desenhar os
+proprios widgets. Chama-lo depois dos elementos do mod apagaria a camada 2 inteira: o painel sumia
+atras do fundo e apenas os botoes sobreviviam. O renderizador mantem a propria lista de widgets e
+os desenha por ultimo.
+
+Dentro da camada 2, os elementos aparecem na ordem em que foram declarados: o primeiro fica atras.
+Um painel de fundo deve ser o primeiro elemento da lista.
+
 ## Fundo da tela
 
 Desde a 1.20.5 o jogo desfoca o mundo atras de qualquer tela. Isso serve a um menu de pausa, mas

@@ -25,6 +25,11 @@ local function desenhar(ctx)
         title = "Painel do Loader",
         width = 220,
         height = 140,
+
+        -- O desfoque do jogo por tras da janela. O painel do mod continua na frente dele.
+        blur = true,
+        dim = true,
+
         elements = {
             -- Fundo da janela.
             { type = "panel", x = 0, y = 0, w = 220, h = 140, color = COR_FUNDO },

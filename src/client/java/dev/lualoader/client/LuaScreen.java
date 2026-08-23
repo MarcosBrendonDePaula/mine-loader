@@ -28,6 +28,17 @@ public class LuaScreen extends Screen {
     /** Campos de texto vivos, para o que foi digitado sobreviver a um redesenho. */
     private final Map<String, TextFieldWidget> fields = new HashMap<>();
 
+    /**
+     * Os widgets desta tela, na ordem em que devem ser desenhados.
+     *
+     * <p>O jogo desenha os proprios widgets dentro de {@code Screen.render}, que tambem repinta o
+     * fundo antes deles. Chamar aquele metodo depois de desenhar os elementos do mod apagaria tudo:
+     * o painel sumia atras do fundo e so os botoes sobreviviam. Mantendo a lista aqui, a ordem fica
+     * explicita — fundo, elementos, widgets.
+     */
+    private final java.util.List<net.minecraft.client.gui.widget.ClickableWidget> widgets =
+            new java.util.ArrayList<>();
+
     public LuaScreen(String screenId, ScreenModel model) {
         super(Text.literal(model.title()));
         this.screenId = screenId;
@@ -55,6 +66,7 @@ public class LuaScreen extends Screen {
         this.model = novo;
         clearChildren();
         fields.clear();
+        widgets.clear();
         buildWidgets(anteriores);
 
         // Devolve o foco ao campo em que o jogador estava digitando.
@@ -67,6 +79,7 @@ public class LuaScreen extends Screen {
     @Override
     protected void init() {
         fields.clear();
+        widgets.clear();
         buildWidgets(Map.of());
     }
 
@@ -117,10 +130,10 @@ public class LuaScreen extends Screen {
             int[] pos = resolve(element);
 
             if (element.type().equals("button")) {
-                addDrawableChild(net.minecraft.client.gui.widget.ButtonWidget
+                widgets.add(addDrawableChild(net.minecraft.client.gui.widget.ButtonWidget
                         .builder(Text.literal(element.text()), botao -> send(element.id(), "click", ""))
                         .dimensions(pos[0], pos[1], Math.max(20, element.w()), Math.max(12, element.h()))
-                        .build());
+                        .build()));
             } else if (element.type().equals("input")) {
                 TextFieldWidget existente = anteriores.get(element.id());
 
@@ -128,7 +141,7 @@ public class LuaScreen extends Screen {
                     // Reaproveita o campo: o texto, o cursor e a selecao continuam onde estavam.
                     existente.setPosition(pos[0], pos[1]);
                     fields.put(element.id(), existente);
-                    addDrawableChild(existente);
+                    widgets.add(addDrawableChild(existente));
                     continue;
                 }
 
@@ -140,7 +153,7 @@ public class LuaScreen extends Screen {
                 campo.setChangedListener(texto -> send(element.id(), "change", texto));
 
                 fields.put(element.id(), campo);
-                addDrawableChild(campo);
+                widgets.add(addDrawableChild(campo));
             }
         }
     }
@@ -211,7 +224,11 @@ public class LuaScreen extends Screen {
                 }
             }
         }
-        super.render(context, mouseX, mouseY, delta);
+        // Os widgets sao desenhados por ultimo, para ficarem sobre os elementos do mod. Nao se
+        // chama Screen.render aqui: ele repintaria o fundo por cima do que acabou de ser desenhado.
+        for (var widget : widgets) {
+            widget.render(context, mouseX, mouseY, delta);
+        }
     }
 
     private void send(String elementId, String action, String value) {
