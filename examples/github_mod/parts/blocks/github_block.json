@@ -1,0 +1,49 @@
+{
+  "id": "github_block",
+  "name": "Bloco do GitHub",
+  "material": {
+    "map_color": "black",
+    "sound": "metal"
+  },
+  "settings": {
+    "hardness": 4.0,
+    "resistance": 6.0,
+    "requires_tool": true,
+    "luminance": 3
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/github_mod/textures/block/github_block.png",
+      "fallback": "minecraft:block/deepslate_tiles"
+    },
+    "variant_textures": {
+      "0": {
+        "source": "local",
+        "path": "assets/github_mod/textures/block/github_block.png",
+        "fallback": "minecraft:block/deepslate_tiles"
+      },
+      "1": {
+        "source": "local",
+        "path": "assets/github_mod/textures/block/github_block_alt.png",
+        "fallback": "minecraft:block/quartz_block"
+      }
+    }
+  },
+  "loot": {
+    "mode": "item",
+    "item": "github_mod:commit",
+    "count": 3
+  },
+  "tags": [
+    "minecraft:mineable/pickaxe"
+  ],
+  "item": {
+    "register": true,
+    "rarity": "rare"
+  },
+  "behavior": {
+    "on_use": "scripts/github_block/on_use.lua"
+  }
+}

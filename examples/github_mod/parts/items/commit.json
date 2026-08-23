@@ -1,0 +1,14 @@
+{
+  "id": "commit",
+  "name": "Commit",
+  "max_stack_size": 64,
+  "rarity": "uncommon",
+  "texture": {
+    "source": "local",
+    "path": "assets/github_mod/textures/item/commit.png",
+    "fallback": "minecraft:item/emerald"
+  },
+  "behavior": {
+    "on_use_on_block": "scripts/commit/on_use_on_block.lua"
+  }
+}

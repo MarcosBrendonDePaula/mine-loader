@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "id": "github_mod",
+  "name": "GitHub Mod",
+  "version": "1.0.0",
+  "description": "Mod de exemplo publicado no GitHub, usado para testar import remoto por raw URL.",
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "world.read",
+    "world.write"
+  ],
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "GitHub",
+    "icon": "github_mod:github_block"
+  },
+  "items": [
+    {
+      "$import": "parts/items/commit.json"
+    }
+  ],
+  "blocks": [
+    {
+      "$import": "parts/blocks/github_block.json"
+    }
+  ],
+  "structures": [
+    {
+      "$import": "parts/structures/repo.json"
+    }
+  ],
+  "enabled": true
+}

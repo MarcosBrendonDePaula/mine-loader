@@ -1,0 +1,28 @@
+{
+  "id": "repo",
+  "name": "Repositorio",
+  "origin": "bottom_center",
+  "palette": {
+    "G": "github_mod:github_block",
+    "L": "minecraft:glowstone",
+    ".": "minecraft:air",
+    " ": null
+  },
+  "layers": [
+    [
+      "GGG",
+      "GLG",
+      "GGG"
+    ],
+    [
+      "G G",
+      " . ",
+      "G G"
+    ],
+    [
+      "GGG",
+      "G.G",
+      "GGG"
+    ]
+  ]
+}
