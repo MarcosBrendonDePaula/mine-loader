@@ -1,0 +1,88 @@
+name: Release
+
+# Publica uma versao a partir de uma tag. O jar do loader e o que o jogador instala em mods/;
+# os mods de exemplo vao empacotados a parte, porque sao pastas de dados e nao jars.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versao a publicar, por exemplo v0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publicar versao
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Obter o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Preparar o Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar e rodar os testes
+        # Uma versao so e publicada se os testes passarem.
+        run: ./gradlew build --stacktrace
+
+      - name: Empacotar os mods de exemplo
+        # Cada exemplo vira um zip proprio, para o jogador baixar so o que quer e descompactar
+        # dentro de mods-lua/.
+        run: |
+          mkdir -p build/distribuicao
+          for pasta in examples/*/; do
+            nome=$(basename "$pasta")
+            (cd examples && zip -r "../build/distribuicao/${nome}.zip" "$nome" -x '*/.*')
+          done
+          ls -la build/distribuicao
+
+      - name: Descobrir a versao
+        id: versao
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.versao }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publicar a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versao.outputs.tag }}
+          name: Mine Loader ${{ steps.versao.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            ## Instalacao
+
+            1. Instale o Fabric Loader para Minecraft 1.21.1 e a Fabric API.
+            2. Coloque `minecraft-lua-loader.jar` na pasta `mods/`.
+            3. Baixe um mod de exemplo abaixo e descompacte em `mods-lua/`, ao lado de `mods/`.
+
+            O jar precisa estar no cliente e no servidor. As telas desenhadas exigem o loader no
+            cliente; a janela de itens funciona em cliente vanilla.
+
+            ## Mods de exemplo
+
+            | Pacote | O que demonstra |
+            |---|---|
+            | `hello_lua` | Bloco com variantes, receitas, comando |
+            | `crystal_world` | Estrutura declarada, dados por bloco, menu |
+            | `guilda` | Missoes com progresso persistido |
+            | `loja` | Interface minima de itens |
+            | `painel` | Tela desenhada e HUD |
+            | `github_mod` | Mod servido por URL |
+          files: |
+            build/libs/*.jar
+            build/distribuicao/*.zip

@@ -1,5 +1,7 @@
 # Minecraft Lua Loader
 
+[![CI](https://github.com/MarcosBrendonDePaula/mine-loader/actions/workflows/ci.yml/badge.svg)](https://github.com/MarcosBrendonDePaula/mine-loader/actions/workflows/ci.yml)
+
 ## Especificações
 
 - [Especificação geral do projeto](docs/SPECIFICATION.md)
