@@ -39,6 +39,23 @@ Windows PowerShell:
 ./gradlew.bat build
 ```
 
+## Rodar nas duas plataformas
+
+```bash
+./gradlew runClient              # Fabric
+./gradlew :neoforge:runClient    # NeoForge
+```
+
+Cada run tem o proprio diretorio de jogo, e portanto a propria pasta `mods-lua`. Para nao manter
+duas copias dos mesmos mods:
+
+```bash
+./gradlew :neoforge:linkModsLua
+```
+
+Isso aponta `neoforge/run/mods-lua` para `run/mods-lua`, e um mod editado passa a valer nas duas
+plataformas de uma vez -- que e justamente o que se quer verificar.
+
 ## Executar servidor de desenvolvimento
 
 ```bash

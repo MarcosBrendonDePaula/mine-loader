@@ -702,8 +702,13 @@ public final class LuaRuntime {
 
         // O entrypoint e opcional: um mod pode declarar apenas scripts por bloco no manifesto.
         if (mod.manifest().entrypoint != null && !mod.manifest().entrypoint.isBlank()) {
-            Path entrypoint = mod.directory().resolve(mod.manifest().entrypoint).normalize();
-            if (!entrypoint.startsWith(mod.directory().toAbsolutePath().normalize())) {
+            // Os dois lados precisam ser absolutos antes de comparar. Resolver a partir do
+            // diretorio como veio deixava um caminho relativo comparado com um absoluto, e a
+            // comparacao falhava sempre -- so que o adaptador Fabric passa o diretorio ja absoluto
+            // e escondia isso. Uma plataforma que passe relativo tranca todos os mods.
+            Path root = mod.directory().toAbsolutePath().normalize();
+            Path entrypoint = root.resolve(mod.manifest().entrypoint).normalize();
+            if (!entrypoint.startsWith(root)) {
                 throw new IOException("entrypoint Lua sai da pasta do mod");
             }
 
@@ -891,7 +896,7 @@ public final class LuaRuntime {
     private LuaValue loadModule(ModLoader.LoadedMod mod, Globals globals, String path)
             throws IOException {
         Path root = mod.directory().toAbsolutePath().normalize();
-        Path file = mod.directory().resolve(path).normalize();
+        Path file = root.resolve(path).normalize();
         if (!file.startsWith(root)) {
             throw new IOException("modulo sai da pasta do mod: " + path);
         }
@@ -922,7 +927,9 @@ public final class LuaRuntime {
                                         Globals globals,
                                         Path root,
                                         String reference) throws IOException {
-        Path script = mod.directory().resolve(reference).normalize();
+        // Resolve a partir da raiz absoluta, e nao do diretorio como veio: comparar um caminho
+        // relativo com um absoluto reprova sempre.
+        Path script = root.resolve(reference).normalize();
         if (!script.startsWith(root)) {
             throw new IOException("script de comportamento sai da pasta do mod: " + reference);
         }

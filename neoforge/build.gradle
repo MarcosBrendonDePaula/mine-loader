@@ -15,6 +15,11 @@ neoForge {
     version = project.neoforge_version
 
     runs {
+        client {
+            client()
+            gameDirectory = file('run')
+        }
+
         server {
             server()
             gameDirectory = file('run')
@@ -41,6 +46,14 @@ dependencies {
 
     jarJar(project(':core'))
     jarJar("org.luaj:luaj-jse:${project.luaj_version}")
+
+    // O ModDevGradle nao leva o que esta em implementation para o classpath dos runs: sem isto o
+    // jogo sobe e o mod falha em ClassNotFoundException do proprio nucleo.
+    additionalRuntimeClasspath(project(':core')) {
+        exclude group: 'com.google.code.gson', module: 'gson'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    additionalRuntimeClasspath "org.luaj:luaj-jse:${project.luaj_version}"
 }
 
 processResources {
@@ -49,6 +62,44 @@ processResources {
 
     filesMatching("META-INF/neoforge.mods.toml") {
         expand "version": version
+    }
+}
+
+/**
+ * Compartilha a pasta de mods Lua com o adaptador Fabric.
+ *
+ * <p>Os mods sao os mesmos nas duas plataformas -- e o que o projeto existe para demonstrar --, mas
+ * cada run tem o proprio diretorio de jogo. Copiar significa manter duas copias em sincronia a mao,
+ * e elas divergem no primeiro esquecimento.
+ *
+ * <p>Junction no Windows e link simbolico no resto, porque junction nao pede privilegio de
+ * administrador, e symlink de diretorio no Windows pede.
+ */
+tasks.register('linkModsLua') {
+    description = 'Aponta neoforge/run/mods-lua para a mesma pasta do adaptador Fabric.'
+    group = 'lua loader'
+
+    doLast {
+        def compartilhada = rootProject.file('run/mods-lua')
+        def destino = file('run/mods-lua')
+
+        compartilhada.mkdirs()
+        if (destino.exists()) {
+            println "Ja existe: ${destino}. Apague antes se quiser refazer o link."
+            return
+        }
+        destino.parentFile.mkdirs()
+
+        if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+            exec {
+                commandLine 'cmd', '/c', 'mklink', '/J',
+                        destino.absolutePath, compartilhada.absolutePath
+            }
+        } else {
+            java.nio.file.Files.createSymbolicLink(
+                    destino.toPath(), compartilhada.toPath().toAbsolutePath())
+        }
+        println "Mods Lua compartilhados: ${destino} -> ${compartilhada}"
     }
 }
 
