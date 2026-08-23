@@ -160,8 +160,14 @@ public final class ScreenRenderer {
                     ItemStack stack = new ItemStack(Registries.ITEM.get(id), element.count());
                     context.drawItem(stack, x, y);
                     context.drawItemInSlot(textRenderer, stack, x, y);
+                } else if (id != null && Registries.ENTITY_TYPE.containsId(id)) {
+                    // Um identificador de mob num slot de item: acontece em lista misturada, como
+                    // "o que derruba isto", onde a fonte tanto pode ser um bloco quanto um bicho.
+                    // Deixar o slot vazio seria pior que desenhar o bicho pequeno ali.
+                    drawEntity(context, id, x, y, 16, 16);
                 }
             }
+            case "entity" -> entity(context, element, x, y);
             case "grid" -> {
                 int columns = Math.max(1, element.columns());
                 for (int position = 0; position < element.cells().size(); position++) {
@@ -211,6 +217,23 @@ public final class ScreenRenderer {
         int bottom = y + element.h();
         String style = element.style();
 
+        // Uma divisoria e uma linha de duas cores, e nao um retangulo: escura primeiro e clara
+        // depois, como um sulco. Duas cores porque uma linha chapada sobre painel cinza some.
+        if (style.equals("divider")) {
+            boolean horizontal = element.w() >= element.h();
+            int dark = element.borderDark();
+            int light = element.borderLight();
+
+            if (horizontal) {
+                context.fill(x, y, right, y + 1, dark);
+                context.fill(x, y + 1, right, y + 2, light);
+            } else {
+                context.fill(x, y, x + 1, bottom, dark);
+                context.fill(x + 1, y, x + 2, bottom, light);
+            }
+            return;
+        }
+
         // As cores do jogo, para um painel sair igual ao do inventário sem o mod declarar nada.
         int background = switch (style) {
             case "vanilla" -> element.color() == 0xFFFFFFFF ? 0xFFC6C6C6 : element.color();
@@ -232,6 +255,72 @@ public final class ScreenRenderer {
         context.fill(x, y, x + thickness, bottom, light);
         context.fill(x, bottom - thickness, right, bottom, dark);
         context.fill(right - thickness, y, right, bottom, dark);
+    }
+
+    /**
+     * Cache de entidades para desenho.
+     *
+     * <p>Uma entidade precisa existir para ser desenhada, e cria-la a cada quadro seria caro e
+     * geraria lixo sem parar. Elas nunca entram no mundo: servem so de modelo para o renderizador.
+     */
+    private static final java.util.Map<Identifier, net.minecraft.entity.LivingEntity> ENTITIES =
+            new java.util.HashMap<>();
+
+    private static void entity(DrawContext context, ScreenModel.Element element, int x, int y) {
+        Identifier id = Identifier.tryParse(element.entity());
+        if (id == null) return;
+
+        drawEntity(context, id, x, y, Math.max(8, element.w()), Math.max(8, element.h()));
+    }
+
+    /**
+     * Desenha uma entidade viva dentro de um retangulo.
+     *
+     * <p>Cai para o ovo de spawn quando a entidade nao pode ser desenhada -- um tipo que nao e
+     * LivingEntity, ou um mod que recusa criar a instancia fora do mundo. Um icone aproximado diz
+     * mais que um espaco vazio.
+     */
+    private static void drawEntity(DrawContext context, Identifier id, int x, int y,
+                                   int width, int height) {
+        net.minecraft.entity.LivingEntity living = livingEntity(id);
+        if (living == null) {
+            drawItemIcon(context, MinecraftClient.getInstance().textRenderer,
+                    id.getNamespace() + ":" + id.getPath() + "_spawn_egg", x, y);
+            return;
+        }
+
+        // O tamanho e escolhido para o bicho caber na altura pedida, e nao o contrario: um Enderman
+        // e um galinha tem alturas muito diferentes, e uma escala fixa deixaria um deles fora.
+        float tall = Math.max(0.5f, living.getHeight());
+        int size = (int) (height / tall * 0.9f);
+
+        net.minecraft.client.gui.screen.ingame.InventoryScreen.drawEntity(
+                context, x, y, x + width, y + height, Math.max(4, size), 0.0f,
+                x + width / 2f, y + height / 2f, living);
+    }
+
+    private static net.minecraft.entity.LivingEntity livingEntity(Identifier id) {
+        if (ENTITIES.containsKey(id)) return ENTITIES.get(id);
+
+        net.minecraft.entity.LivingEntity created = null;
+        try {
+            var world = MinecraftClient.getInstance().world;
+            var type = Registries.ENTITY_TYPE.get(id);
+            if (world != null && type != null) {
+                var entity = type.create(world);
+                if (entity instanceof net.minecraft.entity.LivingEntity alive) created = alive;
+            }
+        } catch (RuntimeException ignored) {
+            // Uma entidade de mod pode recusar existir fora do mundo. O ovo de spawn cobre o caso.
+        }
+
+        ENTITIES.put(id, created);
+        return created;
+    }
+
+    /** Esquece as entidades de desenho. Chamado ao sair do mundo, que as invalida. */
+    public static void forgetEntities() {
+        ENTITIES.clear();
     }
 
     /** Desenha o ícone de um item, sem quantidade. Usado por elementos que só ilustram. */

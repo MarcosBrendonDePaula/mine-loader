@@ -1260,6 +1260,47 @@ class ScreenTest {
     }
 
     @Test
+    void labelsDisappearOnceATabFilters(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.items.add("minecraft:iron_ingot");
+        bridge.drops.put("minecraft:iron_ore", List.of("minecraft:iron_ingot"));
+        bridge.recipes.clear();
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_ore","type":"minecraft:smelting",                "output":{"item":"minecraft:iron_ingot","count":1},"width":0,"height":0,                "ingredients":[["minecraft:raw_iron"]]}                """);
+
+        TestPlayer player = new TestPlayer();
+        player.screenSize = new int[]{854, 480};
+
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "iron_ingot", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+
+        // Sem filtro as fontes se misturam, e o rotulo diz de qual origem cada uma e.
+        assertTrue(player.screenJson.contains("\"text\":\"Fornalha\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"text\":\"Derruba\""), player.screenJson);
+
+        // Com a aba escolhida, repetir o nome em cada fonte seria dizer o que a aba ja disse.
+        runtime.triggerScreenEvent("catalogo:livro", "aba_1", "click", "", player);
+        assertFalse(player.screenJson.contains("\"text\":\"Fornalha\""), player.screenJson);
+        assertTrue(player.screenJson.contains("Qualquer combustivel"),
+                "a receita continua na tela, so sem o rotulo: " + player.screenJson);
+
+        // A divisoria separa a lista do painel, e existe nos dois casos.
+        assertTrue(player.screenJson.contains("\"style\":\"divider\""), player.screenJson);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);

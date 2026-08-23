@@ -53,7 +53,7 @@ public final class ScreenProtocol {
     /** Tipos de elemento que o renderizador entende. */
     public static final Set<String> ELEMENTS = Set.of(
             "panel", "label", "image", "item", "progress", "button", "input",
-            "grid", "viewport");
+            "grid", "viewport", "entity");
 
     /**
      * Elementos que recebem interação e por isso exigem um {@code id}.
@@ -110,7 +110,8 @@ public final class ScreenProtocol {
      * e à esquerda, escura embaixo e à direita. Descrevê-lo como regra, e não como arquivo, deixa
      * o painel acompanhar qualquer tamanho e dispensa o mod distribuir textura.
      */
-    public static final Set<String> PANEL_STYLES = Set.of("flat", "vanilla", "slot", "inset");
+    public static final Set<String> PANEL_STYLES =
+            Set.of("flat", "vanilla", "slot", "inset", "divider");
 
     /** Teto de sobreposições simultâneas por jogador. */
     public static final int MAX_OVERLAYS = 16;

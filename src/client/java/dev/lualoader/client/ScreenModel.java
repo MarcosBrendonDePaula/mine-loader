@@ -26,7 +26,7 @@ public final class ScreenModel {
                           int color, int count, double progress, double scale,
                           String group, int columns, int cell, int content, List<Cell> cells,
                           String style, int border, int borderLight, int borderDark,
-                          boolean shadow) {
+                          boolean shadow, String entity) {
     }
 
     private final String title;
@@ -138,7 +138,8 @@ public final class ScreenModel {
                     integer(element, "border", 2),
                     colorOf(element, "border_light", 0xFFFFFFFF),
                     colorOf(element, "border_dark", 0xFF555555),
-                    bool(element, "shadow", true)));
+                    bool(element, "shadow", true),
+                    text(element, "entity", "")));
         }
         return list;
     }

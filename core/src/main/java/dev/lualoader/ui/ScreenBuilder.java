@@ -184,6 +184,7 @@ public final class ScreenBuilder {
         copyText(source, json, "text");
         copyText(source, json, "value");
         copyText(source, json, "item");
+        copyText(source, json, "entity");
         copyText(source, json, "texture");
         copyText(source, json, "tooltip");
 

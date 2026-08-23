@@ -249,7 +249,7 @@ end
 -- Fornalha, alto-forno, defumador, fogueira e cortador: uma entrada, e o combustivel embaixo
 -- quando o processo queima algo. O rotulo diz qual estacao e, porque a forma sozinha nao distingue
 -- uma fornalha de um alto-forno.
-local function desenhar_estacao(receita, x, y, estacao)
+local function desenhar_estacao(receita, x, y, estacao, com_rotulo)
     local elementos = {}
     local alternativas = receita.ingredients[1] or {}
 
@@ -259,8 +259,10 @@ local function desenhar_estacao(receita, x, y, estacao)
         mostrados[#mostrados + 1] = "e mais " .. (#alternativas - 6) .. "..."
     end
 
-    elementos[#elementos + 1] = { type = "label", x = x, y = y, text = estacao,
-                                  color = "#404040", shadow = false }
+    if com_rotulo then
+        elementos[#elementos + 1] = { type = "label", x = x, y = y, text = estacao,
+                                      color = "#404040", shadow = false }
+    end
 
     local topo = y + 12
     elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
@@ -289,14 +291,16 @@ local function desenhar_estacao(receita, x, y, estacao)
     return elementos, 2 * CELULA + 12
 end
 
-local function desenhar_receita(receita, x, y)
+local function desenhar_receita(receita, x, y, com_rotulo)
     local estacao = estacao_de(receita)
-    if estacao then return desenhar_estacao(receita, x, y, estacao) end
+    if estacao then return desenhar_estacao(receita, x, y, estacao, com_rotulo) end
 
-    local elementos = {
-        { type = "label", x = x, y = y, text = BANCADA[receita.type] or "Receita",
-          color = "#404040", shadow = false }
-    }
+    local elementos = {}
+    if com_rotulo then
+        elementos[#elementos + 1] = { type = "label", x = x, y = y,
+                                      text = BANCADA[receita.type] or "Receita",
+                                      color = "#404040", shadow = false }
+    end
     y = y + 12
 
     -- A grade e sempre 3x3, como a mesa de trabalho. Desenhar so as posicoes ocupadas encolheria a
@@ -357,17 +361,23 @@ end
 
 -- Um drop desenha como uma linha: o bloco, a seta e o item. Para a maior parte do jogo esta e a
 -- resposta verdadeira sobre de onde um item vem.
-local function desenhar_drop(bloco, item, x, y)
+local function desenhar_drop(bloco, item, x, y, com_rotulo)
     local topo = y + 12
-    return {
-        { type = "label", x = x, y = y, text = "Derruba", color = "#404040", shadow = false },
+    local elementos = {
         { type = "panel", style = "slot", border = 1, x = x, y = topo, w = 16, h = 16 },
-        { type = "item", x = x, y = topo, item = bloco },
+        -- O identificador tanto pode ser um bloco quanto um mob; o cliente desenha o que for.
+        { type = "item", x = x, y = topo, item = bloco, tooltip = bloco },
         { type = "label", x = x + 22, y = topo + 4, text = "->",
           color = "#404040", shadow = false },
         { type = "panel", style = "slot", border = 1, x = x + 38, y = topo, w = 16, h = 16 },
         { type = "item", x = x + 38, y = topo, item = item }
-    }, CELULA + 12
+    }
+
+    if com_rotulo then
+        table.insert(elementos, 1, { type = "label", x = x, y = y, text = "Derruba",
+                                     color = "#404040", shadow = false })
+    end
+    return elementos, CELULA + 12
 end
 
 -- Reune as tres fontes numa lista unica, para poderem ser paginadas juntas.
@@ -489,14 +499,16 @@ local function fontes(ctx, item, modo)
 end
 
 -- Desenha uma fonte na posicao dada, qualquer que seja o tipo.
-local function desenhar_fonte(fonte, x, y)
+-- O rotulo so aparece sem filtro. Com uma aba escolhida, toda fonte na tela e da mesma categoria,
+-- e repetir o nome em cada uma seria dizer o que a aba ja disse.
+local function desenhar_fonte(fonte, x, y, com_rotulo)
     if fonte.tipo == "receita" then
-        return (desenhar_receita(fonte.dados, x, y))
+        return (desenhar_receita(fonte.dados, x, y, com_rotulo))
     elseif fonte.tipo == "processo" then
         -- O rotulo fica acima da grade, entao o desenho comeca abaixo da posicao pedida.
-        return (desenhar_processo(fonte.dados, x, y + 12))
+        return (desenhar_processo(fonte.dados, x, y + 12, com_rotulo))
     end
-    return (desenhar_drop(fonte.de, fonte.para, x, y))
+    return (desenhar_drop(fonte.de, fonte.para, x, y, com_rotulo))
 end
 
 -- As categorias presentes na lista, na ordem em que aparecem, com quantas fontes cada uma tem.
@@ -578,7 +590,11 @@ local function livro(ctx)
         grade("itens", "area", recorte, colunas),
 
         { type = "button", id = "anterior", x = 8, y = rodape, w = 30, h = 18, text = "<" },
-        { type = "button", id = "proxima", x = largura - 22, y = rodape, w = 30, h = 18, text = ">" }
+        { type = "button", id = "proxima", x = largura - 22, y = rodape, w = 30, h = 18, text = ">" },
+
+        -- Separa a lista do painel de receitas. Sem ela as duas metades encostam e a tela parece
+        -- uma coisa so, quando sao duas com funcoes diferentes.
+        { type = "panel", style = "divider", x = largura + 14, y = 22, w = 2, h = janela_h - 44 }
     }
 
     if estado.item then
@@ -623,6 +639,10 @@ local function livro(ctx)
                                               tooltip = aba.nome .. " (" .. aba.total .. ")" }
                 aba_x = aba_x + LADO_DA_ABA + 2
             end
+            -- Fecha a fileira de abas, separando-a do conteudo que elas filtram.
+            elementos[#elementos + 1] = { type = "panel", style = "divider",
+                                          x = painel_x, y = topo_das_fontes + LADO_DA_ABA - 2,
+                                          w = disponivel_w, h = 2 }
             topo_das_fontes = topo_das_fontes + LADO_DA_ABA + 6
         end
 
@@ -634,7 +654,8 @@ local function livro(ctx)
         for _, posicionado in ipairs(paginas[pagina_atual]) do
             for _, elemento in ipairs(desenhar_fonte(posicionado.fonte,
                                                      painel_x + posicionado.x,
-                                                     topo_das_fontes + posicionado.y)) do
+                                                     topo_das_fontes + posicionado.y,
+                                                     estado.aba == nil)) do
                 elementos[#elementos + 1] = elemento
             end
             mostrou = true

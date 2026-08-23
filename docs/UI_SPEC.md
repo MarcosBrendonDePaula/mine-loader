@@ -97,6 +97,7 @@ distribuir e o cliente baixar uma imagem.
 | `vanilla` | Cinza e bisel da janela do jogo |
 | `slot` | Bisel invertido: o quadrado parece cavado, como um slot |
 | `inset` | Igual a `slot`, para areas maiores que um slot |
+| `divider` | Linha de separacao, horizontal ou vertical conforme a proporcao |
 
 `border`, `border_light` e `border_dark` ajustam espessura e cores quando o padrao nao serve. Sem
 `color`, `vanilla` e `slot` usam os cinzas do jogo.
@@ -117,6 +118,37 @@ botao, porque o botao e um widget do jogo e cobriria qualquer coisa pintada ante
 
 O botao nao responde por texto de ajuda -- widgets do jogo tem o proprio caminho para isso. Para dar
 nome a uma aba de icone, sobreponha um `item` com `tooltip` na mesma posicao.
+
+### Divisorias
+
+`divider` desenha uma linha de duas cores -- escura e clara, como um sulco -- e nao um retangulo
+chapado, que sobre painel cinza sumiria. A orientacao sai da proporcao: mais larga que alta e
+horizontal, o contrario e vertical.
+
+```lua
+{ type = "panel", style = "divider", x = 8, y = 40, w = 200, h = 2 }
+{ type = "panel", style = "divider", x = 120, y = 8, w = 2, h = 160 }
+```
+
+## Entidade desenhada
+
+Um mob nao e um item, e por isso nao tem icone: pedir `minecraft:wither_skeleton` num slot de item
+deixava o slot vazio. O tipo `entity` desenha a entidade em si, como o jogo faz na tela de
+inventario.
+
+```lua
+{ type = "entity", entity = "minecraft:cow", x = 8, y = 8, w = 40, h = 50 }
+```
+
+O tamanho do desenho sai da altura pedida, e nao de uma escala fixa: um Enderman e uma galinha tem
+alturas muito diferentes, e uma escala unica deixaria um dos dois fora do quadro.
+
+Uma entidade que nao pode ser desenhada -- um tipo que nao e vivo, ou um mod que recusa cria-la fora
+do mundo -- cai para o ovo de spawn correspondente. Um icone aproximado diz mais que um vazio.
+
+**`item` tambem aceita identificador de entidade.** E conveniencia para lista misturada, como "o que
+derruba isto", onde a fonte tanto pode ser um bloco quanto um bicho: em vez de o mod ter de
+descobrir qual dos dois e, o cliente desenha o que existir.
 
 ## Sombra do texto
 
