@@ -260,36 +260,56 @@ end
 -- Uma receita 3x3 ocupa 62 px e uma 1x1 ocupa 26: um numero fixo por pagina ou desperdicava metade
 -- da janela ou empurrava a terceira receita para fora dela. Quem decide quantas cabem e a soma das
 -- alturas.
-local function altura_da_fonte(fonte)
+-- Espaco de cada fonte, em largura e altura.
+--
+-- Uma receita e a grade 3x3 mais a seta e o resultado; um processo tem tantas entradas quantas
+-- forem declaradas; um drop e uma linha de dois itens. Medir antes de desenhar e o que permite
+-- empacotar sem tentativa e erro.
+local ESPACO = 10
+
+local function medir(fonte)
     if fonte.tipo == "receita" then
-        -- Constante: toda receita desenha a grade 3x3 inteira, com os buracos a mostra.
-        return 3 * CELULA + 8
+        return 3 * CELULA + 38, 3 * CELULA
     elseif fonte.tipo == "processo" then
-        -- O rotulo do processo fica acima da grade, e por isso ele comeca 10 px mais abaixo.
-        return CELULA + 22
+        local colunas = math.max(1, #fonte.dados.inputs)
+        -- Mais alta que a grade porque o rotulo do processo fica acima dela.
+        return colunas * CELULA + 38, CELULA + 12
     end
-    return CELULA + 4
+    return 54, CELULA
 end
 
--- Divide a lista em paginas que cabem na altura disponivel, mantendo a ordem.
-local function paginar(lista, disponivel)
+-- Distribui as fontes em paginas, enchendo cada linha antes de descer.
+--
+-- E o comportamento de um flex com quebra: cabendo duas receitas lado a lado, elas ficam lado a
+-- lado. Empilhar uma por linha desperdicava a largura inteira da janela, que agora acompanha a
+-- tela e por isso costuma sobrar.
+local function paginar(lista, disponivel_w, disponivel_h)
     local paginas = {}
     local atual = {}
-    local altura = 0
+    local x, y, altura_da_linha = 0, 0, 0
+
+    local function quebrar_linha()
+        x = 0
+        y = y + altura_da_linha + ESPACO
+        altura_da_linha = 0
+    end
 
     for _, fonte in ipairs(lista) do
-        local ocupa = altura_da_fonte(fonte)
+        local w, h = medir(fonte)
 
-        -- Uma fonte sozinha maior que a area ainda ocupa uma pagina inteira: melhor mostra-la
-        -- transbordando um pouco do que nunca mostra-la.
-        if #atual > 0 and altura + ocupa > disponivel then
+        if x > 0 and x + w > disponivel_w then quebrar_linha() end
+
+        -- A linha nova nao cabe: a pagina fecha. Uma fonte sozinha maior que a area ainda ocupa
+        -- uma pagina inteira, porque mostra-la transbordando e melhor que nunca mostra-la.
+        if #atual > 0 and y + h > disponivel_h then
             paginas[#paginas + 1] = atual
             atual = {}
-            altura = 0
+            x, y, altura_da_linha = 0, 0, 0
         end
 
-        atual[#atual + 1] = fonte
-        altura = altura + ocupa
+        atual[#atual + 1] = { fonte = fonte, x = x, y = y }
+        x = x + w + ESPACO
+        altura_da_linha = math.max(altura_da_linha, h)
     end
 
     if #atual > 0 then paginas[#paginas + 1] = atual end
@@ -343,6 +363,17 @@ local function fontes(ctx, item, modo)
     return lista
 end
 
+-- Desenha uma fonte na posicao dada, qualquer que seja o tipo.
+local function desenhar_fonte(fonte, x, y)
+    if fonte.tipo == "receita" then
+        return (desenhar_receita(fonte.dados, x, y))
+    elseif fonte.tipo == "processo" then
+        -- O rotulo fica acima da grade, entao o desenho comeca abaixo da posicao pedida.
+        return (desenhar_processo(fonte.dados, x, y + 10))
+    end
+    return (desenhar_drop(fonte.de, fonte.para, x, y))
+end
+
 local function livro(ctx)
     local estado = meu(ctx)
     local itens = filtrar(ctx, estado.busca)
@@ -384,40 +415,33 @@ local function livro(ctx)
                                       text = estado.modo == "produz" and "Ver usos" or "Ver receita" }
 
         local lista = fontes(ctx, estado.item, estado.modo)
-        local disponivel = rodape - 70
-        local paginas = paginar(lista, disponivel)
-        local pagina_atual = math.min(estado.pagina_receita or 1, #paginas)
+        local painel_x = largura + 24
+        local disponivel_w = janela_w - painel_x - 8
+        local disponivel_h = rodape - 70
 
-        local topo = 66
+        local paginas = paginar(lista, disponivel_w, disponivel_h)
+        local pagina_atual = math.min(estado.pagina_receita or 1, #paginas)
         local mostrou = false
 
-        for _, fonte in ipairs(paginas[pagina_atual]) do
-            local desenho, altura
-            if fonte.tipo == "receita" then
-                desenho, altura = desenhar_receita(fonte.dados, largura + 24, topo)
-                altura = altura + 8
-            elseif fonte.tipo == "processo" then
-                desenho, altura = desenhar_processo(fonte.dados, largura + 24, topo + 10)
-                altura = altura + 12
-            else
-                desenho, altura = desenhar_drop(fonte.de, fonte.para, largura + 24, topo)
+        for _, posicionado in ipairs(paginas[pagina_atual]) do
+            for _, elemento in ipairs(desenhar_fonte(posicionado.fonte,
+                                                     painel_x + posicionado.x,
+                                                     66 + posicionado.y)) do
+                elementos[#elementos + 1] = elemento
             end
-
-            for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-            topo = topo + altura
             mostrou = true
         end
 
         -- A navegacao so aparece quando ha mais de uma pagina; dizer "1/1" seria ruido.
         if #paginas > 1 then
             elementos[#elementos + 1] = { type = "button", id = "receita_anterior",
-                                          x = largura + 24, y = rodape, w = 24, h = 18, text = "<" }
-            elementos[#elementos + 1] = { type = "label", x = largura + 54, y = rodape + 5,
+                                          x = painel_x, y = rodape, w = 24, h = 18, text = "<" }
+            elementos[#elementos + 1] = { type = "label", x = painel_x + 30, y = rodape + 5,
                                           text = pagina_atual .. "/" .. #paginas
                                                  .. "  (" .. #lista .. ")",
                                           color = "#404040", shadow = false }
             elementos[#elementos + 1] = { type = "button", id = "receita_proxima",
-                                          x = largura + 120, y = rodape, w = 24, h = 18, text = ">" }
+                                          x = painel_x + 96, y = rodape, w = 24, h = 18, text = ">" }
         end
 
         if not mostrou then
@@ -491,10 +515,12 @@ mod.screen("livro", function(ctx)
         estado.modo = estado.modo == "produz" and "usa" or "produz"
         estado.pagina_receita = 1
     elseif ctx.ui.element == "receita_proxima" or ctx.ui.element == "receita_anterior" then
-        -- A mesma divisao por altura que livro() faz, senao a navegacao andaria para paginas
-        -- que a tela nao mostra.
-        local _, janela_h = janela_do_livro(ctx)
-        local paginas = #paginar(fontes(ctx, estado.item, estado.modo), janela_h - 96)
+        -- O mesmo empacotamento que livro() faz, senao a navegacao andaria para paginas que a
+        -- tela nao mostra.
+        local janela_w, janela_h = janela_do_livro(ctx)
+        local painel_x = colunas * CELULA + 24
+        local paginas = #paginar(fontes(ctx, estado.item, estado.modo),
+                                 janela_w - painel_x - 8, janela_h - 96)
         local passo = ctx.ui.element == "receita_proxima" and 1 or -1
 
         estado.pagina_receita =

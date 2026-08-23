@@ -1002,10 +1002,10 @@ class ScreenTest {
         }
 
         RecordingBridge bridge = new RecordingBridge();
-        // La e o caso real: barbante, tingimento a partir de cada cor, e a ovelha. Mostrar as tres
+        // La e o caso real: barbante, tingimento a partir de cada cor, e a ovelha. Mostrar as
         // primeiras e esconder o resto em silencio faz quem le concluir que aquilo e tudo.
         bridge.recipes.clear();
-        for (int index = 0; index < 2; index++) {
+        for (int index = 0; index < 6; index++) {
             bridge.recipes.add(("""
                     {"id":"minecraft:wool_%d","type":"minecraft:crafting_shaped",\
                     "output":{"item":"minecraft:white_wool","count":1},"width":1,"height":1,\
@@ -1024,23 +1024,24 @@ class ScreenTest {
         runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "white_wool", player);
         runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
 
-        // Duas receitas mais um drop. Toda receita ocupa a grade 3x3 inteira, entao cabe uma por
-        // pagina; o drop, que e uma linha, acompanha a ultima. O total fica a vista.
-        assertTrue(player.screenJson.contains("1/2"), player.screenJson);
-        assertTrue(player.screenJson.contains("(3)"), player.screenJson);
+        // Sete fontes ao todo, e o total fica a vista em vez de truncado em silencio.
+        assertTrue(player.screenJson.contains("(7)"), player.screenJson);
+        assertTrue(player.screenJson.contains("1/"), player.screenJson);
 
-        // A ultima pagina traz o drop, que vem depois das receitas na lista unificada.
-        runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
-        assertTrue(player.screenJson.contains("2/2"), player.screenJson);
-        assertTrue(player.screenJson.contains("minecraft:sheep"), player.screenJson);
+        // Andar ate a ultima pagina precisa chegar ao drop, que vem depois das receitas.
+        for (int passo = 0; passo < 6; passo++) {
+            runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
+        }
+        assertTrue(player.screenJson.contains("minecraft:sheep"),
+                "a ultima pagina deveria trazer o drop: " + player.screenJson);
 
-        // Trocar de modo volta para a primeira pagina, senao a tela abriria vazia.
+        // Trocar de modo volta para a primeira pagina, senao a tela abriria numa que nao existe.
         runtime.triggerScreenEvent("catalogo:livro", "alternar", "click", "", player);
-        assertFalse(player.screenJson.contains("2/2"), player.screenJson);
+        assertTrue(player.screenJson.contains("Ver receita"), player.screenJson);
     }
 
     @Test
-    void bigRecipesGetFewerPerPage(@TempDir Path root) throws IOException {
+    void recipesShareALineWhenTheyFit(@TempDir Path root) throws IOException {
         Path origin = Path.of("..", "examples", "catalogo");
         Path target = root.resolve("catalogo");
         Files.createDirectories(target);
@@ -1052,10 +1053,10 @@ class ScreenTest {
         bridge.items.add("minecraft:beacon");
         bridge.drops.clear();
 
-        // Seis receitas 3x3. Uma ocupa 62 px contra 26 de uma 1x1, entao um numero fixo por pagina
-        // empurraria a terceira para fora da janela -- que foi o que aconteceu em jogo.
+        // Quatro receitas 3x3. Empilhar uma por linha desperdicava a largura da janela, que
+        // acompanha a tela e por isso costuma sobrar.
         bridge.recipes.clear();
-        for (int index = 0; index < 6; index++) {
+        for (int index = 0; index < 4; index++) {
             StringBuilder ingredients = new StringBuilder();
             for (int slot = 0; slot < 9; slot++) {
                 ingredients.append(slot == 0 ? "" : ",").append("[\"minecraft:glass\"]");
@@ -1068,6 +1069,8 @@ class ScreenTest {
         }
 
         TestPlayer player = new TestPlayer();
+        player.screenSize = new int[]{854, 480};
+
         LuaRuntime runtime = runtime(bridge);
         runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
 
@@ -1076,10 +1079,14 @@ class ScreenTest {
         runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "beacon", player);
         runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
 
-        // Seis receitas de 62 px em uma area de 104: uma por pagina, e nao tres.
-        assertTrue(player.screenJson.contains("(6)"), player.screenJson);
-        assertTrue(player.screenJson.contains("1/6"),
-                "receita 3x3 deveria render uma por pagina: " + player.screenJson);
+        // Cada receita desenha uma grade com id "entrada"; mais de uma na mesma tela significa que
+        // elas dividiram a linha em vez de ocupar uma pagina cada.
+        int grades = player.screenJson.split("\"id\":\"entrada\"", -1).length - 1;
+        assertEquals(4, grades,
+                "numa tela larga as quatro receitas cabem juntas: " + player.screenJson);
+
+        // Cabendo tudo em uma pagina, a navegacao nao aparece: dizer "1/1" seria ruido.
+        assertFalse(player.screenJson.contains("receita_proxima"), player.screenJson);
     }
 
     @Test
