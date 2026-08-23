@@ -254,6 +254,25 @@ local abriu = ctx.player.open_screen("forja", desenhar(ctx))
 
 O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `ctx.ui.value`.
 
+## Fundo da tela
+
+Desde a 1.20.5 o jogo desfoca o mundo atras de qualquer tela. Isso serve a um menu de pausa, mas
+atrapalha um painel consultado durante a partida, em que o jogador quer continuar vendo o que
+acontece.
+
+| Campo | Padrao | Efeito |
+|---|---|---|
+| `blur` | `false` | Desfoca o mundo atras, como um menu do jogo |
+| `dim` | `true` | Escurece o fundo, para a janela ganhar contraste |
+
+```lua
+ctx.player.open_screen("menu", {
+    blur = true,     -- para uma tela de menu
+    dim = true,
+    elements = { ... }
+})
+```
+
 ## Redesenhar com campos de texto
 
 Um campo de texto dispara `change` a cada tecla, e um script costuma redesenhar a tela em resposta

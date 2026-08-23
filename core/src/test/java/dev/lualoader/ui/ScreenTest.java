@@ -260,4 +260,48 @@ class ScreenTest {
         assertFalse(ScreenProtocol.ELEMENTS.contains("script"),
                 "o cliente interpreta dados, nunca codigo");
     }
+
+    @Test
+    void backgroundEffectsAreOptional(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Sem declarar nada: sem desfoque, com escurecimento. O desfoque do jogo serve a um menu de
+        // pausa, mas atrapalha um painel consultado durante a partida.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("padrao", {
+                        elements = { { type = "label", x = 0, y = 0, text = "oi" } }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"blur\":false"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"dim\":true"), player.screenJson);
+    }
+
+    @Test
+    void modCanAskForBlur(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("menu", {
+                        blur = true,
+                        dim = false,
+                        elements = { { type = "label", x = 0, y = 0, text = "oi" } }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"blur\":true"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"dim\":false"), player.screenJson);
+    }
 }

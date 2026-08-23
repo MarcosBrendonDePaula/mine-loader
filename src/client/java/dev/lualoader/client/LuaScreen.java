@@ -146,6 +146,19 @@ public class LuaScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        // O padrao do jogo desfoca o mundo. Um painel consultado durante a partida fica melhor sem
+        // isso, entao o desfoque so acontece quando o mod pede.
+        if (model.blur()) {
+            super.renderBackground(context, mouseX, mouseY, delta);
+            return;
+        }
+        if (model.dim()) {
+            context.fill(0, 0, width, height, 0x60000000);
+        }
+    }
+
+    @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
 

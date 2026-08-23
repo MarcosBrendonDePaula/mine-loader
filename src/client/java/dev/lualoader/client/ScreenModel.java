@@ -25,13 +25,28 @@ public final class ScreenModel {
     private final String title;
     private final int width;
     private final int height;
+    private final boolean blur;
+    private final boolean dim;
     private final List<Element> elements;
 
-    private ScreenModel(String title, int width, int height, List<Element> elements) {
+    private ScreenModel(String title, int width, int height, boolean blur, boolean dim,
+                        List<Element> elements) {
         this.title = title;
         this.width = width;
         this.height = height;
+        this.blur = blur;
+        this.dim = dim;
         this.elements = elements;
+    }
+
+    /** Se o mundo atras deve ser desfocado. */
+    public boolean blur() {
+        return blur;
+    }
+
+    /** Se o mundo atras deve ser escurecido. */
+    public boolean dim() {
+        return dim;
     }
 
     public String title() {
@@ -61,6 +76,8 @@ public final class ScreenModel {
                     texto(objeto, "title", ""),
                     inteiro(objeto, "width", 256),
                     inteiro(objeto, "height", 166),
+                    booleano(objeto, "blur", false),
+                    booleano(objeto, "dim", true),
                     elementos(objeto));
         } catch (RuntimeException error) {
             return null;
@@ -95,6 +112,14 @@ public final class ScreenModel {
                     decimal(elemento, "scale", 1.0)));
         }
         return lista;
+    }
+
+    private static boolean booleano(JsonObject objeto, String campo, boolean padrao) {
+        try {
+            return objeto.has(campo) ? objeto.get(campo).getAsBoolean() : padrao;
+        } catch (RuntimeException error) {
+            return padrao;
+        }
     }
 
     private static String texto(JsonObject objeto, String campo, String padrao) {

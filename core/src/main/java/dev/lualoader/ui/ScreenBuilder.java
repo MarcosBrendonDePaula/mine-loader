@@ -41,6 +41,13 @@ public final class ScreenBuilder {
         json.addProperty("width", size(definition.get("width"), 256, "width"));
         json.addProperty("height", size(definition.get("height"), 166, "height"));
 
+        // O jogo desfoca o mundo atras de qualquer tela desde a 1.20.5. Isso serve a um menu de
+        // pausa, mas atrapalha um painel consultado durante o jogo, entao o padrao e sem desfoque.
+        json.addProperty("blur", definition.get("blur").toboolean());
+
+        LuaValue escurecer = definition.get("dim");
+        json.addProperty("dim", escurecer.isnil() || escurecer.toboolean());
+
         LuaValue elements = definition.get("elements");
         if (!elements.istable()) {
             throw new InvalidScreenException("a tela precisa de uma lista em elements");
