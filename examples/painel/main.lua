@@ -24,7 +24,7 @@ local function desenhar(ctx)
     return {
         title = "Painel do Loader",
         width = 220,
-        height = 140,
+        height = 160,
 
         -- O desfoque do jogo por tras da janela. O painel do mod continua na frente dele.
         blur = true,
@@ -32,7 +32,7 @@ local function desenhar(ctx)
 
         elements = {
             -- Fundo da janela.
-            { type = "panel", x = 0, y = 0, w = 220, h = 140, color = COR_FUNDO },
+            { type = "panel", x = 0, y = 0, w = 220, h = 160, color = COR_FUNDO },
 
             -- Titulo montado pelo modulo de componentes.
             ui.titulo(10, 10, "Painel do Loader"),
@@ -51,8 +51,11 @@ local function desenhar(ctx)
             { type = "button", id = "zerar",  x = 105, y = 78, w = 60, h = 20, text = "Zerar" },
             { type = "button", id = "fechar", x = 10,  y = 108, w = 200, h = 20, text = "Fechar" },
 
-            -- Campo de texto: o que for digitado volta como evento change.
-            { type = "input", id = "nome", x = 10, y = 132, w = 200, h = 0, value = ctx.state.nome or "" }
+            -- Campo de texto: cada tecla volta como change, e Enter como submit.
+            -- O tamanho precisa caber dentro da janela: a altura vai de y ate y + h.
+            { type = "label", x = 10, y = 130, text = "Seu nome:", color = COR_TEXTO },
+            { type = "input", id = "nome", x = 10, y = 140, w = 200, h = 16,
+              value = ctx.state.nome or "" }
         }
     }
 end
@@ -91,8 +94,13 @@ mod.screen("principal", function(ctx)
         ctx.player.close_screen()
         return
     elseif ctx.ui.element == "nome" then
-        -- O valor digitado chega em ctx.ui.value.
+        -- O valor digitado chega em ctx.ui.value a cada tecla.
         ctx.state.nome = ctx.ui.value
+
+        -- Enter no campo chega como submit, e nao como mais um change.
+        if ctx.ui.action == "submit" then
+            ctx.player.send_message("Nome confirmado: " .. ctx.ui.value)
+        end
     end
 
     -- Redesenhar mantem a tela aberta e preserva o texto ja digitado.

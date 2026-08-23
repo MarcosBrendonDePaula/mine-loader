@@ -304,4 +304,45 @@ class ScreenTest {
         assertTrue(player.screenJson.contains("\"blur\":true"), player.screenJson);
         assertTrue(player.screenJson.contains("\"dim\":false"), player.screenJson);
     }
+
+    @Test
+    void interactiveElementNeedsSize(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Um campo sem altura era aceito e o cliente arbitrava um minimo, o que colocava o elemento
+        // fora do lugar esperado e transbordando a janela.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("ruim", {
+                        elements = {
+                            { type = "input", id = "nome", x = 10, y = 10, w = 200, h = 0 }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertNull(player.screenId, "um campo sem altura precisa ser recusado na carga");
+    }
+
+    @Test
+    void nonInteractiveElementMayOmitSize(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Um rotulo se dimensiona pelo proprio texto, entao nao precisa declarar tamanho.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("ok", {
+                        elements = { { type = "label", x = 10, y = 10, text = "sem tamanho" } }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertEquals("ui_mod:ok", player.screenId);
+    }
 }

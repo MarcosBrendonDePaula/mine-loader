@@ -119,8 +119,20 @@ public final class ScreenBuilder {
 
         json.addProperty("x", coordinate(origem.get("x"), 0, "x"));
         json.addProperty("y", coordinate(origem.get("y"), 0, "y"));
-        if (!origem.get("w").isnil()) json.addProperty("w", size(origem.get("w"), 0, "w"));
-        if (!origem.get("h").isnil()) json.addProperty("h", size(origem.get("h"), 0, "h"));
+
+        int largura = origem.get("w").isnil() ? 0 : size(origem.get("w"), 0, "w");
+        int altura = origem.get("h").isnil() ? 0 : size(origem.get("h"), 0, "h");
+        if (!origem.get("w").isnil()) json.addProperty("w", largura);
+        if (!origem.get("h").isnil()) json.addProperty("h", altura);
+
+        // Um botao ou campo sem tamanho era aceito em silencio e o cliente arbitrava um minimo,
+        // o que produzia um elemento fora do lugar esperado. E melhor recusar e dizer o motivo.
+        if (ScreenProtocol.INTERACTIVE.contains(tipo)) {
+            if (largura <= 0 || altura <= 0) {
+                throw new InvalidScreenException("elemento " + tipo + " em " + indice
+                        + " precisa de w e h maiores que zero");
+            }
+        }
 
         LuaValue anchor = origem.get("anchor");
         if (!anchor.isnil()) {

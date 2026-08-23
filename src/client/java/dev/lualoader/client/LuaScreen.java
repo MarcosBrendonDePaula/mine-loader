@@ -239,6 +239,24 @@ public class LuaScreen extends Screen {
     }
 
     @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Enter em um campo de texto vira a acao submit, que o protocolo ja previa mas o cliente
+        // nunca enviava: sem isso, confirmar um formulario exigia um botao ao lado do campo.
+        boolean enter = keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+                || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER;
+
+        if (enter) {
+            for (Map.Entry<String, TextFieldWidget> entrada : fields.entrySet()) {
+                if (entrada.getValue().isFocused()) {
+                    send(entrada.getKey(), "submit", entrada.getValue().getText());
+                    return true;
+                }
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
     public void close() {
         send("", "close", "");
         super.close();

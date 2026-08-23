@@ -254,6 +254,21 @@ local abriu = ctx.player.open_screen("forja", desenhar(ctx))
 
 O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `ctx.ui.value`.
 
+## Tamanho dos elementos
+
+| Tipo | Tamanho |
+|---|---|
+| `button`, `input` | `w` e `h` obrigatorios e maiores que zero |
+| `panel`, `progress`, `image` | `w` e `h` definem a area desenhada |
+| `label`, `item` | Dimensionam-se sozinhos pelo conteudo |
+
+Um elemento interativo sem tamanho era aceito em silencio, e o cliente arbitrava um minimo — o que
+colocava o campo fora do lugar esperado, transbordando a janela. Agora a descricao e recusada com o
+motivo.
+
+O tamanho da janela nao recorta o que e desenhado: um elemento em `y` proximo de `height` continua
+sendo desenhado alem da borda. Ao posicionar, considere que a area vai de `y` ate `y + h`.
+
 ## Ordem de desenho
 
 A tela e desenhada em tres camadas, nesta ordem:
