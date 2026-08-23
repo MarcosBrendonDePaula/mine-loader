@@ -110,6 +110,18 @@ public final class LuaRuntime {
 
     /** Callbacks de tela desenhada, por identificador. */
     private final Map<String, RegisteredMenu> screens = new LinkedHashMap<>();
+
+    /**
+     * Processos declarados pelos mods, por identificador.
+     *
+     * <p>O livro de receitas do jogo só conhece as receitas do jogo. Uma mecânica inventada por um
+     * mod — dar trigo a uma vaca e receber leite, moer minério, curtir couro — não existe lá, e por
+     * isso seria invisível a qualquer catálogo. Este registro é o lugar onde ela passa a existir.
+     *
+     * <p>É global de propósito: um catálogo é um mod que lista o que os outros declararam, e não
+     * teria como fazer isso se cada mod só enxergasse os próprios processos.
+     */
+    private final Map<String, RegisteredProcess> processes = new LinkedHashMap<>();
     private long currentTick;
     private final Path remoteCache;
     private final StateStore stateStore;
@@ -155,14 +167,14 @@ public final class LuaRuntime {
         }
         if (scheduled.isEmpty()) return;
 
-        java.util.List<ScheduledTask> vencidas = new java.util.ArrayList<>();
+        java.util.List<ScheduledTask> due = new java.util.ArrayList<>();
         scheduled.removeIf(task -> {
             if (task.dueTick() > currentTick) return false;
-            vencidas.add(task);
+            due.add(task);
             return true;
         });
 
-        for (ScheduledTask task : vencidas) {
+        for (ScheduledTask task : due) {
             LoadedScript script = scripts.get(task.modId());
             if (script == null) continue;
             try {
@@ -285,22 +297,22 @@ public final class LuaRuntime {
             script.budget().start();
             LuaTable context = context(script.mod(), player, null);
 
-            String texto = arguments == null ? "" : arguments.trim();
-            context.set("args", LuaValue.valueOf(texto));
+            String text = arguments == null ? "" : arguments.trim();
+            context.set("args", LuaValue.valueOf(text));
 
             // Alem do texto cru, o script recebe as palavras separadas e o primeiro termo como
             // subcomando, que e o formato que quase todo comando acaba montando a mao.
-            LuaTable palavras = new LuaTable();
-            String subcomando = "";
-            if (!texto.isEmpty()) {
-                String[] partes = texto.split("\s+");
-                for (int indice = 0; indice < partes.length; indice++) {
-                    palavras.set(indice + 1, LuaValue.valueOf(partes[indice]));
+            LuaTable words = new LuaTable();
+            String subcommand = "";
+            if (!text.isEmpty()) {
+                String[] parts = text.split("\s+");
+                for (int index = 0; index < parts.length; index++) {
+                    words.set(index + 1, LuaValue.valueOf(parts[index]));
                 }
-                subcomando = partes[0];
+                subcommand = parts[0];
             }
-            context.set("argv", palavras);
-            context.set("subcommand", LuaValue.valueOf(subcomando));
+            context.set("argv", words);
+            context.set("subcommand", LuaValue.valueOf(subcommand));
 
             command.callback().call(context);
         } catch (LuaError error) {
@@ -347,22 +359,23 @@ public final class LuaRuntime {
 
         // O ambiente antigo e descartado, entao o que aponta para ele precisa sair junto: uma
         // tarefa agendada ou um comando do script anterior chamaria uma funcao orfa.
-        int descartadas = 0;
+        int discarded = 0;
         for (var iterator = scheduled.iterator(); iterator.hasNext(); ) {
             if (iterator.next().modId().equals(modId)) {
                 iterator.remove();
-                descartadas++;
+                discarded++;
             }
         }
         commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
 
         LoadedScript replacement = compile(previous.mod());
         scripts.put(modId, replacement);
 
         logger.info("Script Lua recarregado: {}{}", modId,
-                descartadas == 0 ? "" : " (" + descartadas + " tarefa(s) pendente(s) descartada(s))");
+                discarded == 0 ? "" : " (" + discarded + " tarefa(s) pendente(s) descartada(s))");
         return true;
     }
 
@@ -507,8 +520,8 @@ public final class LuaRuntime {
 
         // Modulos ja carregados nesta compilacao, para um arquivo importado duas vezes rodar
         // uma vez so, como se espera de um sistema de modulos.
-        Map<String, LuaValue> modulos = new LinkedHashMap<>();
-        java.util.Deque<String> carregando = new java.util.ArrayDeque<>();
+        Map<String, LuaValue> modules = new LinkedHashMap<>();
+        java.util.Deque<String> loading = new java.util.ArrayDeque<>();
         Map<String, LuaFunction> callbacks = new LinkedHashMap<>();
         LuaTable modApi = createLogApi(mod.manifest().id);
         modApi.set("on", new TwoArgFunction() {
@@ -535,32 +548,32 @@ public final class LuaRuntime {
         modApi.set("import", new OneArgFunction() {
             @Override
             public LuaValue call(LuaValue value) {
-                String caminho = value.tojstring();
-                if (!caminho.toLowerCase(java.util.Locale.ROOT).endsWith(".lua")) {
-                    throw new LuaError("import exige um caminho .lua: " + caminho);
+                String path = value.tojstring();
+                if (!path.toLowerCase(java.util.Locale.ROOT).endsWith(".lua")) {
+                    throw new LuaError("import exige um caminho .lua: " + path);
                 }
 
                 // Ja carregado: devolve o mesmo valor, sem executar de novo.
-                LuaValue pronto = modulos.get(caminho);
-                if (pronto != null) return pronto;
+                LuaValue ready = modules.get(path);
+                if (ready != null) return ready;
 
-                if (carregando.contains(caminho)) {
-                    throw new LuaError("import circular em " + caminho
-                            + " (cadeia: " + String.join(" -> ", carregando) + ")");
+                if (loading.contains(path)) {
+                    throw new LuaError("import circular em " + path
+                            + " (cadeia: " + String.join(" -> ", loading) + ")");
                 }
-                if (modulos.size() >= MAX_MODULES) {
+                if (modules.size() >= MAX_MODULES) {
                     throw new LuaError("limite de " + MAX_MODULES + " modulos por mod atingido");
                 }
 
-                carregando.push(caminho);
+                loading.push(path);
                 try {
-                    LuaValue resultado = loadModule(mod, globals, caminho);
-                    modulos.put(caminho, resultado);
-                    return resultado;
+                    LuaValue result = loadModule(mod, globals, path);
+                    modules.put(path, result);
+                    return result;
                 } catch (IOException error) {
                     throw new LuaError(error.getMessage());
                 } finally {
-                    carregando.pop();
+                    loading.pop();
                 }
             }
         });
@@ -571,16 +584,16 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.menu");
                 if (args.narg() < 2) throw new LuaError("menu exige um id e uma funcao");
 
-                String nome = args.arg(1).tojstring();
-                if (!nome.matches("^[a-z][a-z0-9_-]{0,31}$")) {
-                    throw new LuaError("id de menu invalido: " + nome);
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de menu invalido: " + name);
                 }
                 if (!args.arg(2).isfunction()) throw new LuaError("menu exige uma funcao");
 
                 // O id publicado inclui o mod, para dois mods poderem usar o mesmo nome curto.
-                String completo = mod.manifest().id + ":" + nome;
-                menus.put(completo, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
-                return LuaValue.valueOf(completo);
+                String qualified = mod.manifest().id + ":" + name;
+                menus.put(qualified, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
+                return LuaValue.valueOf(qualified);
             }
         });
 
@@ -590,15 +603,35 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.menu");
                 if (args.narg() < 2) throw new LuaError("screen exige um id e uma funcao");
 
-                String nome = args.arg(1).tojstring();
-                if (!nome.matches("^[a-z][a-z0-9_-]{0,31}$")) {
-                    throw new LuaError("id de tela invalido: " + nome);
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de tela invalido: " + name);
                 }
                 if (!args.arg(2).isfunction()) throw new LuaError("screen exige uma funcao");
 
-                String completo = mod.manifest().id + ":" + nome;
-                screens.put(completo, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
-                return LuaValue.valueOf(completo);
+                String qualified = mod.manifest().id + ":" + name;
+                screens.put(qualified, new RegisteredMenu(mod.manifest().id, (LuaFunction) args.arg(2)));
+                return LuaValue.valueOf(qualified);
+            }
+        });
+
+        modApi.set("process", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                if (args.narg() < 2 || !args.arg(2).istable()) {
+                    throw new LuaError("process exige um id e uma tabela de descricao");
+                }
+
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de processo invalido: " + name);
+                }
+
+                LuaTable definition = (LuaTable) args.arg(2);
+                String qualified = mod.manifest().id + ":" + name;
+                processes.put(qualified,
+                        readProcess(mod.manifest().id, qualified, definition));
+                return LuaValue.valueOf(qualified);
             }
         });
 
@@ -614,9 +647,9 @@ public final class LuaRuntime {
                 }
                 if (!args.arg(2).isfunction()) throw new LuaError("command exige uma funcao");
 
-                RegisteredCommand existente = commands.get(name);
-                if (existente != null && !existente.modId().equals(mod.manifest().id)) {
-                    throw new LuaError("comando " + name + " ja registrado pelo mod " + existente.modId());
+                RegisteredCommand existing = commands.get(name);
+                if (existing != null && !existing.modId().equals(mod.manifest().id)) {
+                    throw new LuaError("comando " + name + " ja registrado pelo mod " + existing.modId());
                 }
                 commands.put(name, new RegisteredCommand(mod.manifest().id, (LuaFunction) args.arg(2)));
                 return LuaValue.NIL;
@@ -669,8 +702,13 @@ public final class LuaRuntime {
 
         // O entrypoint e opcional: um mod pode declarar apenas scripts por bloco no manifesto.
         if (mod.manifest().entrypoint != null && !mod.manifest().entrypoint.isBlank()) {
-            Path entrypoint = mod.directory().resolve(mod.manifest().entrypoint).normalize();
-            if (!entrypoint.startsWith(mod.directory().toAbsolutePath().normalize())) {
+            // Os dois lados precisam ser absolutos antes de comparar. Resolver a partir do
+            // diretorio como veio deixava um caminho relativo comparado com um absoluto, e a
+            // comparacao falhava sempre -- so que o adaptador Fabric passa o diretorio ja absoluto
+            // e escondia isso. Uma plataforma que passe relativo tranca todos os mods.
+            Path root = mod.directory().toAbsolutePath().normalize();
+            Path entrypoint = root.resolve(mod.manifest().entrypoint).normalize();
+            if (!entrypoint.startsWith(root)) {
                 throw new IOException("entrypoint Lua sai da pasta do mod");
             }
 
@@ -855,32 +893,32 @@ public final class LuaRuntime {
      *
      * @return o valor devolvido pelo arquivo, ou {@code true} quando ele nao devolve nada
      */
-    private LuaValue loadModule(ModLoader.LoadedMod mod, Globals globals, String caminho)
+    private LuaValue loadModule(ModLoader.LoadedMod mod, Globals globals, String path)
             throws IOException {
         Path root = mod.directory().toAbsolutePath().normalize();
-        Path arquivo = mod.directory().resolve(caminho).normalize();
-        if (!arquivo.startsWith(root)) {
-            throw new IOException("modulo sai da pasta do mod: " + caminho);
+        Path file = root.resolve(path).normalize();
+        if (!file.startsWith(root)) {
+            throw new IOException("modulo sai da pasta do mod: " + path);
         }
 
-        String fonte;
-        if (Files.isRegularFile(arquivo)) {
-            fonte = Files.readString(arquivo, StandardCharsets.UTF_8);
+        String textRenderer;
+        if (Files.isRegularFile(file)) {
+            textRenderer = Files.readString(file, StandardCharsets.UTF_8);
         } else {
             byte[] bytes = new ManifestImports(mod.directory(), remoteCache)
                     .withRemoteBase(mod.manifest().remoteBase)
-                    .readRelative(caminho);
-            if (bytes == null) throw new IOException("modulo nao encontrado: " + caminho);
-            fonte = new String(bytes, StandardCharsets.UTF_8);
+                    .readRelative(path);
+            if (bytes == null) throw new IOException("modulo nao encontrado: " + path);
+            textRenderer = new String(bytes, StandardCharsets.UTF_8);
         }
 
         try {
-            LuaValue chunk = globals.load(fonte, mod.manifest().id + "/" + caminho);
-            LuaValue devolvido = chunk.call();
+            LuaValue chunk = globals.load(textRenderer, mod.manifest().id + "/" + path);
+            LuaValue returned = chunk.call();
             // Um modulo que nao devolve nada ainda precisa marcar presenca no cache.
-            return devolvido.isnil() ? LuaValue.TRUE : devolvido;
+            return returned.isnil() ? LuaValue.TRUE : returned;
         } catch (LuaError error) {
-            throw new IOException("erro no modulo " + caminho + ": " + error.getMessage(), error);
+            throw new IOException("erro no modulo " + path + ": " + error.getMessage(), error);
         }
     }
 
@@ -889,7 +927,9 @@ public final class LuaRuntime {
                                         Globals globals,
                                         Path root,
                                         String reference) throws IOException {
-        Path script = mod.directory().resolve(reference).normalize();
+        // Resolve a partir da raiz absoluta, e nao do diretorio como veio: comparar um caminho
+        // relativo com um absoluto reprova sempre.
+        Path script = root.resolve(reference).normalize();
         if (!script.startsWith(root)) {
             throw new IOException("script de comportamento sai da pasta do mod: " + reference);
         }
@@ -1011,10 +1051,10 @@ public final class LuaRuntime {
             @Override
             public LuaValue call() {
                 requirePermission(mod.manifest(), "server.read");
-                LuaTable lista = new LuaTable();
-                int indice = 1;
-                for (String nome : bridge.onlinePlayers()) lista.set(indice++, LuaValue.valueOf(nome));
-                return lista;
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String name : bridge.onlinePlayers()) list.set(index++, LuaValue.valueOf(name));
+                return list;
             }
         });
         serverApi.set("time_of_day", new ZeroArgFunction() {
@@ -1029,6 +1069,188 @@ public final class LuaRuntime {
             public LuaValue call() {
                 requirePermission(mod.manifest(), "server.read");
                 return LuaValue.valueOf(bridge.worldName());
+            }
+        });
+        serverApi.set("items", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+
+                // Sem filtro, o registro inteiro do jogo passaria para o Lua de uma vez. O teto
+                // existe para que um catalogo seja paginado de proposito, e nao por acidente.
+                LuaValue filter = args.arg(1);
+                String namespace = null;
+                String contains = null;
+                int limit = 256;
+
+                if (filter.istable()) {
+                    LuaTable options = (LuaTable) filter;
+                    if (!options.get("namespace").isnil()) {
+                        namespace = options.get("namespace").tojstring();
+                    }
+                    if (!options.get("contains").isnil()) {
+                        contains = options.get("contains").tojstring();
+                    }
+                    if (!options.get("limit").isnil()) {
+                        limit = options.get("limit").checkint();
+                        if (limit < 1 || limit > 4096) {
+                            throw new LuaError("limit deve estar entre 1 e 4096");
+                        }
+                    }
+                } else if (!filter.isnil()) {
+                    throw new LuaError("items aceita uma tabela de filtros");
+                }
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String id : bridge.registeredItems(namespace, contains, limit)) {
+                    list.set(index++, LuaValue.valueOf(id));
+                }
+                return list;
+            }
+        });
+        serverApi.set("processes", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+
+                String produces = null;
+                String uses = null;
+                String station = null;
+                int limit = 64;
+
+                if (args.arg(1).istable()) {
+                    LuaTable options = (LuaTable) args.arg(1);
+                    if (!options.get("produces").isnil()) produces = options.get("produces").tojstring();
+                    if (!options.get("uses").isnil()) uses = options.get("uses").tojstring();
+                    if (!options.get("by").isnil()) station = options.get("by").tojstring();
+                    if (!options.get("limit").isnil()) {
+                        limit = options.get("limit").checkint();
+                        if (limit < 1 || limit > 512) throw new LuaError("limit deve estar entre 1 e 512");
+                    }
+                } else if (!args.arg(1).isnil()) {
+                    throw new LuaError("processes aceita uma tabela de filtros");
+                }
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (RegisteredProcess process : processes.values()) {
+                    if (index > limit) break;
+                    if (produces != null && !process.outputItem().equals(produces)) continue;
+                    if (station != null && !station.equals(process.station())) continue;
+                    if (uses != null && !process.inputs().contains(uses)) continue;
+
+                    list.set(index++, process.toLua());
+                }
+                return list;
+            }
+        });
+
+        serverApi.set("capabilities_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("capabilities_at exige x, y e z");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String capability : bridge.capabilitiesAt(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)))) {
+                    list.set(index++, LuaValue.valueOf(capability));
+                }
+                return list;
+            }
+        });
+        serverApi.set("container_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 3) throw new LuaError("container_at exige x, y e z");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String line : bridge.containerAt(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)))) {
+                    String[] parts = line.split(";");
+                    if (parts.length < 3) continue;
+
+                    LuaTable entry = new LuaTable();
+                    entry.set("slot", LuaValue.valueOf(Integer.parseInt(parts[0])));
+                    entry.set("item", LuaValue.valueOf(parts[1]));
+                    entry.set("count", LuaValue.valueOf(Integer.parseInt(parts[2])));
+                    list.set(index++, entry);
+                }
+                return list;
+            }
+        });
+        serverApi.set("insert_into", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 5) {
+                    throw new LuaError("insert_into exige x, y, z, item e quantidade");
+                }
+                return LuaValue.valueOf(bridge.insertInto(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)),
+                        requireIdentifier(args.arg(4).tojstring()),
+                        requireCount(args.arg(5))));
+            }
+        });
+        serverApi.set("extract_from", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 5) {
+                    throw new LuaError("extract_from exige x, y, z, item e quantidade");
+                }
+                return LuaValue.valueOf(bridge.extractFrom(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)),
+                        requireIdentifier(args.arg(4).tojstring()),
+                        requireCount(args.arg(5))));
+            }
+        });
+        serverApi.set("drops_of", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                if (args.narg() < 1) throw new LuaError("drops_of exige um bloco");
+                return stringList(bridge.dropsOf(
+                        requireIdentifier(args.arg(1).tojstring()), recipeLimit(args.arg(2))));
+            }
+        });
+        serverApi.set("dropped_by", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                if (args.narg() < 1) throw new LuaError("dropped_by exige um item");
+                return stringList(bridge.droppedBy(
+                        requireIdentifier(args.arg(1).tojstring()), recipeLimit(args.arg(2))));
+            }
+        });
+        serverApi.set("recipes_for", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                if (args.narg() < 1) throw new LuaError("recipes_for exige um item");
+                return recipeList(bridge.recipesFor(
+                        requireIdentifier(args.arg(1).tojstring()), recipeLimit(args.arg(2))));
+            }
+        });
+        serverApi.set("recipes_using", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                if (args.narg() < 1) throw new LuaError("recipes_using exige um item");
+                return recipeList(bridge.recipesUsing(
+                        requireIdentifier(args.arg(1).tojstring()), recipeLimit(args.arg(2))));
             }
         });
         serverApi.set("spawn_entity", new VarArgFunction() {
@@ -1050,21 +1272,21 @@ public final class LuaRuntime {
                 double radius = args.arg(4).checkdouble();
                 if (radius <= 0 || radius > 64) throw new LuaError("raio deve estar entre 0 e 64");
 
-                LuaTable lista = new LuaTable();
-                int indice = 1;
-                for (String linha : bridge.entitiesNear(requireCoordinate(args.arg(1)),
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String line : bridge.entitiesNear(requireCoordinate(args.arg(1)),
                         requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)), radius)) {
-                    String[] partes = linha.split(";");
-                    if (partes.length < 5) continue;
-                    LuaTable entidade = new LuaTable();
-                    entidade.set("uuid", LuaValue.valueOf(partes[0]));
-                    entidade.set("type", LuaValue.valueOf(partes[1]));
-                    entidade.set("x", LuaValue.valueOf(Integer.parseInt(partes[2])));
-                    entidade.set("y", LuaValue.valueOf(Integer.parseInt(partes[3])));
-                    entidade.set("z", LuaValue.valueOf(Integer.parseInt(partes[4])));
-                    lista.set(indice++, entidade);
+                    String[] parts = line.split(";");
+                    if (parts.length < 5) continue;
+                    LuaTable entity = new LuaTable();
+                    entity.set("uuid", LuaValue.valueOf(parts[0]));
+                    entity.set("type", LuaValue.valueOf(parts[1]));
+                    entity.set("x", LuaValue.valueOf(Integer.parseInt(parts[2])));
+                    entity.set("y", LuaValue.valueOf(Integer.parseInt(parts[3])));
+                    entity.set("z", LuaValue.valueOf(Integer.parseInt(parts[4])));
+                    list.set(index++, entity);
                 }
-                return lista;
+                return list;
             }
         });
         serverApi.set("remove_entity", new OneArgFunction() {
@@ -1365,8 +1587,8 @@ public final class LuaRuntime {
             @Override
             public LuaValue call() {
                 requirePermission(mod.manifest(), "player.menu");
-                String aberto = player.openMenuId();
-                return aberto == null ? LuaValue.NIL : LuaValue.valueOf(aberto);
+                String open = player.openMenuId();
+                return open == null ? LuaValue.NIL : LuaValue.valueOf(open);
             }
         });
         playerApi.set("supports_screens", new ZeroArgFunction() {
@@ -1425,6 +1647,46 @@ public final class LuaRuntime {
                 return LuaValue.NIL;
             }
         });
+        playerApi.set("screen_size", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.menu");
+                int[] size = player.screenSize();
+                // Sem informacao, devolve nil: o mod escolhe um padrao em vez de receber um numero
+                // inventado, que seria pior porque pareceria confiavel.
+                if (size == null) return LuaValue.NIL;
+
+                LuaTable table = new LuaTable();
+                table.set("width", LuaValue.valueOf(size[0]));
+                table.set("height", LuaValue.valueOf(size[1]));
+                return table;
+            }
+        });
+        playerApi.set("set_overlay", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 2 || !args.arg(2).istable()) {
+                    throw new LuaError("set_overlay exige um id e uma tabela de sobreposicao");
+                }
+                // O id e qualificado igual ao de uma tela, e por isso o evento de um botao dentro
+                // da sobreposicao volta para o callback registrado por mod.screen com o mesmo nome.
+                String overlayId = qualifiedMenuId(mod, args.arg(1).tojstring());
+                try {
+                    return LuaValue.valueOf(player.setOverlay(overlayId,
+                            ScreenBuilder.overlay((LuaTable) args.arg(2))));
+                } catch (ScreenBuilder.InvalidScreenException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
+        playerApi.set("clear_overlay", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.menu");
+                return LuaValue.valueOf(player.clearOverlay(qualifiedMenuId(mod, value.tojstring())));
+            }
+        });
         playerApi.set("close_menu", new ZeroArgFunction() {
             @Override
             public LuaValue call() {
@@ -1449,8 +1711,72 @@ public final class LuaRuntime {
     }
 
     /** Prefixa o id do menu com o mod, para dois mods poderem usar o mesmo nome curto. */
-    private static String qualifiedMenuId(ModLoader.LoadedMod mod, String nome) {
-        return nome.contains(":") ? nome : mod.manifest().id + ":" + nome;
+    /**
+     * Teto de receitas devolvidas.
+     *
+     * <p>Consultar receitas custa uma varredura do livro inteiro, porque o jogo nao indexa por
+     * item. Um teto pequeno por padrao empurra o mod a perguntar pelo que vai mostrar agora.
+     */
+    private static int recipeLimit(LuaValue value) {
+        if (value.isnil()) return 16;
+        int limit = value.checkint();
+        if (limit < 1 || limit > 256) throw new LuaError("limite deve estar entre 1 e 256");
+        return limit;
+    }
+
+    private static LuaTable stringList(java.util.List<String> values) {
+        LuaTable list = new LuaTable();
+        int index = 1;
+        for (String value : values) list.set(index++, LuaValue.valueOf(value));
+        return list;
+    }
+
+    /** Converte a descricao JSON de cada receita na tabela que o script recebe. */
+    private static LuaTable recipeList(java.util.List<String> descriptions) {
+        LuaTable list = new LuaTable();
+        int index = 1;
+
+        for (String description : descriptions) {
+            com.google.gson.JsonObject json;
+            try {
+                json = com.google.gson.JsonParser.parseString(description).getAsJsonObject();
+            } catch (RuntimeException error) {
+                continue;
+            }
+
+            LuaTable recipe = new LuaTable();
+            recipe.set("id", LuaValue.valueOf(json.get("id").getAsString()));
+            recipe.set("type", LuaValue.valueOf(json.get("type").getAsString()));
+            recipe.set("width", LuaValue.valueOf(json.get("width").getAsInt()));
+            recipe.set("height", LuaValue.valueOf(json.get("height").getAsInt()));
+
+            com.google.gson.JsonObject output = json.getAsJsonObject("output");
+            LuaTable result = new LuaTable();
+            result.set("item", LuaValue.valueOf(output.get("item").getAsString()));
+            result.set("count", LuaValue.valueOf(output.get("count").getAsInt()));
+            recipe.set("output", result);
+
+            // Cada posicao da receita traz os itens que servem ali: uma tag como "qualquer tabua"
+            // chega como a lista das tabuas, e nao como o nome da tag, para o mod poder desenhar.
+            LuaTable ingredients = new LuaTable();
+            int position = 1;
+            for (com.google.gson.JsonElement entry : json.getAsJsonArray("ingredients")) {
+                LuaTable alternatives = new LuaTable();
+                int alternative = 1;
+                for (com.google.gson.JsonElement item : entry.getAsJsonArray()) {
+                    alternatives.set(alternative++, LuaValue.valueOf(item.getAsString()));
+                }
+                ingredients.set(position++, alternatives);
+            }
+            recipe.set("ingredients", ingredients);
+
+            list.set(index++, recipe);
+        }
+        return list;
+    }
+
+    private static String qualifiedMenuId(ModLoader.LoadedMod mod, String name) {
+        return name.contains(":") ? name : mod.manifest().id + ":" + name;
     }
 
     /**
@@ -1459,24 +1785,24 @@ public final class LuaRuntime {
      * <p>Aceita tanto um texto simples quanto uma tabela com {@code item}, {@code count} e
      * {@code label}, para o caso comum ficar curto sem impedir o caso completo.
      */
-    private static java.util.List<String> menuItems(LuaTable lista) {
-        java.util.List<String> itens = new java.util.ArrayList<>();
-        for (int indice = 1; indice <= lista.length(); indice++) {
-            LuaValue entrada = lista.get(indice);
-            if (entrada.istable()) {
-                LuaValue id = entrada.get("item");
-                LuaValue count = entrada.get("count");
-                LuaValue label = entrada.get("label");
-                itens.add(id.tojstring()
+    private static java.util.List<String> menuItems(LuaTable list) {
+        java.util.List<String> items = new java.util.ArrayList<>();
+        for (int index = 1; index <= list.length(); index++) {
+            LuaValue entry = list.get(index);
+            if (entry.istable()) {
+                LuaValue id = entry.get("item");
+                LuaValue count = entry.get("count");
+                LuaValue label = entry.get("label");
+                items.add(id.tojstring()
                         + ";" + (count.isnumber() ? count.toint() : 1)
                         + ";" + (label.isnil() ? "" : label.tojstring()));
-            } else if (!entrada.isnil()) {
-                itens.add(entrada.tojstring() + ";1;");
+            } else if (!entry.isnil()) {
+                items.add(entry.tojstring() + ";1;");
             } else {
-                itens.add("");
+                items.add("");
             }
         }
-        return itens;
+        return items;
     }
 
     /** Quantidade de itens aceita em uma operacao de inventario. */
@@ -1555,6 +1881,86 @@ public final class LuaRuntime {
      *                {@code mod.require}
      */
     /** Janela registrada por um mod. */
+    /**
+     * Um processo declarado por um mod: o que entra, o que sai e quem executa.
+     *
+     * <p>Deliberadamente próximo do formato de uma receita do jogo, para um catálogo poder desenhar
+     * os dois com o mesmo código em vez de manter dois desenhos paralelos.
+     */
+    private record RegisteredProcess(String modId, String id, String title,
+                                     java.util.List<String> inputs, String outputItem,
+                                     int outputCount, double chance, String station) {
+        LuaTable toLua() {
+            LuaTable table = new LuaTable();
+            table.set("id", LuaValue.valueOf(id));
+            table.set("title", LuaValue.valueOf(title));
+            table.set("by", station == null ? LuaValue.NIL : LuaValue.valueOf(station));
+
+            LuaTable list = new LuaTable();
+            int index = 1;
+            for (String input : inputs) list.set(index++, LuaValue.valueOf(input));
+            table.set("inputs", list);
+
+            LuaTable output = new LuaTable();
+            output.set("item", LuaValue.valueOf(outputItem));
+            output.set("count", LuaValue.valueOf(outputCount));
+            output.set("chance", LuaValue.valueOf(chance));
+            table.set("output", output);
+            return table;
+        }
+    }
+
+    /** Teto de entradas de um processo, pelo mesmo motivo que uma receita do jogo tem nove. */
+    private static final int MAX_PROCESS_INPUTS = 27;
+
+    private static RegisteredProcess readProcess(String modId, String id, LuaTable definition) {
+        LuaValue title = definition.get("title");
+        LuaValue output = definition.get("output");
+        if (!output.istable()) {
+            throw new LuaError("processo " + id + " precisa de uma tabela em output");
+        }
+
+        LuaTable outputTable = (LuaTable) output;
+        LuaValue item = outputTable.get("item");
+        if (item.isnil() || item.tojstring().isBlank()) {
+            throw new LuaError("processo " + id + " precisa de output.item");
+        }
+
+        java.util.List<String> inputs = new java.util.ArrayList<>();
+        LuaValue declared = definition.get("inputs");
+        if (declared.istable()) {
+            LuaTable table = (LuaTable) declared;
+            int total = table.length();
+            if (total > MAX_PROCESS_INPUTS) {
+                throw new LuaError("processo " + id + " tem " + total
+                        + " entradas, acima do limite de " + MAX_PROCESS_INPUTS);
+            }
+            for (int index = 1; index <= total; index++) {
+                LuaValue entry = table.get(index);
+                if (entry.isnil()) continue;
+                inputs.add(requireIdentifier(entry.tojstring()));
+            }
+        }
+
+        double chance = outputTable.get("chance").isnil() ? 1.0 : outputTable.get("chance").todouble();
+        if (Double.isNaN(chance) || chance <= 0 || chance > 1) {
+            throw new LuaError("chance do processo " + id + " deve estar entre 0 e 1");
+        }
+
+        int count = outputTable.get("count").isnil() ? 1 : outputTable.get("count").checkint();
+        if (count < 1 || count > 64) {
+            throw new LuaError("count do processo " + id + " deve estar entre 1 e 64");
+        }
+
+        LuaValue station = definition.get("by");
+        return new RegisteredProcess(modId, id,
+                title.isnil() ? id : title.tojstring(),
+                java.util.List.copyOf(inputs),
+                requireIdentifier(item.tojstring()),
+                count, chance,
+                station.isnil() ? null : requireIdentifier(station.tojstring()));
+    }
+
     private record RegisteredMenu(String modId, LuaFunction callback) {
     }
 

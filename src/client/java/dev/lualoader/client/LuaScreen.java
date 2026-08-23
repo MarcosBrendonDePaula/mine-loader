@@ -6,10 +6,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,6 +36,9 @@ public class LuaScreen extends Screen {
     private final java.util.List<net.minecraft.client.gui.widget.ClickableWidget> widgets =
             new java.util.ArrayList<>();
 
+    /** Recorte, rolagem e clique de celula, compartilhados com a sobreposicao. */
+    private final ScreenSurface surface = new ScreenSurface();
+
     public LuaScreen(String screenId, ScreenModel model) {
         super(Text.literal(model.title()));
         this.screenId = screenId;
@@ -56,23 +56,23 @@ public class LuaScreen extends Screen {
      * campo a cada atualização faria o jogador perder o foco e a posição do cursor a cada tecla,
      * porque um script costuma redesenhar a tela em resposta ao próprio evento de digitação.
      */
-    public void updateModel(ScreenModel novo) {
-        Map<String, TextFieldWidget> anteriores = new HashMap<>(fields);
-        String focado = null;
-        for (Map.Entry<String, TextFieldWidget> entrada : anteriores.entrySet()) {
-            if (entrada.getValue().isFocused()) focado = entrada.getKey();
+    public void updateModel(ScreenModel updated) {
+        Map<String, TextFieldWidget> previous = new HashMap<>(fields);
+        String focused = null;
+        for (Map.Entry<String, TextFieldWidget> entry : previous.entrySet()) {
+            if (entry.getValue().isFocused()) focused = entry.getKey();
         }
 
-        this.model = novo;
+        this.model = updated;
         clearChildren();
         fields.clear();
         widgets.clear();
-        buildWidgets(anteriores);
+        buildWidgets(previous);
 
         // Devolve o foco ao campo em que o jogador estava digitando.
-        if (focado != null && fields.containsKey(focado)) {
-            setFocused(fields.get(focado));
-            fields.get(focado).setFocused(true);
+        if (focused != null && fields.containsKey(focused)) {
+            setFocused(fields.get(focused));
+            fields.get(focused).setFocused(true);
         }
     }
 
@@ -96,64 +96,49 @@ public class LuaScreen extends Screen {
      *
      * <p>Sem âncora, a coordenada é relativa ao canto da janela do mod, que fica centralizada na
      * tela do jogo — é o que faz uma janela de 220 por 140 aparecer no meio, com os elementos
-     * posicionados a partir do canto dela.
-     *
-     * <p>Com âncora, a origem passa a ser um ponto da tela do jogo, o que permite prender um
-     * elemento à borda em resoluções diferentes. Nas âncoras centradas, metade do tamanho do
-     * elemento é descontada: caso contrário o canto do elemento é que ficaria no centro, e não o
-     * elemento.
+     * posicionados a partir do canto dela. Com âncora, a origem passa a ser um ponto dessa mesma
+     * janela, o que mantém o elemento preso à borda dela em qualquer resolução.
      */
-    private int[] resolve(ScreenModel.Element element) {
-        // Sem âncora: relativo à janela do mod, já centralizada.
-        if (element.anchor().isBlank()) {
-            return new int[]{originX() + element.x(), originY() + element.y()};
-        }
-
-        int baseX;
-        int baseY;
-        switch (element.anchor()) {
-            case "top_left" -> { baseX = 0; baseY = 0; }
-            case "top" -> { baseX = width / 2 - element.w() / 2; baseY = 0; }
-            case "top_right" -> { baseX = width - element.w(); baseY = 0; }
-            case "left" -> { baseX = 0; baseY = height / 2 - element.h() / 2; }
-            case "right" -> { baseX = width - element.w(); baseY = height / 2 - element.h() / 2; }
-            case "bottom_left" -> { baseX = 0; baseY = height - element.h(); }
-            case "bottom" -> { baseX = width / 2 - element.w() / 2; baseY = height - element.h(); }
-            case "bottom_right" -> { baseX = width - element.w(); baseY = height - element.h(); }
-            default -> { baseX = width / 2 - element.w() / 2; baseY = height / 2 - element.h() / 2; }
-        }
-        return new int[]{baseX + element.x(), baseY + element.y()};
+    private ScreenRenderer.Bounds bounds() {
+        return new ScreenRenderer.Bounds(originX(), originY(), model.width(), model.height());
     }
 
-    private void buildWidgets(Map<String, TextFieldWidget> anteriores) {
+    private int[] resolve(ScreenModel.Element element) {
+        ScreenRenderer.Bounds window = bounds();
+        // Numa tela propria nao ha tela do jogo por baixo, entao as ancoras gui_ caem na janela do
+        // mod: e a unica leitura util delas aqui, e evita um elemento sumir sem explicacao.
+        return ScreenRenderer.resolve(element, window, window);
+    }
+
+    private void buildWidgets(Map<String, TextFieldWidget> previous) {
         for (ScreenModel.Element element : model.elements()) {
             int[] pos = resolve(element);
 
             if (element.type().equals("button")) {
                 widgets.add(addDrawableChild(net.minecraft.client.gui.widget.ButtonWidget
-                        .builder(Text.literal(element.text()), botao -> send(element.id(), "click", ""))
+                        .builder(Text.literal(element.text()), button -> send(element.id(), "click", ""))
                         .dimensions(pos[0], pos[1], Math.max(20, element.w()), Math.max(12, element.h()))
                         .build()));
             } else if (element.type().equals("input")) {
-                TextFieldWidget existente = anteriores.get(element.id());
+                TextFieldWidget existing = previous.get(element.id());
 
-                if (existente != null) {
+                if (existing != null) {
                     // Reaproveita o campo: o texto, o cursor e a selecao continuam onde estavam.
-                    existente.setPosition(pos[0], pos[1]);
-                    fields.put(element.id(), existente);
-                    widgets.add(addDrawableChild(existente));
+                    existing.setPosition(pos[0], pos[1]);
+                    fields.put(element.id(), existing);
+                    widgets.add(addDrawableChild(existing));
                     continue;
                 }
 
-                TextFieldWidget campo = new TextFieldWidget(textRenderer, pos[0], pos[1],
+                TextFieldWidget field = new TextFieldWidget(textRenderer, pos[0], pos[1],
                         Math.max(20, element.w()), Math.max(12, element.h()),
                         Text.literal(element.text()));
-                campo.setMaxLength(ScreenProtocol.MAX_TEXT_LENGTH);
-                campo.setText(element.value());
-                campo.setChangedListener(texto -> send(element.id(), "change", texto));
+                field.setMaxLength(ScreenProtocol.MAX_TEXT_LENGTH);
+                field.setText(element.value());
+                field.setChangedListener(text -> send(element.id(), "change", text));
 
-                fields.put(element.id(), campo);
-                widgets.add(addDrawableChild(campo));
+                fields.put(element.id(), field);
+                widgets.add(addDrawableChild(field));
             }
         }
     }
@@ -175,60 +160,42 @@ public class LuaScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
 
-        for (ScreenModel.Element element : model.elements()) {
-            int[] pos = resolve(element);
-            int x = pos[0];
-            int y = pos[1];
+        ScreenRenderer.Bounds window = bounds();
+        String tooltip = surface.draw(context, textRenderer, model.elements(),
+                window, window, mouseX, mouseY, true);
 
-            switch (element.type()) {
-                case "panel" -> context.fill(x, y, x + element.w(), y + element.h(), element.color());
-                case "label" -> {
-                    if (element.scale() == 1.0) {
-                        context.drawTextWithShadow(textRenderer, Text.literal(element.text()),
-                                x, y, element.color());
-                    } else {
-                        // A escala multiplica a matriz, entao a posicao precisa ser dividida por ela.
-                        // Escala inteira mantem a fonte bitmap nitida; uma fracionaria interpola e
-                        // borra, e o arredondamento abaixo evita ainda cair em meio pixel.
-                        float escala = (float) element.scale();
-                        context.getMatrices().push();
-                        context.getMatrices().scale(escala, escala, 1f);
-                        context.drawTextWithShadow(textRenderer, Text.literal(element.text()),
-                                Math.round(x / escala), Math.round(y / escala), element.color());
-                        context.getMatrices().pop();
-                    }
-                }
-                case "progress" -> {
-                    context.fill(x, y, x + element.w(), y + element.h(), 0xFF303030);
-                    int preenchido = (int) (element.w() * Math.max(0, Math.min(1, element.progress())));
-                    context.fill(x, y, x + preenchido, y + element.h(), element.color());
-                }
-                case "item" -> {
-                    Identifier id = Identifier.tryParse(element.item());
-                    if (id != null && Registries.ITEM.containsId(id)) {
-                        ItemStack stack = new ItemStack(Registries.ITEM.get(id), element.count());
-                        context.drawItem(stack, x, y);
-                        context.drawItemInSlot(textRenderer, stack, x, y);
-                    }
-                }
-                case "image" -> {
-                    Identifier textura = Identifier.tryParse(element.texture());
-                    if (textura != null) {
-                        context.drawTexture(textura, x, y, 0, 0,
-                                element.w(), element.h(), element.w(), element.h());
-                    }
-                }
-                default -> {
-                    // Tipo desconhecido: ignorado de proposito, para uma tela nova nao quebrar em
-                    // um cliente antigo. Botao e campo ja foram criados como widgets.
-                }
-            }
-        }
         // Os widgets sao desenhados por ultimo, para ficarem sobre os elementos do mod. Nao se
         // chama Screen.render aqui: ele repintaria o fundo por cima do que acabou de ser desenhado.
         for (var widget : widgets) {
             widget.render(context, mouseX, mouseY, delta);
         }
+        // O icone de um botao vem depois dele, senao o proprio botao o cobriria.
+        surface.drawButtonIcons(context, textRenderer, model.elements(), window, window);
+
+        // O texto de ajuda vem depois de tudo, senao os widgets cobririam a caixa.
+        ScreenRenderer.drawTooltip(context, textRenderer, tooltip, mouseX, mouseY);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // Uma celula de grade nao e um widget: o clique e resolvido aqui, e o indice da celula vai
+        // no valor do evento para o script saber qual item foi apontado.
+        Object[] cell = surface.clickedCell(model.elements(), bounds(), bounds(),
+                (int) mouseX, (int) mouseY);
+        if (cell != null) {
+            send((String) cell[0], "click", String.valueOf(cell[1]));
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if (surface.scroll(model.elements(), bounds(), bounds(),
+                (int) mouseX, (int) mouseY, vertical)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
 
     private void send(String elementId, String action, String value) {
@@ -246,9 +213,9 @@ public class LuaScreen extends Screen {
                 || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER;
 
         if (enter) {
-            for (Map.Entry<String, TextFieldWidget> entrada : fields.entrySet()) {
-                if (entrada.getValue().isFocused()) {
-                    send(entrada.getKey(), "submit", entrada.getValue().getText());
+            for (Map.Entry<String, TextFieldWidget> entry : fields.entrySet()) {
+                if (entry.getValue().isFocused()) {
+                    send(entry.getKey(), "submit", entry.getValue().getText());
                     return true;
                 }
             }

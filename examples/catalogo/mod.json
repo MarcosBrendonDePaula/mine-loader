@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "catalogo",
+  "name": "Catalogo de Itens",
+  "version": "1.0.0",
+  "description": "Sobreposicao no inventario listando os itens registrados no jogo.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.menu", "server.read"],
+  "events": { "player_joined": "on_player_joined" },
+  "enabled": true
+}

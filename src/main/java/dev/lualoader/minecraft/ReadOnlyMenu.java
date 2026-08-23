@@ -47,22 +47,22 @@ public class ReadOnlyMenu extends GenericContainerScreenHandler {
     public static Inventory buildInventory(java.util.List<String> items, int rows) {
         SimpleInventory inventory = new SimpleInventory(rows * 9);
         int index = 0;
-        for (String linha : items) {
+        for (String line : items) {
             if (index >= inventory.size()) break;
-            String[] partes = linha.split(";");
-            if (partes.length == 0 || partes[0].isBlank()) {
+            String[] parts = line.split(";");
+            if (parts.length == 0 || parts[0].isBlank()) {
                 index++;
                 continue;
             }
-            var id = net.minecraft.util.Identifier.tryParse(partes[0]);
+            var id = net.minecraft.util.Identifier.tryParse(parts[0]);
             if (id == null || !net.minecraft.registry.Registries.ITEM.containsId(id)) {
                 index++;
                 continue;
             }
             int count = 1;
-            if (partes.length > 1) {
+            if (parts.length > 1) {
                 try {
-                    count = Math.max(1, Math.min(64, Integer.parseInt(partes[1].trim())));
+                    count = Math.max(1, Math.min(64, Integer.parseInt(parts[1].trim())));
                 } catch (NumberFormatException ignored) {
                     count = 1;
                 }

@@ -41,29 +41,29 @@ public final class LuaLoaderCommands {
         var runtime = LuaLoaderMod.luaRuntime();
         if (runtime == null || runtime.commandNames().isEmpty()) return;
 
-        var raiz = CommandManager.literal("mod");
-        for (String nome : runtime.commandNames()) {
-            raiz = raiz.then(CommandManager.literal(nome)
-                    .executes(context -> runModCommand(context.getSource(), nome, ""))
+        var root = CommandManager.literal("mod");
+        for (String name : runtime.commandNames()) {
+            root = root.then(CommandManager.literal(name)
+                    .executes(context -> runModCommand(context.getSource(), name, ""))
                     .then(CommandManager.argument("args", StringArgumentType.greedyString())
-                            .executes(context -> runModCommand(context.getSource(), nome,
+                            .executes(context -> runModCommand(context.getSource(), name,
                                     StringArgumentType.getString(context, "args")))));
         }
-        dispatcher.register(raiz);
+        dispatcher.register(root);
         LuaLoaderMod.LOGGER.info("Comandos de mod publicados: {}", runtime.commandNames());
     }
 
-    private static int runModCommand(ServerCommandSource source, String nome, String argumentos) {
+    private static int runModCommand(ServerCommandSource source, String name, String arguments) {
         var runtime = LuaLoaderMod.luaRuntime();
         if (runtime == null) return 0;
 
         var player = source.getPlayer();
-        boolean existe = runtime.runCommand(nome,
+        boolean exists = runtime.runCommand(name,
                 player == null ? null : new dev.lualoader.minecraft.FabricPlayerHandle(player),
-                argumentos);
+                arguments);
 
-        if (!existe) {
-            source.sendError(Text.literal("Comando de mod desconhecido: " + nome));
+        if (!exists) {
+            source.sendError(Text.literal("Comando de mod desconhecido: " + name));
             return 0;
         }
         return 1;
@@ -82,14 +82,14 @@ public final class LuaLoaderCommands {
             return 0;
         }
 
-        var nomes = new java.util.ArrayList<>(runtime.commandNames());
-        java.util.Collections.sort(nomes);
+        var names = new java.util.ArrayList<>(runtime.commandNames());
+        java.util.Collections.sort(names);
 
-        source.sendFeedback(() -> Text.literal("Comandos de mod (" + nomes.size() + "):"), false);
-        for (String nome : nomes) {
-            source.sendFeedback(() -> Text.literal("  /mod " + nome), false);
+        source.sendFeedback(() -> Text.literal("Comandos de mod (" + names.size() + "):"), false);
+        for (String name : names) {
+            source.sendFeedback(() -> Text.literal("  /mod " + name), false);
         }
-        return nomes.size();
+        return names.size();
     }
 
     private static int list(ServerCommandSource source) {

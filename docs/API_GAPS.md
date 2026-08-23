@@ -17,6 +17,12 @@ que trata de quando o código roda; aqui a pergunta é o que o código consegue 
 | Jogador | `name`, `uuid`, `send_message`, `position`, `health`, `teleport` |
 | Inventário | `count_item`, `give_item`, `take_item`, `held_item` |
 | Janela | `mod.menu`, `open_menu`, `update_menu`, `close_menu`, `open_menu_id` |
+| Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` |
+| Tela do jogo | `set_overlay`, `clear_overlay` |
+| Registro do jogo | `items`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
+| Processos do mod | `mod.process`, `processes` |
+| Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
+| Tela do jogador | `screen_size` |
 | Leitura do servidor | `players`, `time_of_day`, `world_name` |
 | Entidades | `spawn_entity`, `entities_near`, `remove_entity`, `damage_entity` |
 | Agendamento | `mod.after` |
@@ -90,6 +96,119 @@ mochila ou loja depende disso.
 Todo bloco é um cubo. `render.model` aceita apenas `cube_all`; escadas, lajes, cercas, plantas e
 qualquer forma não cúbica não existem, e o campo é avisado como não aplicado na carga.
 
+## Conhecer o conteudo do jogo
+
+Um catalogo -- o papel que o JEI cumpre -- precisa responder tres perguntas sobre um item: o que ele
+e, como se obtem, e para que serve. As tres tem API.
+
+| Pergunta | Operacao |
+|---|---|
+| Que itens existem | `ctx.server.items({ namespace, contains, limit })` |
+| Que receita o produz | `ctx.server.recipes_for(item, limit)` |
+| Que receita o consome | `ctx.server.recipes_using(item, limit)` |
+| Que bloco ou mob o derruba | `ctx.server.dropped_by(item, limit)` |
+| Que itens um bloco ou mob derruba | `ctx.server.drops_of(fonte, limit)` |
+
+Todas passam por `server.read` e todas tem teto obrigatorio. O motivo do teto e o mesmo nas cinco: o
+jogo nao mantem indice reverso, entao cada pergunta custa uma varredura -- do registro, do livro de
+receitas ou dos blocos. Um mod deve guardar o que ja perguntou em vez de repetir a consulta a cada
+quadro.
+
+**Como os drops sao descobertos.** O loader varre as tabelas de loot carregadas e deduz o dono de
+cada uma pelo nome: `blocks/stone` e do bloco, `entities/sheep/white` e da ovelha. Perguntar a
+tabela de cada bloco e de cada tipo de entidade seria o caminho obvio, e erra -- a ovelha tem uma
+tabela por cor, escolhida dentro da instancia, e o tipo so conhece a generica, que da carne e nao
+la. Varrer resolve os dois casos e ainda descobre variantes que ninguem precisou prever.
+
+**Limites.** So entradas de item sao lidas: uma entrada que aponta para outra tabela e ignorada.
+Tabelas sem dono -- bau de masmorra, pesca, presente de aldeao -- ficam de fora, porque nao
+respondem "o que este bloco derruba".
+
+**O que nao e loot.** Morte de mob e mineracao sao dados, e por isso consultaveis. Ja uma interacao
+que vive em codigo -- tosquiar uma ovelha, encher um balde numa vaca, pegar um peixe com balde --
+nao esta registrada em lugar nenhum do jogo: ele sabe fazer, mas nao sabe dizer. Para aparecer num
+catalogo, precisa ser declarada como processo.
+
+E o mesmo caso de uma mecanica inventada por um mod, e por isso a mesma solucao serve aos dois. O
+exemplo `processos_vanilla` faz exatamente isso: declara tosquia, ordenha e balde de peixe, e todo
+catalogo passa a mostra-las so por ele estar instalado, porque o registro e global.
+
+Isso nao vive dentro do loader de proposito. O nucleo nao conhece conteudo do jogo -- e a regra que
+o mantem portavel -- e como dado em Lua qualquer um corrige uma linha errada sem esperar uma versao
+nova do loader.
+
+### Processos: mecanica que o jogo nao conhece
+
+O livro de receitas do jogo so conhece as receitas do jogo. Uma mecanica inventada por um mod -- dar
+trigo a uma vaca e receber leite, moer minerio, curtir couro -- nao existe la, e por isso seria
+invisivel a qualquer catalogo. E o que o JEI resolve com categorias de receita.
+
+```lua
+mod.process("ordenha", {
+    title  = "Alimentar a vaca",
+    inputs = { "minecraft:wheat" },
+    output = { item = "minecraft:milk_bucket", count = 1, chance = 0.5 },
+    by     = "minecraft:cow"      -- quem executa: entidade, bloco ou item
+})
+```
+
+```lua
+ctx.server.processes({ produces = item })   -- o que produz isto
+ctx.server.processes({ uses = item })       -- o que consome isto
+ctx.server.processes({ by = "minecraft:cow" })
+```
+
+O registro e **global**: um catalogo e um mod que lista o que os outros declararam, e nao teria como
+fazer isso se cada mod so enxergasse os proprios processos. Uma recarga descarta os processos
+daquele mod, junto com as telas e as tarefas.
+
+O formato ficou proximo do de uma receita do jogo de proposito, para um catalogo desenhar os dois
+com o mesmo codigo em vez de manter dois desenhos paralelos.
+
+## Falar com o resto do ecossistema
+
+Um catalogo le o jogo. Operar o jogo -- tirar carvao de um bau, alimentar a maquina de outro mod --
+exige alcancar o inventario de um bloco, e e ai que a portabilidade fica em risco.
+
+Cada plataforma tem o proprio mecanismo para isso, e os tres sao incompativeis:
+
+| Plataforma | Mecanismo |
+|---|---|
+| Fabric | Transfer API, `Storage<ItemVariant>` |
+| NeoForge | Capabilities, `IItemHandler` |
+| Paper | `Inventory`, do Bukkit |
+
+Se o contrato citasse um deles, um mod escrito para este loader deixaria de rodar nos outros. Por
+isso o nucleo nomeia a **ideia**, e nao a API:
+
+```lua
+local capacidades = ctx.server.capabilities_at(x, y, z)   -- { "items" }
+local conteudo    = ctx.server.container_at(x, y, z)      -- { {slot=, item=, count=} }
+local sobrou      = ctx.server.insert_into(x, y, z, "minecraft:coal", 8)
+local pegou       = ctx.server.extract_from(x, y, z, "minecraft:iron_ingot", 4)
+```
+
+O vocabulario de capacidades e fechado -- `items`, `fluid`, `energy` -- e cada adaptador traduz para
+o mecanismo da casa. Hoje so `items` tem operacoes; as outras duas estao previstas e ainda nao
+respondem, porque anunciar uma capacidade que o loader nao sabe usar faria o mod perguntar e nao ter
+o que fazer com a resposta.
+
+**E isso que os mod loaders nao dao.** Quem escreve para Fabric reescreve para NeoForge, porque as
+duas APIs nao se conhecem. Um mod Lua escrito para este loader roda nas duas assim que houver
+adaptador, sem mudar uma linha -- e alcanca a maquina de um mod de terceiros sem que esse mod saiba
+que o loader existe, porque o que ele implementou foi o padrao da plataforma dele.
+
+**Verificado em jogo.** Com o Tom's Simple Storage instalado ao lado do loader -- um mod que nao
+conhece este projeto --, um script Lua leu o inventario do `filing_cabinet` dele, com item e
+quantidade, sem uma linha de codigo especifica para aquele mod. A escrita chegou ate ele e foi
+recusada pelo filtro do proprio mod, que e o comportamento correto: `insert_into` devolveu "sobrou
+8 de 8" em vez de fingir sucesso. No bau do jogo, a mesma escrita entra.
+
+**O que isso nao resolve.** Chamar codigo de outro mod continua fora: nao ha ponte para a API Java
+dele, e nem deveria haver -- um script de terceiros com acesso a JVM seria o fim do sandbox. E uma
+mecanica que o outro mod executa sem registrar receita nem expor inventario permanece invisivel,
+pelo mesmo motivo que a tosquia permanecia: o jogo sabe fazer e nao sabe dizer.
+
 ## Prioridade sugerida
 
 A ordem considera quantos tipos de mod cada item destrava, e não a dificuldade.
@@ -117,7 +236,24 @@ nova, com modelo e comportamento próprios, continua fora: isso exige registrar 
 um modelo e um renderizador no cliente, além de sincronização de rede. Um mod pode usar um Allay como
 guardião; não pode criar o Moa.
 
-**Interface.** A janela usa a tela de container do próprio jogo, o que faz o recurso funcionar em
+**Interface.** Além da tela desenhada e do HUD, o mod desenha sobre telas do próprio jogo — o
+inventário, o forno, o menu de pausa — com `set_overlay`, e o `tooltip` de qualquer elemento passou
+a ser desenhado. A grade de itens, a rolagem, a leitura de receitas, os drops e os processos declarados por mod
+também existem, e com eles um catálogo — listar, buscar, ver o que produz, o que consome e o que
+derruba um item — cabe em um mod de Lua. O exemplo `catalogo` faz exatamente isso.
+
+O que separa esse catálogo de um JEI de verdade é interação com a tela de baixo: arrastar um item
+para o inventário, preencher a mesa de trabalho com um clique, e um atalho de teclado. Os três
+dependem da mesma peça ausente, descrita abaixo.
+
+**A peça ausente: os slots da tela de baixo.** O loader desenha sobre o inventário, mas não lê nem
+mexe nele. Sem isso não há arrastar item, preencher receita, nem saber o que o jogador está
+segurando naquela tela. É o que hoje separa o catálogo de um JEI.
+
+Também fora: aba, barra de rolagem arrastável e tecla como ação, que impede um atalho ao estilo
+`R` e `U` do JEI.
+
+A janela de itens usa a tela de container do próprio jogo, o que faz o recurso funcionar em
 qualquer cliente vanilla com o loader instalado. Cada slot é um botão: o clique volta ao script com
 o índice, o item e o botão usado, e o mod redesenha sem fechar a tela. O que continua fora é a tela
 desenhada de verdade — HUD, botões próprios, campos de texto — porque isso exige um renderizador no
@@ -138,16 +274,17 @@ Dimensões próprias e geração de mundo seguem inteiramente fora do alcance.
 | `player.read` | Leitura de jogador: item na mão, posição, vida, contagem de itens |
 | `player.inventory` | Dar e remover itens |
 | `player.move` | Teleporte |
-| `player.menu` | Abrir e fechar menus |
+| `player.menu` | Abrir e fechar menus, telas, HUD e sobreposições |
 | `world.read` | Ler blocos, dados de bloco, tocar som e emitir partículas |
 | `world.write` | Alterar blocos, preencher regiões, posicionar estruturas, gravar dados |
+| `world.containers` | Ler e mexer no inventário de um bloco |
 | `entity.read` | Listar entidades próximas |
 | `entity.spawn` | Invocar entidades |
 | `entity.modify` | Remover e machucar entidades |
 | `server.command.register` | Registrar comandos |
 | `entity.read`, `entity.spawn`, `entity.modify` | Entidades |
 
-| `server.read` | Ler jogadores conectados, hora do dia e dimensão |
+| `server.read` | Ler jogadores conectados, hora do dia, dimensão, itens, receitas, drops e processos |
 
 Nenhuma permissão declarável fica sem uso: todas protegem uma operação real.
 

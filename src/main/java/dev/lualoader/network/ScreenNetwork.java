@@ -28,8 +28,14 @@ public final class ScreenNetwork {
                 ScreenPayloads.CloseScreen.ID, ScreenPayloads.CloseScreen.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 ScreenPayloads.SetHud.ID, ScreenPayloads.SetHud.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ScreenPayloads.SetOverlay.ID, ScreenPayloads.SetOverlay.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ScreenPayloads.ClearOverlay.ID, ScreenPayloads.ClearOverlay.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ScreenEvent.ID, ScreenPayloads.ScreenEvent.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                ScreenPayloads.ClientInfo.ID, ScreenPayloads.ClientInfo.CODEC);
     }
 
     /** Passa a receber os eventos que o cliente envia. */
@@ -39,6 +45,13 @@ public final class ScreenNetwork {
                     // A carga chega na thread de rede; tocar o jogo exige a thread do servidor.
                     context.server().execute(() -> handleEvent(payload, context.player()));
                 });
+    }
+
+    /** Guarda o tamanho de tela informado, para o mod poder montar uma tela que caiba. */
+    private static void handleClientInfo(ScreenPayloads.ClientInfo payload,
+                                         ServerPlayerEntity player) {
+        if (payload.version() != ScreenProtocol.VERSION) return;
+        FabricPlayerHandle.rememberScreenSize(player.getUuid(), payload.width(), payload.height());
     }
 
     private static void handleEvent(ScreenPayloads.ScreenEvent payload, ServerPlayerEntity player) {
@@ -66,6 +79,13 @@ public final class ScreenNetwork {
                 payload.action(),
                 payload.value(),
                 new FabricPlayerHandle(player));
+    }
+
+    /** Passa a receber o tamanho de tela que o cliente informa. */
+    public static void registerClientInfoReceiver() {
+        ServerPlayNetworking.registerGlobalReceiver(ScreenPayloads.ClientInfo.ID,
+                (payload, context) ->
+                        context.server().execute(() -> handleClientInfo(payload, context.player())));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

@@ -1,6 +1,7 @@
 pluginManagement {
     repositories {
         maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+        maven { name = 'NeoForged'; url = 'https://maven.neoforged.net/releases' }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -8,5 +9,7 @@ pluginManagement {
 
 rootProject.name = 'minecraft-lua-loader'
 
-// Nucleo agnostico de plataforma. O modulo raiz e o adaptador Fabric.
+// Nucleo agnostico de plataforma. O modulo raiz e o adaptador Fabric, e neoforge e o segundo
+// adaptador -- a prova de que o nucleo nao depende de nenhuma das duas.
 include 'core'
+include 'neoforge'

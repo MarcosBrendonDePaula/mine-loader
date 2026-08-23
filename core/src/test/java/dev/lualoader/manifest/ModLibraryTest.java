@@ -63,8 +63,8 @@ class ModLibraryTest {
         writeMod(root, "zeta_lib", "", "", "return {}\n");
         writeMod(root, "alpha_app", "", "\"zeta_lib\": \"1.0.0\"", "return {}\n");
 
-        List<String> ordem = discover(root).stream().map(mod -> mod.manifest().id).toList();
-        assertEquals(List.of("zeta_lib", "alpha_app"), ordem);
+        List<String> order = discover(root).stream().map(mod -> mod.manifest().id).toList();
+        assertEquals(List.of("zeta_lib", "alpha_app"), order);
     }
 
     @Test

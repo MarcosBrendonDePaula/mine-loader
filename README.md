@@ -16,7 +16,9 @@
 - [Roadmap de implementação](docs/ROADMAP.md)
 - [Pipeline de geração por IA](docs/AI_PIPELINE.md)
 
-Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java inicia pelo Fabric, descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
+Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
+
+O núcleo não conhece plataforma: existem dois adaptadores, **Fabric** e **NeoForge**, e o mesmo mod em Lua roda nos dois sem mudança. O Fabric é o completo; o NeoForge cobre o caminho central e recusa com mensagem clara o que ainda não implementa.
 
 ## Requisitos
 
@@ -27,7 +29,8 @@ O projeto usa Java 21. No Windows, o Gradle Wrapper já está disponível em `gr
 Linux/macOS:
 
 ```bash
-./gradlew build
+./gradlew build              # nucleo, testes e adaptador Fabric
+./gradlew :neoforge:build    # adaptador NeoForge
 ```
 
 Windows PowerShell:
@@ -35,6 +38,23 @@ Windows PowerShell:
 ```powershell
 ./gradlew.bat build
 ```
+
+## Rodar nas duas plataformas
+
+```bash
+./gradlew runClient              # Fabric
+./gradlew :neoforge:runClient    # NeoForge
+```
+
+Cada run tem o proprio diretorio de jogo, e portanto a propria pasta `mods-lua`. Para nao manter
+duas copias dos mesmos mods:
+
+```bash
+./gradlew :neoforge:linkModsLua
+```
+
+Isso aponta `neoforge/run/mods-lua` para `run/mods-lua`, e um mod editado passa a valer nas duas
+plataformas de uma vez -- que e justamente o que se quer verificar.
 
 ## Executar servidor de desenvolvimento
 
@@ -56,6 +76,26 @@ run/mods-lua/hello_lua/main.lua
 run/mods-lua/hello_lua/assets/hello_lua/textures/block/ruby_block.png
 run/mods-lua/hello_lua/assets/hello_lua/textures/block/ruby_block_alt.png
 ```
+
+## Exemplos
+
+A pasta `examples/` traz mods prontos para copiar para `run/mods-lua`. Cada um exercita uma parte
+diferente do loader.
+
+| Exemplo | O que demonstra |
+|---|---|
+| `hello_lua` | Bloco declarativo com variantes, textura local e propriedades dinâmicas |
+| `crystal_world` | Estruturas, dados por bloco e aba criativa |
+| `github_mod` | Mod remoto: manifesto e scripts baixados por URL |
+| `guilda` | Estado persistido, comandos próprios e menu de itens |
+| `loja` | Inventário do jogador: dar, tirar e contar itens |
+| `painel` | Tela desenhada e HUD |
+| `catalogo` | Sobreposição no inventário, grade rolável, busca, receitas, drops e processos |
+| `processos_vanilla` | Declara as interações que o jogo executa em código: tosquia, ordenha, balde de peixe |
+| `inspetor` | Lê e abastece o inventário de qualquer bloco, inclusive de mods de terceiros |
+
+O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
+serve como referência de como as peças se combinam.
 
 ## Manifesto mínimo
 

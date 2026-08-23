@@ -16,22 +16,31 @@ import java.util.List;
  * sem os elementos que não entende, em vez de uma tela quebrada.
  */
 public final class ScreenModel {
+    /** Uma célula de grade: um item, sua quantidade e o texto de ajuda. */
+    public record Cell(String item, int count, String tooltip) {
+    }
+
     /** Um elemento e seus atributos, todos opcionais fora do tipo. */
     public record Element(String type, String id, int x, int y, int w, int h, String anchor,
                           String text, String value, String item, String texture, String tooltip,
-                          int color, int count, double progress, double scale) {
+                          int color, int count, double progress, double scale,
+                          String group, int columns, int cell, int content, List<Cell> cells,
+                          String style, int border, int borderLight, int borderDark,
+                          boolean shadow, String entity) {
     }
 
     private final String title;
+    private final String target;
     private final int width;
     private final int height;
     private final boolean blur;
     private final boolean dim;
     private final List<Element> elements;
 
-    private ScreenModel(String title, int width, int height, boolean blur, boolean dim,
-                        List<Element> elements) {
+    private ScreenModel(String title, String target, int width, int height, boolean blur,
+                        boolean dim, List<Element> elements) {
         this.title = title;
+        this.target = target;
         this.width = width;
         this.height = height;
         this.blur = blur;
@@ -53,6 +62,15 @@ public final class ScreenModel {
         return title;
     }
 
+    /**
+     * Tela do jogo sobre a qual desenhar, em uma sobreposição.
+     *
+     * <p>Vazio numa tela própria e num HUD, que não se prendem a nada.
+     */
+    public String target() {
+        return target;
+    }
+
     public int width() {
         return width;
     }
@@ -68,89 +86,122 @@ public final class ScreenModel {
     /** Lê a descrição. Devolve {@code null} quando o texto não é uma tela válida. */
     public static ScreenModel parse(String json) {
         try {
-            JsonElement raiz = JsonParser.parseString(json);
-            if (!raiz.isJsonObject()) return null;
-            JsonObject objeto = raiz.getAsJsonObject();
+            JsonElement root = JsonParser.parseString(json);
+            if (!root.isJsonObject()) return null;
+            JsonObject object = root.getAsJsonObject();
 
             return new ScreenModel(
-                    texto(objeto, "title", ""),
-                    inteiro(objeto, "width", 256),
-                    inteiro(objeto, "height", 166),
-                    booleano(objeto, "blur", false),
-                    booleano(objeto, "dim", true),
-                    elementos(objeto));
+                    text(object, "title", ""),
+                    text(object, "target", ""),
+                    integer(object, "width", 256),
+                    integer(object, "height", 166),
+                    bool(object, "blur", false),
+                    bool(object, "dim", true),
+                    elements(object));
         } catch (RuntimeException error) {
             return null;
         }
     }
 
-    private static List<Element> elementos(JsonObject objeto) {
-        List<Element> lista = new ArrayList<>();
-        if (!objeto.has("elements") || !objeto.get("elements").isJsonArray()) return lista;
+    private static List<Element> elements(JsonObject object) {
+        List<Element> list = new ArrayList<>();
+        if (!object.has("elements") || !object.get("elements").isJsonArray()) return list;
 
-        JsonArray array = objeto.getAsJsonArray("elements");
-        for (JsonElement entrada : array) {
-            if (!entrada.isJsonObject()) continue;
-            JsonObject elemento = entrada.getAsJsonObject();
+        JsonArray array = object.getAsJsonArray("elements");
+        for (JsonElement entry : array) {
+            if (!entry.isJsonObject()) continue;
+            JsonObject element = entry.getAsJsonObject();
 
-            lista.add(new Element(
-                    texto(elemento, "type", ""),
-                    texto(elemento, "id", ""),
-                    inteiro(elemento, "x", 0),
-                    inteiro(elemento, "y", 0),
-                    inteiro(elemento, "w", 0),
-                    inteiro(elemento, "h", 0),
-                    texto(elemento, "anchor", ""),
-                    texto(elemento, "text", ""),
-                    texto(elemento, "value", ""),
-                    texto(elemento, "item", ""),
-                    texto(elemento, "texture", ""),
-                    texto(elemento, "tooltip", ""),
-                    cor(elemento),
-                    inteiro(elemento, "count", 1),
-                    decimal(elemento, "progress", 0.0),
-                    decimal(elemento, "scale", 1.0)));
+            list.add(new Element(
+                    text(element, "type", ""),
+                    text(element, "id", ""),
+                    integer(element, "x", 0),
+                    integer(element, "y", 0),
+                    integer(element, "w", 0),
+                    integer(element, "h", 0),
+                    text(element, "anchor", ""),
+                    text(element, "text", ""),
+                    text(element, "value", ""),
+                    text(element, "item", ""),
+                    text(element, "texture", ""),
+                    text(element, "tooltip", ""),
+                    color(element),
+                    integer(element, "count", 1),
+                    decimal(element, "progress", 0.0),
+                    decimal(element, "scale", 1.0),
+                    text(element, "group", ""),
+                    integer(element, "columns", 9),
+                    integer(element, "cell", 18),
+                    integer(element, "content", 0),
+                    cells(element),
+                    text(element, "style", "flat"),
+                    integer(element, "border", 2),
+                    colorOf(element, "border_light", 0xFFFFFFFF),
+                    colorOf(element, "border_dark", 0xFF555555),
+                    bool(element, "shadow", true),
+                    text(element, "entity", "")));
         }
-        return lista;
+        return list;
     }
 
-    private static boolean booleano(JsonObject objeto, String campo, boolean padrao) {
+    /** Lê as células de uma grade. Vazia quando o elemento não é uma grade. */
+    private static List<Cell> cells(JsonObject element) {
+        List<Cell> cells = new ArrayList<>();
+        if (!element.has("cells") || !element.get("cells").isJsonArray()) return cells;
+
+        for (JsonElement entry : element.getAsJsonArray("cells")) {
+            if (!entry.isJsonObject()) continue;
+            JsonObject cell = entry.getAsJsonObject();
+            cells.add(new Cell(
+                    text(cell, "item", ""),
+                    integer(cell, "count", 1),
+                    text(cell, "tooltip", "")));
+        }
+        return cells;
+    }
+
+    private static boolean bool(JsonObject object, String field, boolean fallback) {
         try {
-            return objeto.has(campo) ? objeto.get(campo).getAsBoolean() : padrao;
+            return object.has(field) ? object.get(field).getAsBoolean() : fallback;
         } catch (RuntimeException error) {
-            return padrao;
+            return fallback;
         }
     }
 
-    private static String texto(JsonObject objeto, String campo, String padrao) {
-        return objeto.has(campo) && objeto.get(campo).isJsonPrimitive()
-                ? objeto.get(campo).getAsString()
-                : padrao;
+    private static String text(JsonObject object, String field, String fallback) {
+        return object.has(field) && object.get(field).isJsonPrimitive()
+                ? object.get(field).getAsString()
+                : fallback;
     }
 
-    private static int inteiro(JsonObject objeto, String campo, int padrao) {
+    private static int integer(JsonObject object, String field, int fallback) {
         try {
-            return objeto.has(campo) ? objeto.get(campo).getAsInt() : padrao;
+            return object.has(field) ? object.get(field).getAsInt() : fallback;
         } catch (RuntimeException error) {
-            return padrao;
+            return fallback;
         }
     }
 
-    private static double decimal(JsonObject objeto, String campo, double padrao) {
+    private static double decimal(JsonObject object, String field, double fallback) {
         try {
-            return objeto.has(campo) ? objeto.get(campo).getAsDouble() : padrao;
+            return object.has(field) ? object.get(field).getAsDouble() : fallback;
         } catch (RuntimeException error) {
-            return padrao;
+            return fallback;
         }
     }
 
     /** Converte {@code #RRGGBBAA} no inteiro ARGB que o renderizador usa. */
-    private static int cor(JsonObject objeto) {
-        String texto = texto(objeto, "color", "#FFFFFFFF");
+    private static int color(JsonObject object) {
+        return colorOf(object, "color", 0xFFFFFFFF);
+    }
+
+    private static int colorOf(JsonObject object, String field, int fallback) {
+        if (!object.has(field)) return fallback;
+        String text = text(object, field, "#FFFFFFFF");
         try {
-            String limpo = texto.startsWith("#") ? texto.substring(1) : texto;
-            if (limpo.length() == 6) limpo = limpo + "FF";
-            long rgba = Long.parseLong(limpo, 16);
+            String cleaned = text.startsWith("#") ? text.substring(1) : text;
+            if (cleaned.length() == 6) cleaned = cleaned + "FF";
+            long rgba = Long.parseLong(cleaned, 16);
 
             int r = (int) ((rgba >> 24) & 0xFF);
             int g = (int) ((rgba >> 16) & 0xFF);
@@ -158,7 +209,7 @@ public final class ScreenModel {
             int a = (int) (rgba & 0xFF);
             return (a << 24) | (r << 16) | (g << 8) | b;
         } catch (RuntimeException error) {
-            return 0xFFFFFFFF;
+            return fallback;
         }
     }
 }

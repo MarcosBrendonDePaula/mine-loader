@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "processos_vanilla",
+  "name": "Processos do Jogo",
+  "version": "1.0.0",
+  "description": "Declara as interacoes que o Minecraft executa em codigo e nao publica em lugar nenhum.",
+  "entrypoint": "main.lua",
+  "permissions": [],
+  "enabled": true
+}
