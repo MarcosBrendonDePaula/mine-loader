@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "loja",
+  "name": "Loja de Exemplo",
+  "version": "1.0.0",
+  "description": "Exemplo minimo de interface: uma loja com botoes que funcionam.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "player.inventory", "player.menu", "server.command.register"],
+  "enabled": true
+}
