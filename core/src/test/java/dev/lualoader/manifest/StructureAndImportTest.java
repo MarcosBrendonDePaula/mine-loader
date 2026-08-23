@@ -409,4 +409,78 @@ class StructureAndImportTest {
                 """);
         assertTrue(discover(root).isEmpty(), "$import combinado com outros campos e ambiguo");
     }
+
+    @Test
+    void remoteBaseResolvesRelativePathsFromCache(@TempDir Path root) throws Exception {
+        // A base remota permite instalar um mod publicado na web com um manifesto pequeno: o
+        // arquivo nao existe no disco e e buscado sob a base. Aqui o cache faz o papel da rede.
+        String base = "https://exemplo.invalido/meu_mod/";
+        String bloco = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
+
+        Path cache = root.resolve("cache");
+        Files.createDirectories(cache);
+        Files.writeString(cache.resolve(sha256Hex(base + "parts/bloco.json") + ".latest"),
+                bloco, StandardCharsets.UTF_8);
+
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "remote_base": "%s",
+                  "blocks": [{"$import": "parts/bloco.json"}]
+                }
+                """.formatted(base));
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
+        assertEquals(1, mods.size(), "o mod deveria carregar com o conteudo vindo da base");
+        assertEquals("remoto", mods.get(0).manifest().blocks.get(0).id);
+    }
+
+    @Test
+    void localFileWinsOverRemoteBase(@TempDir Path root) throws Exception {
+        // Um arquivo presente no disco tem prioridade, para permitir sobrescrever localmente
+        // um pedaco do mod publicado sem alterar a base.
+        String base = "https://exemplo.invalido/meu_mod/";
+
+        Path cache = root.resolve("cache");
+        Files.createDirectories(cache);
+        Files.writeString(cache.resolve(sha256Hex(base + "parts/bloco.json") + ".latest"),
+                "{\"id\": \"remoto\", \"name\": \"Remoto\"}", StandardCharsets.UTF_8);
+
+        Path dir = writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "remote_base": "%s",
+                  "blocks": [{"$import": "parts/bloco.json"}]
+                }
+                """.formatted(base));
+        Files.createDirectories(dir.resolve("parts"));
+        Files.writeString(dir.resolve("parts/bloco.json"),
+                "{\"id\": \"local\", \"name\": \"Local\"}", StandardCharsets.UTF_8);
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
+        assertEquals("local", mods.get(0).manifest().blocks.get(0).id,
+                "o arquivo local deve vencer a base remota");
+    }
+
+    @Test
+    void withoutRemoteBaseMissingFileStillFails(@TempDir Path root) throws IOException {
+        // Sem base declarada, o comportamento anterior continua valendo: arquivo ausente e erro.
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "struct_mod",
+                  "name": "Struct Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "blocks": [{"$import": "parts/bloco.json"}]
+                }
+                """);
+        assertTrue(discover(root).isEmpty(), "sem base, um import faltando continua sendo erro");
+    }
 }

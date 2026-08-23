@@ -33,6 +33,8 @@ public final class ModLoader {
             .create();
     private final Logger logger;
     private final Path importCache;
+    /** Base remota do manifesto em validacao, usada para aceitar scripts que nao estao no disco. */
+    private String manifestRemoteBase;
 
     /** Loader apenas local: imports remotos serao recusados. Usado em validacao offline e testes. */
     public ModLoader(Logger logger) {
@@ -141,6 +143,7 @@ public final class ModLoader {
                 require(block.name != null && !block.name.isBlank(), "name de bloco é obrigatório");
                 require(blockIds.add(block.id), "bloco duplicado no mod: " + block.id);
                 validateBlock(block);
+                manifestRemoteBase = manifest.remoteBase;
                 validateBehaviorScripts(block, directory);
             }
         }
@@ -248,8 +251,12 @@ public final class ModLoader {
             Path script = directory.resolve(handler).toAbsolutePath().normalize();
             require(script.startsWith(root),
                     "script de behavior." + entry.getKey() + " sai da pasta do mod: " + handler);
-            require(Files.isRegularFile(script),
-                    "script de behavior." + entry.getKey() + " nao encontrado: " + handler);
+            // Com uma base remota declarada, o arquivo pode nao existir no disco: ele sera
+            // buscado na rede no momento da carga do script.
+            if (manifestRemoteBase == null) {
+                require(Files.isRegularFile(script),
+                        "script de behavior." + entry.getKey() + " nao encontrado: " + handler);
+            }
         }
     }
 

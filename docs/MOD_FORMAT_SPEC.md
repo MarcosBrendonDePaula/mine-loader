@@ -501,3 +501,36 @@ A consequencia precisa ser conhecida por quem administra um servidor: instalar u
 todos os mods que a declararem acesso indireto ao que ela faz. Por isso `mod.require` exige a
 declaracao em `dependencies`, de modo que esse alcance fique registrado no manifesto e possa ser
 auditado antes da instalacao.
+
+## Instalar um mod publicado na web
+
+O campo `remote_base` define um endereco base para os caminhos relativos do manifesto. Cada arquivo
+e procurado primeiro no disco e, se nao existir, sob essa base. Isso permite publicar o mod inteiro
+na web e instala-lo com um manifesto de poucas linhas:
+
+```json
+{
+  "schema": 1,
+  "id": "github_mod",
+  "name": "GitHub Mod",
+  "version": "1.0.0",
+  "remote_base": "https://raw.githubusercontent.com/usuario/repo/main/examples/github_mod/",
+  "permissions": ["chat.send", "world.write"],
+  "blocks": [{ "$import": "parts/blocks/github_block.json" }],
+  "items": [{ "$import": "parts/items/commit.json" }]
+}
+```
+
+A base vale para tres coisas: os proprios `$import`, os scripts declarados em `behavior` e as
+texturas com `source: local`. Sem ela, um pedaco importado por URL nao conseguiria referenciar os
+proprios arquivos, porque os caminhos declarados nele apontam para a pasta do mod de origem.
+
+| Regra | Motivo |
+|---|---|
+| O arquivo local tem prioridade | Permite sobrescrever um pedaco do mod publicado sem alterar a base. |
+| Sem `remote_base`, arquivo ausente continua sendo erro | O comportamento local nao muda para quem nao usa a base. |
+| Os caminhos herdam as regras de import remoto | Somente https, limite de tamanho e timeout continuam valendo. |
+
+Como um caminho resolvido pela base nao declara `sha256`, ele e buscado a cada carga: publicar uma
+versao nova atualiza o mod na proxima inicializacao. Para fixar uma versao, use `$import` com a URL
+completa e o hash.

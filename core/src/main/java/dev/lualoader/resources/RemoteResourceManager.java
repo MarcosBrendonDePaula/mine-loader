@@ -39,6 +39,15 @@ public final class RemoteResourceManager {
 
     public ResolvedTexture resolveTexture(Path modDirectory,
                                           ModManifest.TextureDefinition definition) throws IOException {
+        return resolveTexture(modDirectory, definition, null);
+    }
+
+    /**
+     * @param remoteBase base usada quando a textura local nao existe, para mods publicados na web
+     */
+    public ResolvedTexture resolveTexture(Path modDirectory,
+                                          ModManifest.TextureDefinition definition,
+                                          String remoteBase) throws IOException {
         if (definition == null) {
             throw new IOException("textura ausente");
         }
@@ -47,10 +56,33 @@ public final class RemoteResourceManager {
                 ? "local"
                 : definition.source.toLowerCase(Locale.ROOT);
         return switch (source) {
-            case "local" -> resolveLocal(modDirectory, definition);
+            case "local" -> resolveLocalOrBase(modDirectory, definition, remoteBase);
             case "remote" -> resolveRemote(definition);
             default -> throw new IOException("fonte de textura desconhecida: " + definition.source);
         };
+    }
+
+    /** Procura a textura no disco e, quando ha base declarada, no endereco correspondente. */
+    private ResolvedTexture resolveLocalOrBase(Path modDirectory,
+                                               ModManifest.TextureDefinition definition,
+                                               String remoteBase) throws IOException {
+        Path root = modDirectory.toAbsolutePath().normalize();
+        Path file = definition.path == null ? null : root.resolve(definition.path).normalize();
+
+        if (file != null && Files.isRegularFile(file)) {
+            return resolveLocal(modDirectory, definition);
+        }
+        if (remoteBase != null && !remoteBase.isBlank() && definition.path != null) {
+            String base = remoteBase.endsWith("/") ? remoteBase : remoteBase + "/";
+            ModManifest.TextureDefinition asRemote = new ModManifest.TextureDefinition();
+            asRemote.source = "remote";
+            asRemote.url = base + definition.path.replace('\\', '/');
+            asRemote.fallback = definition.fallback;
+            asRemote.maxBytes = definition.maxBytes;
+            asRemote.sha256 = definition.sha256;
+            return resolveRemote(asRemote);
+        }
+        return resolveLocal(modDirectory, definition);
     }
 
     private ResolvedTexture resolveLocal(Path modDirectory,

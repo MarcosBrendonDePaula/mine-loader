@@ -469,8 +469,24 @@ public final class LuaRuntime {
             throw new IOException("script de comportamento sai da pasta do mod: " + reference);
         }
 
-        try (Reader reader = Files.newBufferedReader(script, StandardCharsets.UTF_8)) {
-            LuaValue chunk = globals.load(reader, mod.manifest().id + "/" + reference);
+        String source;
+        if (Files.isRegularFile(script)) {
+            source = Files.readString(script, StandardCharsets.UTF_8);
+        } else {
+            // Um mod publicado na web declara caminhos relativos que so existem la; a base do
+            // manifesto e o que permite instala-lo com um mod.json de poucas linhas.
+            byte[] bytes = new ManifestImports(mod.directory(), remoteCache)
+                    .withRemoteBase(mod.manifest().remoteBase)
+                    .readRelative(reference);
+            if (bytes == null) {
+                throw new IOException("script de comportamento nao encontrado: " + reference);
+            }
+            source = new String(bytes, StandardCharsets.UTF_8);
+            logger.info("Script {} do mod {} veio da base remota", reference, mod.manifest().id);
+        }
+
+        try {
+            LuaValue chunk = globals.load(source, mod.manifest().id + "/" + reference);
             LuaValue returned = chunk.call();
             if (!returned.isfunction()) {
                 throw new IOException("script de comportamento precisa devolver uma funcao: " + reference);

@@ -55,6 +55,7 @@ public final class ManifestImports {
     private final Path modRoot;
     private final Path cacheDirectory;
     private final HttpClient httpClient;
+    private String remoteBase;
 
     /** Constrói um resolvedor apenas local: qualquer acesso remoto será recusado. */
     public ManifestImports(Path modRoot) {
@@ -74,13 +75,50 @@ public final class ManifestImports {
                 .build();
     }
 
+    /** Define a base usada para caminhos relativos que nao existirem no disco. */
+    public ManifestImports withRemoteBase(String remoteBase) {
+        this.remoteBase = normalizeBase(remoteBase);
+        return this;
+    }
+
+    /** Base remota em uso, ja normalizada com barra final. */
+    public String remoteBase() {
+        return remoteBase;
+    }
+
+    private static String normalizeBase(String base) {
+        if (base == null || base.isBlank()) return null;
+        String trimmed = base.trim();
+        return trimmed.endsWith("/") ? trimmed : trimmed + "/";
+    }
+
     /** Lê o manifesto resolvendo todos os imports encontrados. */
     public JsonElement readResolved(Path manifestPath) throws IOException {
         JsonElement root;
         try (Reader reader = Files.newBufferedReader(manifestPath, StandardCharsets.UTF_8)) {
             root = JsonParser.parseReader(reader);
         }
+
+        // A base precisa valer ja no primeiro import, entao e lida antes de resolver.
+        if (remoteBase == null && root.isJsonObject() && root.getAsJsonObject().has("remote_base")) {
+            JsonElement declared = root.getAsJsonObject().get("remote_base");
+            if (declared.isJsonPrimitive()) remoteBase = normalizeBase(declared.getAsString());
+        }
         return resolve(root, new ArrayDeque<>(), 0);
+    }
+
+    /**
+     * Resolve um caminho relativo, preferindo o arquivo local e caindo para a base remota.
+     *
+     * @return conteudo do arquivo, ou {@code null} se nao existir em lugar nenhum
+     */
+    public byte[] readRelative(String relativePath) throws IOException {
+        Path local = safeResolve(relativePath);
+        if (Files.isRegularFile(local)) {
+            return Files.readAllBytes(local);
+        }
+        if (remoteBase == null) return null;
+        return fetchRemote(remoteBase + relativePath.replace('\\', '/'), null);
     }
 
     private JsonElement resolve(JsonElement element, Deque<Path> chain, int depth) throws IOException {
@@ -141,6 +179,10 @@ public final class ManifestImports {
             throw new IOException("import circular detectado em " + relativePath);
         }
         if (!Files.isRegularFile(target)) {
+            // Nao esta no disco: com uma base declarada, o mesmo caminho e buscado na rede.
+            if (remoteBase != null) {
+                return loadRemote(remoteBase + relativePath.replace('\\', '/'), null, chain, depth);
+            }
             throw new IOException("arquivo importado nao encontrado: " + relativePath);
         }
 

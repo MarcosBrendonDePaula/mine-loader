@@ -29,6 +29,16 @@ public final class ModManifest {
      * carrega antes dele, para que {@code mod.require} ja encontre a API pronta.
      */
     public Map<String, String> dependencies = new LinkedHashMap<>();
+
+    /**
+     * Endereco base para resolver caminhos relativos que nao existam no disco.
+     *
+     * <p>Permite publicar um mod inteiro na web e instala-lo com um manifesto de poucas linhas: o
+     * loader procura cada arquivo primeiro localmente e, se nao achar, busca sob esta base. Sem
+     * isso, um pedaco importado por URL nao conseguiria referenciar os proprios scripts e
+     * texturas, porque os caminhos declarados nele apontam para a pasta do mod de origem.
+     */
+    public String remoteBase;
     public boolean enabled = true;
 
     public static final class BlockDefinition {

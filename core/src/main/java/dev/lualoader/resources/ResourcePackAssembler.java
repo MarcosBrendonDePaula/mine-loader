@@ -147,7 +147,7 @@ public final class ResourcePackAssembler {
                     .resolve("textures/item").resolve(item.id + ".png");
             try {
                 RemoteResourceManager.ResolvedTexture resolved =
-                        remoteResources.resolveTexture(mod.directory(), item.texture);
+                        remoteResources.resolveTexture(mod.directory(), item.texture, mod.manifest().remoteBase);
                 copyAsPng(resolved.path(), target);
                 textureReference = namespace + ":item/" + item.id;
                 logger.info("Textura {} preparada para item {}",
@@ -322,7 +322,7 @@ public final class ResourcePackAssembler {
             if (definition != null) {
                 try {
                     RemoteResourceManager.ResolvedTexture resolved = remoteResources.resolveTexture(
-                            mod.directory(), definition);
+                            mod.directory(), definition, mod.manifest().remoteBase);
                     copyAsPng(resolved.path(), blockTexture);
                     textureReference = namespace + ":block/" + blockId + suffix;
                     logger.info("Textura {} preparada para {} variante {}",
