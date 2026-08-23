@@ -45,6 +45,20 @@ local function desenhar(ctx)
     }
 end
 
+--- Redesenha o HUD a partir do estado.
+-- O HUD nao se atualiza sozinho: quem muda o estado precisa reenvia-lo. Sem isso ele congela
+-- no valor que tinha quando foi definido, que e o erro mais facil de cometer aqui.
+local function atualizar_hud(ctx)
+    local contador = ctx.state.contador or 0
+    local progresso = math.min(1.0, contador / 10)
+
+    ctx.player.set_hud({
+        { type = "panel", x = 2, y = 2, w = 96, h = 28, color = "#00000080" },
+        { type = "label", x = 6, y = 6, text = "Painel: " .. contador .. "/10", color = COR_TITULO },
+        { type = "progress", x = 6, y = 20, w = 88, h = 5, progress = progresso, color = COR_BARRA }
+    })
+end
+
 -- A logica da tela e registrada uma vez e vale para qualquer jogador que a abrir.
 mod.screen("principal", function(ctx)
     if ctx.player == nil then
@@ -70,6 +84,9 @@ mod.screen("principal", function(ctx)
 
     -- Redesenhar mantem a tela aberta e preserva o texto ja digitado.
     ctx.player.update_screen(desenhar(ctx))
+
+    -- O HUD tambem precisa ser reenviado para acompanhar o novo valor.
+    atualizar_hud(ctx)
 end)
 
 local function on_player_joined(ctx)
@@ -78,11 +95,8 @@ local function on_player_joined(ctx)
     end
 
     -- O HUD fica sobre o jogo: nao captura o mouse nem pausa nada.
-    ctx.player.set_hud({
-        { type = "label", x = 4, y = 4, text = "Loader ativo", color = COR_TITULO },
-        { type = "progress", x = 4, y = 16, w = 80, h = 4,
-          progress = math.min(1.0, (ctx.state.contador or 0) / 10), color = COR_BARRA }
-    })
+    atualizar_hud(ctx)
+    ctx.player.send_message("Use /mod painel para abrir a tela, /mod painel hud para limpar o HUD.")
 end
 
 mod.command("painel", function(ctx)
@@ -93,7 +107,13 @@ mod.command("painel", function(ctx)
     if ctx.subcommand == "hud" then
         -- Uma lista vazia limpa o HUD.
         ctx.player.set_hud({})
-        ctx.player.send_message("HUD limpo.")
+        ctx.player.send_message("HUD limpo. Use /mod painel hud on para voltar.")
+        return
+    end
+
+    if ctx.subcommand == "hudon" or ctx.argv[2] == "on" then
+        atualizar_hud(ctx)
+        ctx.player.send_message("HUD ligado.")
         return
     end
 

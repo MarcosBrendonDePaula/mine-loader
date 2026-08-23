@@ -214,6 +214,28 @@ ctx.player.set_hud({
 Um HUD por mod, para que dois mods não briguem pelo mesmo canto sem que ninguém perceba: cada um
 desenha o seu, e o loader os empilha em ordem de carga.
 
+### O HUD não se atualiza sozinho
+
+O que foi enviado fica na tela até ser substituído. Um HUD montado a partir de um valor que muda —
+progresso, contador, vida — precisa ser reenviado sempre que esse valor mudar, senão congela no
+estado em que estava quando foi definido.
+
+É o erro mais fácil de cometer: definir o HUD ao entrar no mundo, com o progresso ainda em zero, e
+concluir que a barra está quebrada. Ela está correta e desatualizada.
+
+O padrão que funciona é uma função que desenha o HUD a partir do estado, chamada em todo ponto que
+altera esse estado:
+
+```lua
+local function atualizar_hud(ctx)
+    ctx.player.set_hud({
+        { type = "label", x = 6, y = 6, text = "Progresso: " .. ctx.state.contador },
+        { type = "progress", x = 6, y = 20, w = 88, h = 5,
+          progress = math.min(1.0, ctx.state.contador / 10) }
+    })
+end
+```
+
 ## API Lua pretendida
 
 ```lua
