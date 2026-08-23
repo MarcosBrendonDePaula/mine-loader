@@ -380,25 +380,45 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
-    public java.util.List<String> dropsOf(String blockId, int limit) {
-        Block block = requireAnyBlock(blockId);
-        java.util.List<String> found = new java.util.ArrayList<>(itemsOfLootTable(block));
+    public java.util.List<String> dropsOf(String sourceId, int limit) {
+        Identifier id = parseIdentifier(sourceId);
 
+        // Bloco ou entidade: um catalogo pergunta "o que isto derruba" sem saber de antemao qual
+        // dos dois e, e obrigar o mod a escolher a chamada certa so passaria o problema adiante.
+        java.util.Set<String> items = new java.util.LinkedHashSet<>();
+        if (Registries.BLOCK.containsId(id)) {
+            items.addAll(itemsOfLootTable(Registries.BLOCK.get(id).getLootTableKey()));
+        }
+        if (Registries.ENTITY_TYPE.containsId(id)) {
+            items.addAll(itemsOfLootTable(Registries.ENTITY_TYPE.get(id).getLootTableId()));
+        }
+        if (items.isEmpty() && !Registries.BLOCK.containsId(id)
+                && !Registries.ENTITY_TYPE.containsId(id)) {
+            throw new BridgeException("bloco ou entidade desconhecido: " + sourceId);
+        }
+
+        java.util.List<String> found = new java.util.ArrayList<>(items);
         java.util.Collections.sort(found);
         return found.size() > limit ? found.subList(0, limit) : found;
     }
 
     @Override
     public java.util.List<String> droppedBy(String itemId, int limit) {
-        Identifier wanted = parseIdentifier(itemId);
+        String wanted = parseIdentifier(itemId).toString();
         java.util.List<String> found = new java.util.ArrayList<>();
 
-        // Sem indice reverso: a pergunta custa uma varredura dos blocos registrados. E o mesmo
+        // Sem indice reverso: a pergunta custa uma varredura dos blocos e das entidades. E o mesmo
         // custo de consultar receitas, e pelo mesmo motivo tem teto.
         for (Block block : Registries.BLOCK) {
             if (found.size() >= limit) break;
-            if (itemsOfLootTable(block).contains(wanted.toString())) {
+            if (itemsOfLootTable(block.getLootTableKey()).contains(wanted)) {
                 found.add(Registries.BLOCK.getId(block).toString());
+            }
+        }
+        for (EntityType<?> type : Registries.ENTITY_TYPE) {
+            if (found.size() >= limit) break;
+            if (itemsOfLootTable(type.getLootTableId()).contains(wanted)) {
+                found.add(Registries.ENTITY_TYPE.getId(type).toString());
             }
         }
         java.util.Collections.sort(found);
@@ -412,10 +432,9 @@ public final class FabricGameBridge implements GameBridge {
      * prova que um item raro nao existe. So entradas de item sao consideradas -- uma entrada que
      * aponta para outra tabela e ignorada, e isso esta documentado como limite.
      */
-    private java.util.Set<String> itemsOfLootTable(Block block) {
+    private java.util.Set<String> itemsOfLootTable(
+            net.minecraft.registry.RegistryKey<net.minecraft.loot.LootTable> key) {
         java.util.Set<String> items = new java.util.LinkedHashSet<>();
-
-        var key = block.getLootTableKey();
         if (key == null) return items;
 
         var table = requireServer().getReloadableRegistries().getLootTable(key);

@@ -105,8 +105,8 @@ e, como se obtem, e para que serve. As tres tem API.
 | Que itens existem | `ctx.server.items({ namespace, contains, limit })` |
 | Que receita o produz | `ctx.server.recipes_for(item, limit)` |
 | Que receita o consome | `ctx.server.recipes_using(item, limit)` |
-| Que bloco o derruba | `ctx.server.dropped_by(item, limit)` |
-| Que itens um bloco derruba | `ctx.server.drops_of(bloco, limit)` |
+| Que bloco ou mob o derruba | `ctx.server.dropped_by(item, limit)` |
+| Que itens um bloco ou mob derruba | `ctx.server.drops_of(fonte, limit)` |
 
 Todas passam por `server.read` e todas tem teto obrigatorio. O motivo do teto e o mesmo nas cinco: o
 jogo nao mantem indice reverso, entao cada pergunta custa uma varredura -- do registro, do livro de
@@ -115,6 +115,15 @@ quadro.
 
 **Limite dos drops.** So entradas de item da tabela de loot sao lidas. Uma entrada que aponta para
 outra tabela e ignorada, o que afeta alguns baus e mobs.
+
+**O que nao e loot.** Morte de mob e mineracao sao dados, e por isso consultaveis. Ja uma interacao
+que vive em codigo -- tosquiar uma ovelha, encher um balde numa vaca, pegar um peixe com balde --
+nao esta registrada em lugar nenhum do jogo: ele sabe fazer, mas nao sabe dizer. Para aparecer num
+catalogo, precisa ser declarada como processo.
+
+E o mesmo caso de uma mecanica inventada por um mod, e por isso a mesma solucao serve aos dois. Um
+mod de biblioteca pode declarar as interacoes do jogo uma vez, e todo catalogo passa a mostra-las,
+porque o registro de processos e global.
 
 ### Processos: mecanica que o jogo nao conhece
 

@@ -147,19 +147,27 @@ public interface GameBridge {
     java.util.List<String> recipesUsing(String itemId, int limit);
 
     /**
-     * Itens que um bloco pode derrubar ao ser quebrado.
+     * Itens que um bloco ou uma entidade pode derrubar.
      *
-     * <p>É a terceira pergunta de um catálogo, e para a maioria dos itens do jogo é a verdadeira:
-     * minério, pedra e madeira chegam ao jogador por mineração, e não por receita.
+     * <p>É a terceira pergunta de um catálogo, e para boa parte do jogo é a verdadeira: minério,
+     * pedra e madeira chegam ao jogador por mineração, e couro e lã por matar um mob.
      *
-     * @return uma linha por item, no formato {@code item}
+     * <p>Aceita os dois porque um catálogo pergunta "o que isto derruba" sem saber de antemão qual
+     * dos dois é, e obrigá-lo a escolher a chamada certa só passaria o problema adiante.
+     *
+     * <p>Cobre apenas o que o jogo guarda como tabela de loot. Uma interação que vive em código —
+     * tosquiar uma ovelha, encher um balde numa vaca — não é consultável em lugar nenhum, e para
+     * aparecer num catálogo precisa ser declarada como processo.
+     *
+     * @param sourceId identificador de bloco ou de entidade
+     * @return uma linha por item
      */
-    java.util.List<String> dropsOf(String blockId, int limit);
+    java.util.List<String> dropsOf(String sourceId, int limit);
 
     /**
-     * Blocos que podem derrubar um item.
+     * Blocos e entidades que podem derrubar um item.
      *
-     * @return uma linha por bloco, no formato {@code bloco}
+     * @return uma linha por bloco ou entidade
      */
     java.util.List<String> droppedBy(String itemId, int limit);
 

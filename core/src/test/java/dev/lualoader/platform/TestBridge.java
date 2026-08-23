@@ -132,7 +132,9 @@ public abstract class TestBridge implements GameBridge {
     public final java.util.Map<String, java.util.List<String>> drops =
             new java.util.LinkedHashMap<>(java.util.Map.of(
                     "minecraft:iron_ore", java.util.List.of("minecraft:raw_iron"),
-                    "minecraft:stone", java.util.List.of("minecraft:cobblestone")));
+                    "minecraft:stone", java.util.List.of("minecraft:cobblestone"),
+                    // Uma entidade responde pela mesma pergunta: matar a ovelha derruba la.
+                    "minecraft:sheep", java.util.List.of("minecraft:white_wool", "minecraft:mutton")));
 
     @Override
     public java.util.List<String> dropsOf(String blockId, int limit) {

@@ -938,6 +938,61 @@ class ScreenTest {
     }
 
     @Test
+    void dropsAlsoAnswerForEntities(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Matar um mob e loot, e portanto dado consultavel. Um catalogo pergunta "o que isto
+        // derruba" sem saber se e bloco ou bicho, entao a mesma operacao responde pelos dois.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ovelha = ctx.server.drops_of("minecraft:sheep")
+                    local quem = ctx.server.dropped_by("minecraft:white_wool")
+                    ctx.server.broadcast(table.concat(ovelha, ",") .. "|" .. table.concat(quem, ","))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("minecraft:white_wool,minecraft:mutton|minecraft:sheep"), bridge.calls);
+    }
+
+    @Test
+    void interactionsThatLiveInCodeNeedAProcess(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Tosquiar uma ovelha nao e loot: e codigo dentro da entidade, e nenhuma consulta ao jogo
+        // revela. Declarado como processo, aparece no catalogo ao lado do que o jogo sabe dizer --
+        // e a razao de o registro de processos existir.
+        runtime.load(writeMod(root, """
+                mod.process("tosquia", {
+                    title = "Tosquiar",
+                    inputs = { "minecraft:shears" },
+                    output = { item = "minecraft:white_wool", count = 1 },
+                    by = "minecraft:sheep"
+                })
+
+                mod.on("player_joined", function(ctx)
+                    local do_loot = ctx.server.dropped_by("minecraft:white_wool")
+                    local declarado = ctx.server.processes({ produces = "minecraft:white_wool" })
+
+                    ctx.server.broadcast(#do_loot .. " por loot, " .. #declarado .. " declarado(s)")
+                    ctx.server.broadcast(declarado[1].title .. " com " .. declarado[1].inputs[1]
+                        .. " em " .. declarado[1].by)
+                end)
+
+                return {}
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of(
+                "1 por loot, 1 declarado(s)",
+                "Tosquiar com minecraft:shears em minecraft:sheep"), bridge.calls);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);
