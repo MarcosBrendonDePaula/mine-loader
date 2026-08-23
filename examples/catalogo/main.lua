@@ -14,6 +14,46 @@ local CELULA = 18
 -- Largura da janela de container do jogo, que o painel acompanha.
 local JANELA_DO_JOGO = 176
 
+-- Nem toda receita e uma grade. Uma fornalha tem entrada, combustivel e chama; um cortador tem uma
+-- entrada so. Desenhar todas como 3x3 mentiria sobre o que sao -- um minerio com oito buracos em
+-- volta parece uma receita de bancada que alguem esqueceu de preencher.
+local COZIMENTO = {
+    ["minecraft:smelting"] = "Fornalha",
+    ["minecraft:blasting"] = "Alto-forno",
+    ["minecraft:smoking"] = "Defumador",
+    ["minecraft:campfire_cooking"] = "Fogueira"
+}
+
+local UMA_ENTRADA = {
+    ["minecraft:stonecutting"] = "Cortador"
+}
+
+local function estacao_de(receita)
+    return COZIMENTO[receita.type] or UMA_ENTRADA[receita.type]
+end
+
+-- Nomes das receitas que nao sao cozimento nem corte.
+local BANCADA = {
+    ["minecraft:crafting_shaped"] = "Bancada",
+    ["minecraft:crafting_shapeless"] = "Bancada (livre)",
+    ["minecraft:smithing_transform"] = "Ferraria",
+    ["minecraft:smithing_trim"] = "Ferraria (enfeite)"
+}
+
+-- O rotulo de cada fonte, dizendo o que a produz.
+--
+-- Sem ele a forma tinha de contar a historia sozinha, e ela nao conta: uma grade 3x3 e uma bancada,
+-- mas duas caixas com uma seta tanto podem ser um cortador quanto um mob que derruba o item ao
+-- morrer. Quem olha precisa saber o que fazer, e nao so o que entra e o que sai.
+local function acao_de(fonte)
+    if fonte.tipo == "receita" then
+        return estacao_de(fonte.dados) or BANCADA[fonte.dados.type] or "Receita"
+    elseif fonte.tipo == "processo" then
+        return fonte.dados.title
+    end
+    return "Derruba"
+end
+
 -- Quantas colunas cabem à direita do inventário naquele cliente.
 --
 -- Isto não é detalhe de gosto: a escala da interface divide a resolução, então a mesma janela que
@@ -179,8 +219,58 @@ end
 
 -- Desenha uma receita como o jogo a apresenta: a grade de entrada a esquerda e o resultado a
 -- direita. Uma receita sem forma -- width zero -- vira uma fila unica, porque nao ha posicao.
-local function desenhar_receita(receita, x, y)
+-- Fornalha, alto-forno, defumador, fogueira e cortador: uma entrada, e o combustivel embaixo
+-- quando o processo queima algo. O rotulo diz qual estacao e, porque a forma sozinha nao distingue
+-- uma fornalha de um alto-forno.
+local function desenhar_estacao(receita, x, y, estacao)
     local elementos = {}
+    local alternativas = receita.ingredients[1] or {}
+
+    local mostrados = {}
+    for i = 1, math.min(6, #alternativas) do mostrados[i] = alternativas[i] end
+    if #alternativas > 6 then
+        mostrados[#mostrados + 1] = "e mais " .. (#alternativas - 6) .. "..."
+    end
+
+    elementos[#elementos + 1] = { type = "label", x = x, y = y, text = estacao,
+                                  color = "#404040", shadow = false }
+
+    local topo = y + 12
+    elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
+                                  x = x, y = topo, w = 16, h = 16 }
+    elementos[#elementos + 1] = { type = "item", x = x, y = topo,
+                                  item = alternativas[1] or "minecraft:air",
+                                  tooltip = table.concat(mostrados, "\n") }
+
+    -- Combustivel so existe onde algo queima; um cortador nao consome nada alem da entrada.
+    if COZIMENTO[receita.type] then
+        elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
+                                      x = x, y = topo + CELULA, w = 16, h = 16 }
+        elementos[#elementos + 1] = { type = "item", x = x, y = topo + CELULA,
+                                      item = "minecraft:coal",
+                                      tooltip = "Qualquer combustivel" }
+    end
+
+    local direita = x + CELULA
+    elementos[#elementos + 1] = { type = "label", x = direita + 6, y = topo + 4, text = "->",
+                                  color = "#404040", shadow = false }
+    elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
+                                  x = direita + 22, y = topo, w = 16, h = 16 }
+    elementos[#elementos + 1] = { type = "item", x = direita + 22, y = topo,
+                                  item = receita.output.item, count = receita.output.count }
+
+    return elementos, 2 * CELULA + 12
+end
+
+local function desenhar_receita(receita, x, y)
+    local estacao = estacao_de(receita)
+    if estacao then return desenhar_estacao(receita, x, y, estacao) end
+
+    local elementos = {
+        { type = "label", x = x, y = y, text = BANCADA[receita.type] or "Receita",
+          color = "#404040", shadow = false }
+    }
+    y = y + 12
 
     -- A grade e sempre 3x3, como a mesa de trabalho. Desenhar so as posicoes ocupadas encolheria a
     -- grade e esconderia a forma: um machado e uma picareta usam as mesmas tres tabuas e dois
@@ -234,20 +324,23 @@ local function desenhar_receita(receita, x, y)
     elementos[#elementos + 1] = { type = "item", x = direita + 22, y = y + 18,
                                   item = receita.output.item, count = receita.output.count }
 
-    -- A altura e constante agora: toda receita ocupa a mesma grade.
-    return elementos, 3 * CELULA
+    -- A altura e constante agora: toda receita ocupa a mesma grade, mais o rotulo acima.
+    return elementos, 3 * CELULA + 12
 end
 
 -- Um drop desenha como uma linha: o bloco, a seta e o item. Para a maior parte do jogo esta e a
 -- resposta verdadeira sobre de onde um item vem.
 local function desenhar_drop(bloco, item, x, y)
+    local topo = y + 12
     return {
-        { type = "panel", style = "slot", border = 1, x = x, y = y, w = 16, h = 16 },
-        { type = "item", x = x, y = y, item = bloco },
-        { type = "label", x = x + 22, y = y + 4, text = "->", color = "#404040", shadow = false },
-        { type = "panel", style = "slot", border = 1, x = x + 38, y = y, w = 16, h = 16 },
-        { type = "item", x = x + 38, y = y, item = item }
-    }, CELULA + 4
+        { type = "label", x = x, y = y, text = "Derruba", color = "#404040", shadow = false },
+        { type = "panel", style = "slot", border = 1, x = x, y = topo, w = 16, h = 16 },
+        { type = "item", x = x, y = topo, item = bloco },
+        { type = "label", x = x + 22, y = topo + 4, text = "->",
+          color = "#404040", shadow = false },
+        { type = "panel", style = "slot", border = 1, x = x + 38, y = topo, w = 16, h = 16 },
+        { type = "item", x = x + 38, y = topo, item = item }
+    }, CELULA + 12
 end
 
 -- Reune as tres fontes numa lista unica, para poderem ser paginadas juntas.
@@ -267,15 +360,20 @@ end
 -- empacotar sem tentativa e erro.
 local ESPACO = 10
 
+
 local function medir(fonte)
     if fonte.tipo == "receita" then
-        return 3 * CELULA + 38, 3 * CELULA
+        if estacao_de(fonte.dados) then
+            -- Uma coluna de entrada em vez de tres, e o rotulo da estacao acima.
+            return CELULA + 38, 2 * CELULA + 12
+        end
+        return 3 * CELULA + 38, 3 * CELULA + 12
     elseif fonte.tipo == "processo" then
         local colunas = math.max(1, #fonte.dados.inputs)
         -- Mais alta que a grade porque o rotulo do processo fica acima dela.
         return colunas * CELULA + 38, CELULA + 12
     end
-    return 54, CELULA
+    return 54, CELULA + 12
 end
 
 -- Distribui as fontes em paginas, enchendo cada linha antes de descer.
@@ -369,7 +467,7 @@ local function desenhar_fonte(fonte, x, y)
         return (desenhar_receita(fonte.dados, x, y))
     elseif fonte.tipo == "processo" then
         -- O rotulo fica acima da grade, entao o desenho comeca abaixo da posicao pedida.
-        return (desenhar_processo(fonte.dados, x, y + 10))
+        return (desenhar_processo(fonte.dados, x, y + 12))
     end
     return (desenhar_drop(fonte.de, fonte.para, x, y))
 end

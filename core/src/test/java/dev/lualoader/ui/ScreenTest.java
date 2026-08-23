@@ -1120,6 +1120,45 @@ class ScreenTest {
     }
 
     @Test
+    void eachSourceSaysWhatProducesIt(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.items.add("minecraft:iron_ingot");
+        bridge.drops.put("minecraft:iron_ore", List.of("minecraft:iron_ingot"));
+
+        // Fornalha e bancada tem formas diferentes, e a forma sozinha nao conta a historia: duas
+        // caixas com uma seta tanto podem ser um cortador quanto um mob que derruba o item.
+        bridge.recipes.clear();
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_ore","type":"minecraft:smelting",                "output":{"item":"minecraft:iron_ingot","count":1},"width":0,"height":0,                "ingredients":[["minecraft:raw_iron"]]}                """);
+        bridge.recipes.add("""
+                {"id":"minecraft:iron_from_block","type":"minecraft:crafting_shapeless",                "output":{"item":"minecraft:iron_ingot","count":9},"width":0,"height":0,                "ingredients":[["minecraft:iron_block"]]}                """);
+
+        TestPlayer player = new TestPlayer();
+        player.screenSize = new int[]{854, 480};
+
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "iron_ingot", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+
+        assertTrue(player.screenJson.contains("\"text\":\"Fornalha\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"text\":\"Bancada (livre)\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"text\":\"Derruba\""), player.screenJson);
+        // A fornalha mostra combustivel; a bancada nao.
+        assertTrue(player.screenJson.contains("Qualquer combustivel"), player.screenJson);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);
