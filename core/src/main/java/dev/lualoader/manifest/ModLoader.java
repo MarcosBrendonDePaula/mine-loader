@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -52,7 +53,7 @@ public final class ModLoader {
                 }
 
                 try {
-                    ModManifest manifest = readManifest(manifestPath);
+                    ModManifest manifest = readManifest(manifestPath, directory);
                     validate(manifest, directory, ids);
                     if (!manifest.enabled) {
                         logger.info("Mod desabilitado: {}", manifest.id);
@@ -60,8 +61,10 @@ public final class ModLoader {
                     }
                     ids.add(manifest.id);
                     result.add(new LoadedMod(directory, manifest));
-                } catch (RuntimeException error) {
-                    logger.error("Falha ao validar mod em {}: {}", directory, error.getMessage());
+                } catch (IOException | RuntimeException error) {
+                    // IOException inclui manifesto ilegivel e import quebrado. Sem este catch,
+                    // um unico mod defeituoso impediria a carga de todos os outros.
+                    logger.error("Falha ao carregar mod em {}: {}", directory, error.getMessage());
                 }
             }
         }
@@ -69,9 +72,12 @@ public final class ModLoader {
         return List.copyOf(result);
     }
 
-    private ModManifest readManifest(Path path) throws IOException {
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            ModManifest manifest = gson.fromJson(reader, ModManifest.class);
+    private ModManifest readManifest(Path path, Path modRoot) throws IOException {
+        try {
+            // Os imports sao resolvidos antes da conversao, entao o resto do loader nao
+            // precisa saber que o manifesto pode estar dividido em varios arquivos.
+            var resolved = new ManifestImports(modRoot).readResolved(path);
+            ModManifest manifest = gson.fromJson(resolved, ModManifest.class);
             if (manifest == null) throw new JsonParseException("manifesto vazio");
             return manifest;
         } catch (JsonParseException error) {
@@ -94,7 +100,7 @@ public final class ModLoader {
         require(Files.isRegularFile(entrypoint), "entrypoint não encontrado: " + manifest.entrypoint);
 
         if (manifest.permissions != null) {
-            Set<String> knownPermissions = Set.of("chat.send", "player.read", "server.read", "server.command.register", "world.write");
+            Set<String> knownPermissions = Set.of("chat.send", "player.read", "server.read", "server.command.register", "world.read", "world.write");
             for (String permission : manifest.permissions) {
                 require(knownPermissions.contains(permission), "permissão desconhecida: " + permission);
             }
@@ -106,6 +112,7 @@ public final class ModLoader {
         }
 
         validateItems(manifest);
+        validateStructures(manifest);
         validateCreativeTab(manifest);
 
         Set<String> blockIds = new HashSet<>();
@@ -131,6 +138,47 @@ public final class ModLoader {
             require(item.maxDamage == 0 || item.maxStackSize == 1,
                     "item com durabilidade precisa de max_stack_size igual a 1: " + item.id);
             require(RARITIES.contains(rarityOf(item.rarity)), "rarity de item desconhecida: " + item.rarity);
+        }
+    }
+
+    private void validateStructures(ModManifest manifest) {
+        if (manifest.structures == null) return;
+        Set<String> structureIds = new HashSet<>();
+
+        for (ModManifest.StructureDefinition structure : manifest.structures) {
+            require(structure != null && structure.id != null && MOD_ID.matcher(structure.id).matches(),
+                    "id de estrutura invalido");
+            require(structureIds.add(structure.id), "estrutura duplicada no mod: " + structure.id);
+            require(structure.origin == null || Set.of("bottom_center", "corner").contains(structure.origin),
+                    "origin de estrutura desconhecida: " + structure.origin);
+            require(structure.layers != null && !structure.layers.isEmpty(),
+                    "estrutura sem camadas: " + structure.id);
+            require(structure.palette != null && !structure.palette.isEmpty(),
+                    "estrutura sem paleta: " + structure.id);
+
+            for (Map.Entry<String, String> entry : structure.palette.entrySet()) {
+                require(entry.getKey() != null && entry.getKey().length() == 1,
+                        "simbolo de paleta precisa ter exatamente um caractere: " + entry.getKey());
+                String value = entry.getValue();
+                if (value == null || value.isBlank()) continue;
+                int separator = value.indexOf(':');
+                require(separator > 0 && separator < value.length() - 1,
+                        "bloco da paleta precisa do formato mod:bloco: " + value);
+            }
+
+            // Todo simbolo desenhado precisa existir na paleta, senao o posicionamento falharia
+            // so na hora de construir, longe da causa.
+            for (List<String> layer : structure.layers) {
+                require(layer != null && !layer.isEmpty(), "camada vazia na estrutura " + structure.id);
+                for (String row : layer) {
+                    require(row != null, "linha nula na estrutura " + structure.id);
+                    for (int index = 0; index < row.length(); index++) {
+                        String symbol = String.valueOf(row.charAt(index));
+                        require(structure.palette.containsKey(symbol),
+                                "simbolo fora da paleta na estrutura " + structure.id + ": " + symbol);
+                    }
+                }
+            }
         }
     }
 

@@ -1,0 +1,39 @@
+{
+  "id": "crystal_tower",
+  "name": "Torre de Cristal",
+  "origin": "bottom_center",
+  "palette": {
+    "C": "crystal_world:crystal_block",
+    "G": "minecraft:glass",
+    "L": "minecraft:glowstone",
+    ".": "minecraft:air",
+    " ": null
+  },
+  "layers": [
+    [
+      "CCC",
+      "CLC",
+      "CCC"
+    ],
+    [
+      "CCC",
+      "C.C",
+      "CCC"
+    ],
+    [
+      "CCC",
+      "C.C",
+      "CCC"
+    ],
+    [
+      "CCC",
+      "C.C",
+      "CCC"
+    ],
+    [
+      "CCC",
+      "CGC",
+      "CCC"
+    ]
+  ]
+}

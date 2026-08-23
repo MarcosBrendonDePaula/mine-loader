@@ -1,0 +1,51 @@
+{
+  "id": "crystal_block",
+  "name": "Bloco de Cristal",
+  "material": {
+    "map_color": "blue",
+    "sound": "glass"
+  },
+  "settings": {
+    "hardness": 3.0,
+    "resistance": 3.0,
+    "requires_tool": true,
+    "luminance": 7
+  },
+  "state": {
+    "properties": [
+      {
+        "name": "charge",
+        "type": "int",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ]
+      }
+    ],
+    "default": {
+      "charge": "0"
+    }
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/crystal_world/textures/block/crystal_block.png",
+      "fallback": "minecraft:block/amethyst_block"
+    }
+  },
+  "loot": {
+    "mode": "item",
+    "item": "crystal_world:crystal_shard",
+    "count": 4
+  },
+  "tags": [
+    "minecraft:mineable/pickaxe"
+  ],
+  "item": {
+    "register": true,
+    "rarity": "uncommon"
+  }
+}

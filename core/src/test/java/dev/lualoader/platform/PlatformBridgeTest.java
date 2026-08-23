@@ -54,6 +54,35 @@ class PlatformBridgeTest {
         public boolean isWorldAvailable() {
             return true;
         }
+
+        /** Mundo simulado: so guarda o que foi escrito, o resto e ar. */
+        final java.util.Map<String, String> world = new java.util.HashMap<>();
+
+        @Override
+        public String getBlock(int x, int y, int z) {
+            return world.getOrDefault(x + "," + y + "," + z, "minecraft:air");
+        }
+
+        @Override
+        public void setBlock(String blockId, int x, int y, int z) {
+            world.put(x + "," + y + "," + z, blockId);
+            calls.add("set:" + blockId + "@" + x + "," + y + "," + z);
+        }
+
+        @Override
+        public int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2) {
+            int changed = 0;
+            for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+                for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+                    for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
+                        world.put(x + "," + y + "," + z, blockId);
+                        changed++;
+                    }
+                }
+            }
+            calls.add("fill:" + blockId + "=" + changed);
+            return changed;
+        }
     }
 
     private static final class FakePlayer implements PlayerHandle {
@@ -240,5 +269,102 @@ class PlatformBridgeTest {
 
         assertEquals(List.of("broadcast:alpha_mod viu alpha_mod:stone"), bridge.calls,
                 "beta_mod nao pode receber um evento de bloco do alpha_mod");
+    }
+
+    @Test
+    void scriptCanBuildWithSetBlockAndFill(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.read\", \"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    -- Uma base solida e um pilar: o basico de qualquer construcao.
+                    ctx.server.fill("minecraft:stone", 0, 0, 0, 2, 0, 2)
+                    ctx.server.set_block("minecraft:glowstone", 1, 1, 1)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of(
+                "fill:minecraft:stone=9",
+                "set:minecraft:glowstone@1,1,1"
+        ), bridge.calls);
+        assertEquals("minecraft:glowstone", bridge.getBlock(1, 1, 1));
+        assertEquals("minecraft:stone", bridge.getBlock(2, 0, 2));
+    }
+
+    @Test
+    void scriptCanReadBlocksBack(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"world.read\", \"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.set_block("minecraft:dirt", 5, 6, 7)
+                    ctx.server.broadcast("li: " .. ctx.server.get_block(5, 6, 7))
+                    ctx.server.broadcast("vazio: " .. ctx.server.get_block(9, 9, 9))
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertTrue(bridge.calls.contains("broadcast:li: minecraft:dirt"), bridge.calls.toString());
+        assertTrue(bridge.calls.contains("broadcast:vazio: minecraft:air"), bridge.calls.toString());
+    }
+
+    @Test
+    void oversizedFillIsRefused(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // 100x100x100 = 1.000.000 de blocos, muito acima do limite.
+        runtime.load(writeMod(root, "\"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.fill("minecraft:stone", 0, 0, 0, 99, 99, 99)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertTrue(bridge.calls.isEmpty(), "um fill gigante nao pode chegar a plataforma");
+    }
+
+    @Test
+    void worldWriteRequiresItsOwnPermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // Le o mundo, mas nao declara world.write.
+        runtime.load(writeMod(root, "\"world.read\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.set_block("minecraft:stone", 0, 0, 0)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertTrue(bridge.calls.isEmpty(), "escrever sem world.write deve ser barrado");
+    }
+
+    @Test
+    void absurdCoordinatesAreRefused(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.set_block("minecraft:stone", 999999999, 0, 0)
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertTrue(bridge.calls.isEmpty(), "coordenada fora do mundo deve ser barrada");
     }
 }

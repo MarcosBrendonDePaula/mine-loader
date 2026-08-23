@@ -24,6 +24,31 @@ public interface GameBridge {
     /** Indica se há um mundo ativo capaz de receber operações de escrita. */
     boolean isWorldAvailable();
 
+    /**
+     * Lê o identificador do bloco na posição indicada.
+     *
+     * @return identificador no formato {@code mod:bloco}, por exemplo {@code minecraft:stone}
+     */
+    String getBlock(int x, int y, int z);
+
+    /**
+     * Substitui o bloco na posição indicada por qualquer bloco registrado, do jogo ou de um mod.
+     *
+     * <p>Esta é a primitiva que permite a um mod construir: sem ela o script só consegue alterar
+     * blocos declarativos que já existem no mundo.
+     */
+    void setBlock(String blockId, int x, int y, int z);
+
+    /**
+     * Preenche a região delimitada pelos dois cantos, inclusive.
+     *
+     * <p>Existe como operação própria porque preencher bloco a bloco a partir do Lua seria
+     * ordens de grandeza mais lento.
+     *
+     * @return quantidade de blocos efetivamente alterados
+     */
+    int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2);
+
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {
         @Override
@@ -49,6 +74,21 @@ public interface GameBridge {
         @Override
         public boolean isWorldAvailable() {
             return false;
+        }
+
+        @Override
+        public String getBlock(int x, int y, int z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public void setBlock(String blockId, int x, int y, int z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2) {
+            throw new BridgeException("nenhuma plataforma conectada");
         }
     };
 }

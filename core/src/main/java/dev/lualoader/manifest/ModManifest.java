@@ -21,6 +21,7 @@ public final class ModManifest {
     public List<BlockDefinition> blocks = new ArrayList<>();
     public List<ItemEntryDefinition> items = new ArrayList<>();
     public CreativeTabDefinition creativeTab;
+    public List<StructureDefinition> structures = new ArrayList<>();
     public boolean enabled = true;
 
     public static final class BlockDefinition {
@@ -173,5 +174,22 @@ public final class ModManifest {
         public String name;
         /** Item mostrado como icone da aba, no formato mod:item. Vazio usa o primeiro conteudo. */
         public String icon;
+    }
+
+    /**
+     * Estrutura declarada como dados: uma paleta de simbolos e as camadas do desenho.
+     *
+     * <p>Cada entrada de {@code layers} e uma camada horizontal, da mais baixa para a mais alta.
+     * Dentro de uma camada, cada string e uma linha no eixo Z, e cada caractere uma posicao no
+     * eixo X. Um simbolo mapeado para {@code null} na paleta significa "nao tocar", preservando
+     * o que ja existe no mundo.
+     */
+    public static final class StructureDefinition {
+        public String id;
+        public String name;
+        /** {@code bottom_center} ancora no centro da base; {@code corner} ancora no canto minimo. */
+        public String origin = "bottom_center";
+        public Map<String, String> palette = new LinkedHashMap<>();
+        public List<List<String>> layers = new ArrayList<>();
     }
 }

@@ -3,7 +3,7 @@
   "id": "crystal_world",
   "name": "Crystal World",
   "version": "0.1.0",
-  "description": "Segundo mod de exemplo, usado para validar a carga de varios mods.",
+  "description": "Exemplo de mod dividido em arquivos, com estrutura declarada em JSON.",
   "authors": [
     "Minecraft Lua Loader"
   ],
@@ -11,6 +11,7 @@
   "permissions": [
     "chat.send",
     "player.read",
+    "world.read",
     "world.write"
   ],
   "events": {
@@ -25,68 +26,17 @@
   },
   "items": [
     {
-      "id": "crystal_shard",
-      "name": "Fragmento de Cristal",
-      "max_stack_size": 32,
-      "rarity": "uncommon",
-      "texture": {
-        "source": "local",
-        "path": "assets/crystal_world/textures/item/crystal_shard.png",
-        "fallback": "minecraft:item/amethyst_shard"
-      }
+      "$import": "parts/items/crystal_shard.json"
     }
   ],
   "blocks": [
     {
-      "id": "crystal_block",
-      "name": "Bloco de Cristal",
-      "material": {
-        "map_color": "blue",
-        "sound": "glass"
-      },
-      "settings": {
-        "hardness": 3.0,
-        "resistance": 3.0,
-        "requires_tool": true,
-        "luminance": 7
-      },
-      "state": {
-        "properties": [
-          {
-            "name": "charge",
-            "type": "int",
-            "values": [
-              "0",
-              "1",
-              "2",
-              "3"
-            ]
-          }
-        ],
-        "default": {
-          "charge": "0"
-        }
-      },
-      "render": {
-        "model": "cube_all",
-        "texture": {
-          "source": "local",
-          "path": "assets/crystal_world/textures/block/crystal_block.png",
-          "fallback": "minecraft:block/amethyst_block"
-        }
-      },
-      "loot": {
-        "mode": "item",
-        "item": "crystal_world:crystal_shard",
-        "count": 4
-      },
-      "tags": [
-        "minecraft:mineable/pickaxe"
-      ],
-      "item": {
-        "register": true,
-        "rarity": "uncommon"
-      }
+      "$import": "parts/blocks/crystal_block.json"
+    }
+  ],
+  "structures": [
+    {
+      "$import": "parts/structures/crystal_tower.json"
     }
   ],
   "enabled": true

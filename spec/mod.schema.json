@@ -96,6 +96,19 @@
     },
     "creative_tab": {
       "$ref": "#/$defs/creativeTab"
+    },
+    "structures": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/structure"
+          },
+          {
+            "$ref": "#/$defs/importRef"
+          }
+        ]
+      }
     }
   },
   "$defs": {
@@ -703,6 +716,65 @@
           "type": "string",
           "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
           "description": "Item mostrado como icone. Vazio usa o primeiro conteudo declarado."
+        }
+      }
+    },
+    "importRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$import"
+      ],
+      "properties": {
+        "$import": {
+          "type": "string",
+          "description": "Caminho relativo a pasta do mod. O objeto e substituido pelo conteudo do arquivo."
+        }
+      }
+    },
+    "structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "palette",
+        "layers"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "enum": [
+            "bottom_center",
+            "corner"
+          ],
+          "default": "bottom_center"
+        },
+        "palette": {
+          "type": "object",
+          "description": "Simbolo de um caractere para bloco. null significa nao tocar no mundo.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "layers": {
+          "type": "array",
+          "description": "Camadas em Y, da mais baixa para a mais alta. Cada string avanca em Z; cada caractere avanca em X.",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     }

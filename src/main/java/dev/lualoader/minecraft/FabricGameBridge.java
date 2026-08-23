@@ -2,6 +2,8 @@ package dev.lualoader.minecraft;
 
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
+import net.minecraft.block.Block;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -70,6 +72,57 @@ public final class FabricGameBridge implements GameBridge {
                 ? current.with(DeclarativeBlock.LUA_LUMINANCE, luminance)
                 : block.getDefaultState().with(DeclarativeBlock.LUA_LUMINANCE, luminance);
         world.setBlockState(pos, state, 3);
+    }
+
+    @Override
+    public String getBlock(int x, int y, int z) {
+        var world = requireServer().getOverworld();
+        var state = world.getBlockState(new BlockPos(x, y, z));
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
+        return id == null ? "minecraft:air" : id.toString();
+    }
+
+    @Override
+    public void setBlock(String blockId, int x, int y, int z) {
+        Block block = requireAnyBlock(blockId);
+        requireServer().getOverworld().setBlockState(new BlockPos(x, y, z), block.getDefaultState(), 3);
+    }
+
+    @Override
+    public int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2) {
+        Block block = requireAnyBlock(blockId);
+        var world = requireServer().getOverworld();
+        var state = block.getDefaultState();
+
+        int minX = Math.min(x1, x2);
+        int minY = Math.min(y1, y2);
+        int minZ = Math.min(z1, z2);
+        int maxX = Math.max(x1, x2);
+        int maxY = Math.max(y1, y2);
+        int maxZ = Math.max(z1, z2);
+
+        // Reutiliza a mesma posicao mutavel para nao alocar um BlockPos por bloco.
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        int changed = 0;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    pos.set(x, y, z);
+                    if (world.getBlockState(pos).isOf(block)) continue;
+                    if (world.setBlockState(pos, state, 3)) changed++;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /** Resolve qualquer bloco registrado, do jogo ou de um mod. */
+    private Block requireAnyBlock(String blockId) {
+        Identifier id = parseIdentifier(blockId);
+        if (!Registries.BLOCK.containsId(id)) {
+            throw new BridgeException("bloco desconhecido: " + id);
+        }
+        return Registries.BLOCK.get(id);
     }
 
     private MinecraftServer requireServer() {

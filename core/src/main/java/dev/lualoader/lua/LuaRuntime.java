@@ -6,6 +6,7 @@ import dev.lualoader.platform.BlockEventData;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
 import dev.lualoader.platform.PlayerHandle;
+import dev.lualoader.structure.StructurePlacer;
 import org.luaj.vm2.Globals;
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaFunction;
@@ -29,6 +30,17 @@ import java.util.Set;
 
 /** Runtime Lua por mod. O script recebe apenas a API construída nesta classe. */
 public final class LuaRuntime {
+    /**
+     * Maior volume aceito em uma unica chamada de {@code fill}.
+     *
+     * <p>Existe para que um erro de script nao peca bilhoes de blocos e trave a thread do
+     * servidor. Equivale a um cubo de 32 blocos de lado.
+     */
+    private static final int MAX_FILL_VOLUME = 32_768;
+
+    /** Limite de coordenada aceito, para evitar posicoes absurdas vindas do script. */
+    private static final int MAX_COORDINATE = 30_000_000;
+
     private static final Set<String> EVENTS = Set.of(
             "loader_ready", "server_started", "server_stopped", "player_joined", "tick",
             "block_used", "block_attacked"
@@ -197,6 +209,80 @@ public final class LuaRuntime {
                 return LuaValue.NIL;
             }
         });
+        serverApi.set("get_block", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("get_block exige x, y e z");
+                int x = requireCoordinate(args.arg(1));
+                int y = requireCoordinate(args.arg(2));
+                int z = requireCoordinate(args.arg(3));
+                return LuaValue.valueOf(bridge.getBlock(x, y, z));
+            }
+        });
+        serverApi.set("set_block", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4) throw new LuaError("set_block exige id, x, y e z");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int x = requireCoordinate(args.arg(2));
+                int y = requireCoordinate(args.arg(3));
+                int z = requireCoordinate(args.arg(4));
+                bridge.setBlock(id, x, y, z);
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("fill", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 7) {
+                    throw new LuaError("fill exige id, x1, y1, z1, x2, y2 e z2");
+                }
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int x1 = requireCoordinate(args.arg(2));
+                int y1 = requireCoordinate(args.arg(3));
+                int z1 = requireCoordinate(args.arg(4));
+                int x2 = requireCoordinate(args.arg(5));
+                int y2 = requireCoordinate(args.arg(6));
+                int z2 = requireCoordinate(args.arg(7));
+
+                long volume = (Math.abs((long) x2 - x1) + 1)
+                        * (Math.abs((long) y2 - y1) + 1)
+                        * (Math.abs((long) z2 - z1) + 1);
+                if (volume > MAX_FILL_VOLUME) {
+                    throw new LuaError("fill excede o limite de " + MAX_FILL_VOLUME
+                            + " blocos; pedido: " + volume);
+                }
+                return LuaValue.valueOf(bridge.fillBlocks(id, x1, y1, z1, x2, y2, z2));
+            }
+        });
+        serverApi.set("place_structure", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4) throw new LuaError("place_structure exige id, x, y e z");
+
+                String structureId = args.arg(1).tojstring();
+                ModManifest.StructureDefinition structure = findStructure(mod.manifest(), structureId);
+                if (structure == null) {
+                    throw new LuaError("estrutura nao declarada no manifesto: " + structureId);
+                }
+
+                int x = requireCoordinate(args.arg(2));
+                int y = requireCoordinate(args.arg(3));
+                int z = requireCoordinate(args.arg(4));
+
+                try {
+                    StructurePlacer.Placement placement =
+                            new StructurePlacer(bridge).place(structure, x, y, z);
+                    return LuaValue.valueOf(placement.placed());
+                } catch (IllegalArgumentException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
         serverApi.set("set_block_variant", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -265,6 +351,24 @@ public final class LuaRuntime {
             context.set("player", LuaValue.NIL);
         }
         return context;
+    }
+
+    /** Procura uma estrutura declarada pelo proprio mod. Um mod nao alcanca estruturas alheias. */
+    private static ModManifest.StructureDefinition findStructure(ModManifest manifest, String id) {
+        if (manifest.structures == null) return null;
+        for (ModManifest.StructureDefinition structure : manifest.structures) {
+            if (structure != null && id.equals(structure.id)) return structure;
+        }
+        return null;
+    }
+
+    /** Valida uma coordenada vinda do script, recusando valores fora do mundo. */
+    private static int requireCoordinate(LuaValue value) {
+        int coordinate = value.checkint();
+        if (coordinate < -MAX_COORDINATE || coordinate > MAX_COORDINATE) {
+            throw new LuaError("coordenada fora do intervalo permitido: " + coordinate);
+        }
+        return coordinate;
     }
 
     private static String requireIdentifier(String value) {

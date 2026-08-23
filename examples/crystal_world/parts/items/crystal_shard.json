@@ -1,0 +1,11 @@
+{
+  "id": "crystal_shard",
+  "name": "Fragmento de Cristal",
+  "max_stack_size": 32,
+  "rarity": "uncommon",
+  "texture": {
+    "source": "local",
+    "path": "assets/crystal_world/textures/item/crystal_shard.png",
+    "fallback": "minecraft:item/amethyst_shard"
+  }
+}

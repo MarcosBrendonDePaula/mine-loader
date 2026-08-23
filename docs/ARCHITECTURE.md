@@ -29,6 +29,20 @@ O núcleo nunca chama o jogo diretamente. Toda operação atravessa `dev.luaload
 
 O adaptador Fabric implementa esse contrato em `FabricGameBridge` e `FabricPlayerHandle`. O `LuaRuntime` recebe a bridge por `attach()` e usa `GameBridge.DETACHED` quando nenhuma plataforma está conectada, o que permite validar manifestos e scripts sem iniciar o jogo.
 
+### Controle de mundo
+
+O script recebe primitivas para ler e escrever blocos arbitrarios, do jogo ou de qualquer mod. Antes delas, o Lua so conseguia alterar blocos declarativos que ja existiam na posicao, o que impedia construir qualquer coisa.
+
+| API Lua | Permissao | Efeito |
+|---|---|---|
+| `ctx.server.get_block(x, y, z)` | `world.read` | Devolve o identificador do bloco, ou `minecraft:air`. |
+| `ctx.server.set_block(id, x, y, z)` | `world.write` | Substitui o bloco na posicao. |
+| `ctx.server.fill(id, x1, y1, z1, x2, y2, z2)` | `world.write` | Preenche a regiao e devolve quantos blocos mudaram. |
+
+O `fill` existe como operacao propria porque preencher bloco a bloco a partir do Lua seria ordens de grandeza mais lento; o adaptador reutiliza uma posicao mutavel e ignora blocos que ja estao no estado desejado.
+
+Os limites ficam no nucleo, nao no adaptador, para valerem em qualquer plataforma e serem testaveis sem abrir o jogo: um `fill` aceita no maximo 32.768 blocos, o equivalente a um cubo de 32 de lado, e coordenadas fora de 30.000.000 sao recusadas. Sem esses limites, um erro de script pediria bilhoes de blocos e travaria a thread do servidor.
+
 ### Acrescentar outra plataforma
 
 Um novo alvo (NeoForge, por exemplo) não altera o núcleo. Ele precisa de um módulo próprio que forneça quatro coisas: o entrypoint do loader, a implementação de `GameBridge`, a implementação de `PlayerHandle` e o registro de conteúdo declarativo equivalente ao `BlockRegistrar`, além da geração do resource pack virtual na API daquela plataforma. Manifesto, sandbox Lua, permissões e validação são compartilhados sem duplicação.

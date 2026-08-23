@@ -299,3 +299,70 @@ Alem dessas, o loader sempre adiciona `lua_variant` e `lua_luminance`, usadas pe
 O manifesto aceita campos que o loader ainda nao implementa. Eles nao impedem a carga do mod, mas sao listados no log durante a inicializacao, um a um, para que nenhuma declaracao passe despercebida.
 
 Nesta versao, os campos avisados sao `type` diferente de `generic`, `base`, todo o bloco `behavior`, todo o bloco `placement`, `shape` diferente de `full_cube` e, em `render`, `model` diferente de `cube_all`, `render_layer`, `translucent`, `cutout`, `emissive` e `tint`.
+
+## Estruturas declaradas
+
+O campo `structures` descreve construcoes como dados, em vez de exigir um laco em Lua. Cada estrutura tem uma paleta de simbolos e as camadas do desenho.
+
+```json
+{
+  "structures": [
+    {
+      "id": "crystal_tower",
+      "name": "Torre de Cristal",
+      "origin": "bottom_center",
+      "palette": {
+        "C": "crystal_world:crystal_block",
+        "G": "minecraft:glass",
+        "L": "minecraft:glowstone",
+        ".": "minecraft:air",
+        " ": null
+      },
+      "layers": [
+        ["CCC", "CLC", "CCC"],
+        ["CCC", "C.C", "CCC"],
+        ["CCC", "CGC", "CCC"]
+      ]
+    }
+  ]
+}
+```
+
+Cada entrada de `layers` e uma camada em Y, da mais baixa para a mais alta. Dentro de uma camada, cada string avanca em Z e cada caractere avanca em X.
+
+| Simbolo na paleta | Efeito |
+|---|---|
+| `"mod:bloco"` | Coloca o bloco indicado. |
+| `null` | Nao toca na posicao, preservando o que ja existe no mundo. |
+
+O campo `origin` define como a estrutura e ancorada: `bottom_center` centra o desenho no ponto pedido, `corner` usa o ponto como canto minimo.
+
+Todo simbolo desenhado precisa existir na paleta. Um simbolo desconhecido impede a carga do mod, em vez de falhar so na hora de construir.
+
+O posicionamento e feito por `ctx.server.place_structure(id, x, y, z)`, que exige `world.write` e devolve quantos blocos foram colocados. Um mod so alcanca as proprias estruturas. O limite de 32.768 blocos vale aqui tambem.
+
+## Dividir o mod em varios arquivos
+
+Um mod com muitos blocos, itens ou estruturas produz um `mod.json` grande demais para ler. Qualquer objeto do manifesto pode ser substituido por uma referencia `$import`:
+
+```json
+{
+  "blocks": [{ "$import": "parts/blocks/crystal_block.json" }],
+  "items": [{ "$import": "parts/items/crystal_shard.json" }],
+  "structures": [{ "$import": "parts/structures/crystal_tower.json" }]
+}
+```
+
+O objeto que contem `$import` e trocado pelo conteudo do arquivo apontado, que pode ser um objeto ou um array inteiro. Um arquivo importado tambem pode importar outros.
+
+Regras do import:
+
+| Regra | Motivo |
+|---|---|
+| O caminho e relativo a pasta do mod | O manifesto nao pode ler arquivos arbitrarios da maquina. |
+| Caminhos absolutos, com `:` ou que escapem da raiz sao recusados | Mesma protecao aplicada ao entrypoint Lua. |
+| `$import` nao pode dividir o objeto com outros campos | Evita ambiguidade sobre o que vence. |
+| Cadeias circulares e acima de 16 niveis sao recusadas | Impede laco infinito na leitura. |
+| Arquivo ausente e erro, nao silencio | Um pedaco faltando mudaria o mod sem aviso. |
+
+Uma falha de import invalida apenas o mod afetado; os demais continuam carregando normalmente.
