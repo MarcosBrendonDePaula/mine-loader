@@ -66,6 +66,45 @@ public interface GameBridge {
      */
     void spawnParticles(String particleId, double x, double y, double z, int count, double spread);
 
+    /**
+     * Lê os dados guardados na posição, como texto JSON.
+     *
+     * @return {@code "{}"} quando o bloco não guarda dados ou nada foi gravado ainda
+     */
+    String getBlockData(int x, int y, int z);
+
+    /** Grava dados na posição. O bloco precisa ter sido declarado com {@code block_data}. */
+    void setBlockData(int x, int y, int z, String json);
+
+    /**
+     * Invoca uma entidade do jogo na posição indicada.
+     *
+     * @param entityId identificador, por exemplo {@code minecraft:zombie}
+     * @return identificador único da entidade criada
+     */
+    String spawnEntity(String entityId, double x, double y, double z);
+
+    /**
+     * Lista as entidades dentro de um raio.
+     *
+     * @return para cada entidade, uma linha {@code uuid;tipo;x;y;z}
+     */
+    java.util.List<String> entitiesNear(double x, double y, double z, double radius);
+
+    /**
+     * Remove uma entidade pelo identificador único.
+     *
+     * @return {@code false} quando a entidade não foi encontrada
+     */
+    boolean removeEntity(String entityUuid);
+
+    /**
+     * Aplica dano a uma entidade.
+     *
+     * @return {@code false} quando a entidade não foi encontrada
+     */
+    boolean damageEntity(String entityUuid, float amount);
+
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {
         @Override
@@ -116,6 +155,36 @@ public interface GameBridge {
         @Override
         public void spawnParticles(String particleId, double x, double y, double z,
                                    int count, double spread) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public String getBlockData(int x, int y, int z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public void setBlockData(int x, int y, int z, String json) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public String spawnEntity(String entityId, double x, double y, double z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public boolean removeEntity(String entityUuid) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public boolean damageEntity(String entityUuid, float amount) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
     };

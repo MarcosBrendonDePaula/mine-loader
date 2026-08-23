@@ -66,8 +66,9 @@ public final class ManifestDiagnostics {
                 if (placement.rotateWithPlayer) ignored.add(prefix + "placement.rotate_with_player");
             }
             if (block.shape != null) {
-                addIfCustom(ignored, prefix + "shape.collision", block.shape.collision);
-                addIfCustom(ignored, prefix + "shape.outline", block.shape.outline);
+                // collision e outline sao aplicados quando descrevem uma forma conhecida.
+                addIfUnknownShape(ignored, prefix + "shape.collision", block.shape.collision);
+                addIfUnknownShape(ignored, prefix + "shape.outline", block.shape.outline);
                 addIfCustom(ignored, prefix + "shape.visual", block.shape.visual);
             }
             if (block.render != null) {
@@ -91,6 +92,18 @@ public final class ManifestDiagnostics {
     private static void addIfPresent(List<String> ignored, String field, String value) {
         if (value != null && !value.isBlank()) ignored.add(field);
     }
+
+    /** Formas conhecidas sao aplicadas; o aviso fica para nomes que o loader nao entende. */
+    private static void addIfUnknownShape(List<String> ignored, String field, String value) {
+        if (value == null || value.isBlank()) return;
+        if (!KNOWN_SHAPES.contains(value.trim().toLowerCase(java.util.Locale.ROOT))) {
+            ignored.add(field + ": forma desconhecida " + value);
+        }
+    }
+
+    private static final java.util.Set<String> KNOWN_SHAPES = java.util.Set.of(
+            "full_cube", "slab", "slab_bottom", "slab_top", "carpet", "layer",
+            "pane", "panel", "post", "pillar", "plate", "cross", "plant", "small", "table");
 
     private static void addIfCustom(List<String> ignored, String field, String value) {
         if (value != null && !value.isBlank() && !"full_cube".equals(value)) ignored.add(field);

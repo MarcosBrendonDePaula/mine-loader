@@ -3,6 +3,9 @@ package dev.lualoader.minecraft;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.SpawnReason;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.registry.Registries;
@@ -150,6 +153,86 @@ public final class FabricGameBridge implements GameBridge {
         // A dispersao vale para os tres eixos; a velocidade fica em zero para a particula
         // apenas aparecer, sem ser lancada em uma direcao.
         requireServer().getOverworld().spawnParticles(effect, x, y, z, count, spread, spread, spread, 0.0);
+    }
+
+    @Override
+    public String getBlockData(int x, int y, int z) {
+        var entity = requireServer().getOverworld().getBlockEntity(new BlockPos(x, y, z));
+        if (entity instanceof DeclarativeBlockEntity data) return data.data();
+        return "{}";
+    }
+
+    @Override
+    public void setBlockData(int x, int y, int z, String json) {
+        var entity = requireServer().getOverworld().getBlockEntity(new BlockPos(x, y, z));
+        if (!(entity instanceof DeclarativeBlockEntity data)) {
+            throw new BridgeException("o bloco em " + x + "," + y + "," + z
+                    + " nao foi declarado com block_data");
+        }
+        data.setData(json);
+    }
+
+    @Override
+    public String spawnEntity(String entityId, double x, double y, double z) {
+        Identifier id = parseIdentifier(entityId);
+        if (!Registries.ENTITY_TYPE.containsId(id)) {
+            throw new BridgeException("entidade desconhecida: " + entityId);
+        }
+        EntityType<?> type = Registries.ENTITY_TYPE.get(id);
+        var world = requireServer().getOverworld();
+
+        Entity entity = type.spawn(world, new BlockPos((int) x, (int) y, (int) z), SpawnReason.COMMAND);
+        if (entity == null) throw new BridgeException("nao foi possivel invocar " + entityId);
+
+        entity.refreshPositionAndAngles(x, y, z, entity.getYaw(), entity.getPitch());
+        return entity.getUuidAsString();
+    }
+
+    @Override
+    public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
+        var world = requireServer().getOverworld();
+        var caixa = new net.minecraft.util.math.Box(
+                x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
+
+        java.util.List<String> encontradas = new java.util.ArrayList<>();
+        for (Entity entity : world.getOtherEntities(null, caixa)) {
+            Identifier tipo = Registries.ENTITY_TYPE.getId(entity.getType());
+            encontradas.add(entity.getUuidAsString() + ";" + (tipo == null ? "?" : tipo)
+                    + ";" + entity.getBlockX() + ";" + entity.getBlockY() + ";" + entity.getBlockZ());
+        }
+        return encontradas;
+    }
+
+    @Override
+    public boolean removeEntity(String entityUuid) {
+        Entity entity = findEntity(entityUuid);
+        if (entity == null) return false;
+        entity.discard();
+        return true;
+    }
+
+    @Override
+    public boolean damageEntity(String entityUuid, float amount) {
+        Entity entity = findEntity(entityUuid);
+        if (entity == null) return false;
+
+        var world = requireServer().getOverworld();
+        return entity.damage(world.getDamageSources().magic(), amount);
+    }
+
+    private Entity findEntity(String entityUuid) {
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(entityUuid);
+        } catch (IllegalArgumentException error) {
+            throw new BridgeException("identificador de entidade invalido: " + entityUuid);
+        }
+        // A busca cobre todos os mundos: uma entidade pode ter mudado de dimensao.
+        for (var world : requireServer().getWorlds()) {
+            Entity entity = world.getEntity(uuid);
+            if (entity != null) return entity;
+        }
+        return null;
     }
 
     private MinecraftServer requireServer() {

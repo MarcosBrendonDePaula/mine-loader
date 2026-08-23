@@ -60,6 +60,9 @@ public final class LuaLoaderMod implements ModInitializer {
                 blockRegistrar.register(mod.manifest());
                 contentRegistrar.registerItems(mod.manifest());
             }
+            // O tipo de dados precisa conhecer todos os blocos, entao vem depois do registro deles.
+            dev.lualoader.minecraft.BlockEntityRegistrar.register(LOGGER, blockRegistrar.dataBlocks());
+
             // A aba criativa so pode ser montada depois que blocos e itens existem no registry.
             for (ModLoader.LoadedMod mod : loadedMods) {
                 contentRegistrar.registerCreativeTab(mod.manifest(),

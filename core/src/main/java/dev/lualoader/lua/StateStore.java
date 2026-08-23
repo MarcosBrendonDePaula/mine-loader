@@ -90,6 +90,24 @@ public final class StateStore {
         }
     }
 
+    /** Converte uma tabela Lua em texto JSON, para guardar fora do runtime. */
+    public String toJsonText(String owner, LuaTable table) {
+        return gson.toJson(toJsonObject(owner, table, 0));
+    }
+
+    /** Converte texto JSON de volta em tabela Lua. Texto invalido vira tabela vazia. */
+    public LuaTable fromJsonText(String json) {
+        LuaTable table = new LuaTable();
+        if (json == null || json.isBlank()) return table;
+        try {
+            JsonElement parsed = JsonParser.parseString(json);
+            if (parsed.isJsonObject()) fillTable(table, parsed.getAsJsonObject());
+        } catch (RuntimeException error) {
+            logger.warn("Dados ignorados por nao serem JSON valido: {}", error.getMessage());
+        }
+        return table;
+    }
+
     private Path fileFor(String modId) {
         // O id do mod já é validado como [a-z0-9_-], então não escapa do diretório.
         return directory.resolve(modId + ".json");

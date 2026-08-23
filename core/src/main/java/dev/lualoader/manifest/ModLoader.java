@@ -121,8 +121,9 @@ public final class ModLoader {
 
         if (manifest.permissions != null) {
             Set<String> knownPermissions = Set.of(
-                    "chat.send", "player.read", "player.inventory", "player.move",
-                    "server.read", "server.command.register", "world.read", "world.write");
+                    "chat.send", "player.read", "player.inventory", "player.move", "player.menu",
+                    "server.read", "server.command.register", "world.read", "world.write",
+                    "entity.read", "entity.spawn", "entity.modify");
             for (String permission : manifest.permissions) {
                 require(knownPermissions.contains(permission), "permissão desconhecida: " + permission);
             }

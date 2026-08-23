@@ -12,8 +12,15 @@ que trata de quando o código roda; aqui a pergunta é o que o código consegue 
 | Servidor | `broadcast` |
 | Mundo | `get_block`, `set_block`, `fill`, `place_structure` |
 | Bloco declarativo | `set_block_variant`, `set_block_property`, `set_block_luminance` |
-| Jogador | `name`, `uuid`, `send_message` |
-| Estado | `mod.state`, compartilhado por mod, apenas em memória |
+| Dados por bloco | `get_block_data`, `set_block_data` |
+| Feedback | `play_sound`, `spawn_particles`, `send_action_bar` |
+| Jogador | `name`, `uuid`, `send_message`, `position`, `health`, `teleport` |
+| Inventário | `count_item`, `give_item`, `take_item`, `held_item` |
+| Menu | `open_menu`, `close_menu` |
+| Entidades | `spawn_entity`, `entities_near`, `remove_entity`, `damage_entity` |
+| Agendamento | `mod.after` |
+| Comandos | `mod.command`, publicado em `/mod <nome>` |
+| Estado | `mod.state`, por mod, persistido em disco |
 | Entre mods | `mod.require`, com `dependencies` |
 
 Conteúdo declarável: blocos, itens, aba criativa, estruturas, loot, tags, estados de bloco.
@@ -86,36 +93,57 @@ qualquer forma não cúbica não existem, e o campo é avisado como não aplicad
 
 A ordem considera quantos tipos de mod cada item destrava, e não a dificuldade.
 
-| Ordem | O que | Destrava |
+| Ordem | O que | Estado |
 |---|---|---|
-| 1 | Inventário do jogador | Recompensa, economia, loja, missão, ferramenta com custo |
-| 2 | Persistência de `mod.state` | Qualquer mod com progresso ou memória entre sessões |
-| 3 | Sons e partículas | Feedback em todo mod que já existe |
-| 4 | Receitas | Conteúdo novo obtenível sem comando |
-| 5 | Comandos próprios | Operação e administração do mod |
-| 6 | Temporizadores | Efeitos com duração, cooldown, construção progressiva |
-| 7 | Estado por bloco | Máquinas, containers, blocos com memória |
-| 8 | Entidades | Mobs, combate, deteção de proximidade |
-| 9 | Interface | Menus, HUD, containers visuais |
-| 10 | Modelos além do cubo | Formas de bloco variadas |
+| 1 | Inventário do jogador | implementado |
+| 2 | Persistência de `mod.state` | implementado |
+| 3 | Sons e partículas | implementado |
+| 4 | Receitas | implementado |
+| 5 | Comandos próprios | implementado |
+| 6 | Temporizadores | implementado |
+| 7 | Estado por bloco | implementado |
+| 8 | Entidades | implementado para entidades do jogo |
+| 9 | Interface | implementado como menu de itens |
+| 10 | Modelos além do cubo | implementado como formas de colisão |
 
-Os quatro primeiros somados são o que separa "dá para fazer blocos bonitos" de "dá para fazer um mod
-de verdade".
+## Limites do que foi implementado
 
-## Permissões sem uso
+Três itens foram entregues com alcance menor do que o nome sugere, e é importante saber onde eles
+param antes de planejar um mod em cima deles.
 
-Três permissões são aceitas no manifesto e nunca verificadas em lugar nenhum, porque não existe
-operação que elas protejam:
+**Entidades.** O loader invoca, lista, remove e machuca entidades **do jogo**. Criar uma espécie
+nova, com modelo e comportamento próprios, continua fora: isso exige registrar um tipo de entidade,
+um modelo e um renderizador no cliente, além de sincronização de rede. Um mod pode usar um Allay como
+guardião; não pode criar o Moa.
 
-| Permissão | Situação |
+**Interface.** O menu usa a tela de container do próprio jogo, o que faz o recurso funcionar em
+qualquer cliente vanilla com o loader instalado. Em troca, é uma grade de itens somente leitura: não
+há HUD, tela desenhada, botões nem campos de texto, e o jogador não retira o que está exposto.
+
+**Formas de bloco.** Existem lajes, tapetes, painéis, postes, placas, plantas e mesas, definidas como
+caixas de colisão. Escadas, cercas e portões continuam fora, porque dependem de estado direcional e
+de conexão com vizinhos, que o manifesto ainda não declara. O modelo visual continua sendo um cubo
+com textura: a forma muda a colisão e o contorno, não o desenho.
+
+Dimensões próprias e geração de mundo seguem inteiramente fora do alcance.
+
+## Permissões
+
+| Permissão | Protege |
 |---|---|
-| `player.read` | Nenhuma leitura de jogador é protegida; `ctx.player.name` é livre. |
-| `server.read` | Não há operação de leitura de servidor. |
-| `server.command.register` | Comandos não existem. |
+| `chat.send` | Mensagens no chat e na action bar |
+| `player.read` | Leitura de jogador: item na mão, posição, vida, contagem de itens |
+| `player.inventory` | Dar e remover itens |
+| `player.move` | Teleporte |
+| `player.menu` | Abrir e fechar menus |
+| `world.read` | Ler blocos, dados de bloco, tocar som e emitir partículas |
+| `world.write` | Alterar blocos, preencher regiões, posicionar estruturas, gravar dados |
+| `entity.read` | Listar entidades próximas |
+| `entity.spawn` | Invocar entidades |
+| `entity.modify` | Remover e machucar entidades |
+| `server.command.register` | Registrar comandos |
 
-Elas devem passar a proteger as operações correspondentes conforme cada área for implementada. Até
-lá, declarar qualquer uma delas não muda nada — o mesmo problema de contrato vazio que o diagnóstico
-de campos não aplicados resolveu para os blocos.
+`server.read` continua sem proteger operação alguma e deve ser removida ou passar a cobrir algo.
 
 ## Estudo de caso: recriar o Aether II
 

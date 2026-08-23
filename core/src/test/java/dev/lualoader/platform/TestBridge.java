@@ -50,4 +50,37 @@ public abstract class TestBridge implements GameBridge {
     @Override
     public void spawnParticles(String particleId, double x, double y, double z, int count, double spread) {
     }
+
+    /** Dados por posição, simulados em memória. */
+    private final java.util.Map<String, String> blockData = new java.util.HashMap<>();
+
+    @Override
+    public String getBlockData(int x, int y, int z) {
+        return blockData.getOrDefault(x + "," + y + "," + z, "{}");
+    }
+
+    @Override
+    public void setBlockData(int x, int y, int z, String json) {
+        blockData.put(x + "," + y + "," + z, json);
+    }
+
+    @Override
+    public String spawnEntity(String entityId, double x, double y, double z) {
+        return "00000000-0000-0000-0000-000000000000";
+    }
+
+    @Override
+    public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
+        return java.util.List.of();
+    }
+
+    @Override
+    public boolean removeEntity(String entityUuid) {
+        return false;
+    }
+
+    @Override
+    public boolean damageEntity(String entityUuid, float amount) {
+        return false;
+    }
 }

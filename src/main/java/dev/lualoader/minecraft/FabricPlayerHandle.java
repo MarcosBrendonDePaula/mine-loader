@@ -104,6 +104,22 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
                 java.util.Set.of(), player.getYaw(), player.getPitch());
     }
 
+    @Override
+    public void openMenu(String title, int rows, java.util.List<String> items) {
+        int linhas = Math.max(1, Math.min(6, rows));
+        var inventory = ReadOnlyMenu.buildInventory(items, linhas);
+
+        player.openHandledScreen(new net.minecraft.screen.SimpleNamedScreenHandlerFactory(
+                (syncId, playerInventory, ignored) ->
+                        new ReadOnlyMenu(syncId, playerInventory, inventory, linhas),
+                Text.literal(title)));
+    }
+
+    @Override
+    public void closeMenu() {
+        player.closeHandledScreen();
+    }
+
     private static Item resolveItem(String itemId) {
         int separator = itemId.indexOf(':');
         if (separator <= 0 || separator == itemId.length() - 1) {

@@ -1,0 +1,41 @@
+{
+  "id": "altar",
+  "name": "Altar de Cristal",
+  "material": {
+    "map_color": "blue",
+    "sound": "stone"
+  },
+  "settings": {
+    "hardness": 3.0,
+    "resistance": 6.0,
+    "requires_tool": true,
+    "luminance": 5,
+    "non_opaque": true
+  },
+  "shape": {
+    "collision": "table",
+    "outline": "table"
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/crystal_world/textures/block/crystal_block.png",
+      "fallback": "minecraft:block/amethyst_block"
+    }
+  },
+  "loot": {
+    "mode": "self"
+  },
+  "tags": [
+    "minecraft:mineable/pickaxe"
+  ],
+  "item": {
+    "register": true,
+    "rarity": "rare"
+  },
+  "block_data": true,
+  "behavior": {
+    "on_use": "scripts/altar/on_use.lua"
+  }
+}

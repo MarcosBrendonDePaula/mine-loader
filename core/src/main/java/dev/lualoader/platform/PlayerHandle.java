@@ -44,4 +44,18 @@ public interface PlayerHandle {
 
     /** Move o jogador para a posição indicada. */
     void teleport(double x, double y, double z);
+
+    /**
+     * Abre um menu de itens para o jogador.
+     *
+     * <p>Usa a tela de container do próprio jogo, o que dispensa um renderizador novo no cliente:
+     * cada linha é {@code item;quantidade}, e o menu é somente leitura para o jogador não retirar
+     * o que está sendo mostrado.
+     *
+     * @param rows número de linhas, de 1 a 6
+     */
+    void openMenu(String title, int rows, java.util.List<String> items);
+
+    /** Fecha o menu aberto, se houver. */
+    void closeMenu();
 }

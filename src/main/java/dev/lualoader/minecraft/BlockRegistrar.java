@@ -22,6 +22,7 @@ public final class BlockRegistrar {
     private final Map<Identifier, Block> blocks = new LinkedHashMap<>();
     private final Map<Identifier, Integer> variantCounts = new LinkedHashMap<>();
     private final Map<String, List<Identifier>> blockItemsByMod = new LinkedHashMap<>();
+    private final List<Block> dataBlocks = new ArrayList<>();
 
     public BlockRegistrar(Logger logger) {
         this.logger = logger;
@@ -44,14 +45,31 @@ public final class BlockRegistrar {
             // As propriedades declaradas precisam estar visiveis durante o construtor do bloco.
             DeclarativeBlock.beginConstruction(declaredState);
             try {
-                block = new DeclarativeBlock(
-                        BlockSettingsFactory.create(definition),
-                        values.hardness,
-                        values.resistance,
-                        values.slipperiness,
-                        values.velocityMultiplier,
-                        values.jumpVelocityMultiplier
-                );
+                // Um bloco so paga o custo de guardar dados quando o manifesto pede.
+                boolean comDados = definition.blockData;
+                var outline = definition.shape == null
+                        ? null
+                        : DeclarativeShapes.byName(definition.shape.outline);
+                var collision = definition.shape == null
+                        ? null
+                        : DeclarativeShapes.byName(definition.shape.collision);
+
+                var settings = BlockSettingsFactory.create(definition);
+                if (comDados) {
+                    block = new DeclarativeDataBlock(settings,
+                            values.hardness, values.resistance, values.slipperiness,
+                            values.velocityMultiplier, values.jumpVelocityMultiplier);
+                    dataBlocks.add(block);
+                } else if (outline != null || collision != null) {
+                    block = new DeclarativeShapes.ShapedBlock(settings,
+                            values.hardness, values.resistance, values.slipperiness,
+                            values.velocityMultiplier, values.jumpVelocityMultiplier,
+                            outline, collision);
+                } else {
+                    block = new DeclarativeBlock(settings,
+                            values.hardness, values.resistance, values.slipperiness,
+                            values.velocityMultiplier, values.jumpVelocityMultiplier);
+                }
             } finally {
                 DeclarativeBlock.endConstruction();
             }
@@ -94,6 +112,11 @@ public final class BlockRegistrar {
             case "epic" -> Rarity.EPIC;
             default -> Rarity.COMMON;
         };
+    }
+
+    /** Blocos que declararam guardar dados, para o registro do tipo correspondente. */
+    public List<Block> dataBlocks() {
+        return List.copyOf(dataBlocks);
     }
 
     /** Itens de bloco registrados para o mod, na ordem de declaracao. */

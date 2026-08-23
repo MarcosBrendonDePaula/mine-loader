@@ -727,6 +727,82 @@ public final class LuaRuntime {
                 return LuaValue.NIL;
             }
         });
+        serverApi.set("spawn_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.spawn");
+                if (args.narg() < 4) throw new LuaError("spawn_entity exige id, x, y e z");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                return LuaValue.valueOf(bridge.spawnEntity(id,
+                        requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
+                        requireCoordinate(args.arg(4))));
+            }
+        });
+        serverApi.set("entities_near", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.read");
+                if (args.narg() < 4) throw new LuaError("entities_near exige x, y, z e raio");
+                double radius = args.arg(4).checkdouble();
+                if (radius <= 0 || radius > 64) throw new LuaError("raio deve estar entre 0 e 64");
+
+                LuaTable lista = new LuaTable();
+                int indice = 1;
+                for (String linha : bridge.entitiesNear(requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)), radius)) {
+                    String[] partes = linha.split(";");
+                    if (partes.length < 5) continue;
+                    LuaTable entidade = new LuaTable();
+                    entidade.set("uuid", LuaValue.valueOf(partes[0]));
+                    entidade.set("type", LuaValue.valueOf(partes[1]));
+                    entidade.set("x", LuaValue.valueOf(Integer.parseInt(partes[2])));
+                    entidade.set("y", LuaValue.valueOf(Integer.parseInt(partes[3])));
+                    entidade.set("z", LuaValue.valueOf(Integer.parseInt(partes[4])));
+                    lista.set(indice++, entidade);
+                }
+                return lista;
+            }
+        });
+        serverApi.set("remove_entity", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "entity.modify");
+                return LuaValue.valueOf(bridge.removeEntity(value.tojstring()));
+            }
+        });
+        serverApi.set("damage_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.modify");
+                if (args.narg() < 2) throw new LuaError("damage_entity exige uuid e quantidade");
+                float amount = (float) args.arg(2).checkdouble();
+                if (amount <= 0 || amount > 1024) throw new LuaError("dano deve estar entre 0 e 1024");
+                return LuaValue.valueOf(bridge.damageEntity(args.arg(1).tojstring(), amount));
+            }
+        });
+        serverApi.set("get_block_data", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("get_block_data exige x, y e z");
+                String json = bridge.getBlockData(requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)));
+                return stateStore.fromJsonText(json);
+            }
+        });
+        serverApi.set("set_block_data", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4 || !args.arg(4).istable()) {
+                    throw new LuaError("set_block_data exige x, y, z e uma tabela");
+                }
+                String json = stateStore.toJsonText(mod.manifest().id, (LuaTable) args.arg(4));
+                bridge.setBlockData(requireCoordinate(args.arg(1)), requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)), json);
+                return LuaValue.NIL;
+            }
+        });
         serverApi.set("play_sound", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -954,6 +1030,42 @@ public final class LuaRuntime {
                 String id = requireIdentifier(args.arg(1).tojstring());
                 int count = requireCount(args.arg(2));
                 return LuaValue.valueOf(player.takeItem(id, count));
+            }
+        });
+        playerApi.set("open_menu", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 3 || !args.arg(3).istable()) {
+                    throw new LuaError("open_menu exige titulo, linhas e uma lista de itens");
+                }
+                int rows = args.arg(2).checkint();
+                if (rows < 1 || rows > 6) throw new LuaError("linhas deve estar entre 1 e 6");
+
+                LuaTable lista = (LuaTable) args.arg(3);
+                java.util.List<String> itens = new java.util.ArrayList<>();
+                for (int indice = 1; indice <= lista.length(); indice++) {
+                    LuaValue entrada = lista.get(indice);
+                    if (entrada.istable()) {
+                        LuaValue id = entrada.get("item");
+                        LuaValue count = entrada.get("count");
+                        itens.add(id.tojstring() + ";" + (count.isnumber() ? count.toint() : 1));
+                    } else if (!entrada.isnil()) {
+                        itens.add(entrada.tojstring() + ";1");
+                    } else {
+                        itens.add("");
+                    }
+                }
+                player.openMenu(args.arg(1).tojstring(), rows, itens);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("close_menu", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.menu");
+                player.closeMenu();
+                return LuaValue.NIL;
             }
         });
         playerApi.set("teleport", new VarArgFunction() {

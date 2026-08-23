@@ -16,6 +16,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -158,6 +159,20 @@ class PlatformBridgeTest {
         @Override
         public void teleport(double x, double y, double z) {
             where = new int[]{(int) x, (int) y, (int) z};
+        }
+
+        String menuTitle;
+        java.util.List<String> menuItems = java.util.List.of();
+
+        @Override
+        public void openMenu(String title, int rows, java.util.List<String> items) {
+            menuTitle = title + " (" + rows + " linhas)";
+            menuItems = items;
+        }
+
+        @Override
+        public void closeMenu() {
+            menuTitle = null;
         }
     }
 
@@ -871,5 +886,114 @@ class PlatformBridgeTest {
             }
         }
         assertEquals(1, runtime.commandNames().size(), "o nome pertence a quem registrou primeiro");
+    }
+
+    @Test
+    void blockKeepsItsOwnDataPerPosition(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"world.read\", \"world.write\"", """
+                mod.on("block_used", function(ctx)
+                    local dados = ctx.server.get_block_data(ctx.block.x, ctx.block.y, ctx.block.z)
+                    dados.usos = (dados.usos or 0) + 1
+                    dados.dono = "alguem"
+                    ctx.server.set_block_data(ctx.block.x, ctx.block.y, ctx.block.z, dados)
+                    ctx.server.broadcast("usos aqui: " .. dados.usos)
+                end)
+                """));
+
+        var primeiro = new BlockEventData("test_mod:bloco", 1, 1, 1, 0, 1);
+        var segundo = new BlockEventData("test_mod:bloco", 9, 9, 9, 0, 1);
+
+        runtime.triggerBlock("block_used", null, primeiro);
+        runtime.triggerBlock("block_used", null, primeiro);
+        // Outra posicao tem contagem propria: o dado pertence ao bloco, nao ao mod.
+        runtime.triggerBlock("block_used", null, segundo);
+
+        assertEquals(List.of(
+                "broadcast:usos aqui: 1",
+                "broadcast:usos aqui: 2",
+                "broadcast:usos aqui: 1"
+        ), bridge.calls);
+    }
+
+    @Test
+    void blockDataSurvivesAsJson(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.read\", \"world.write\"", """
+                mod.on("block_used", function(ctx)
+                    ctx.server.set_block_data(ctx.block.x, ctx.block.y, ctx.block.z,
+                        { texto = "ola", numero = 7, ligado = true, dentro = { profundo = 1 } })
+                end)
+                """));
+
+        runtime.triggerBlock("block_used", null, new BlockEventData("test_mod:bloco", 2, 3, 4, 0, 1));
+
+        String json = bridge.getBlockData(2, 3, 4);
+        assertTrue(json.contains("\"texto\": \"ola\""), json);
+        assertTrue(json.contains("\"numero\": 7"), json);
+        assertTrue(json.contains("\"ligado\": true"), json);
+        assertTrue(json.contains("\"profundo\": 1"), json);
+    }
+
+    @Test
+    void scriptCanOpenAMenuForThePlayer(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"player.menu\"", """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_menu("Loja", 3, {
+                        { item = "minecraft:diamond", count = 5 },
+                        "minecraft:emerald"
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals("Loja (3 linhas)", player.menuTitle);
+        assertEquals(List.of("minecraft:diamond;5", "minecraft:emerald;1"), player.menuItems);
+    }
+
+    @Test
+    void menuNeedsItsOwnPermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_menu("Loja", 3, {})
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertNull(player.menuTitle, "abrir menu exige player.menu");
+    }
+
+    @Test
+    void entityOperationsNeedTheirPermissions(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.spawn_entity("minecraft:pig", 0, 64, 0)
+                    ctx.server.broadcast("invocou")
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+        assertTrue(bridge.calls.isEmpty(), "invocar entidade exige entity.spawn");
     }
 }

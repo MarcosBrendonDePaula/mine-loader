@@ -59,6 +59,8 @@ public final class ModManifest {
         public BehaviorDefinition behavior = new BehaviorDefinition();
         /** Fixa a versao dos scripts remotos declarados em {@code behavior}. Opcional. */
         public String behaviorSha256;
+        /** Quando verdadeiro, o bloco guarda dados proprios em cada posicao do mundo. */
+        public boolean blockData = false;
     }
 
     public static final class MaterialDefinition {

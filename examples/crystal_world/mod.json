@@ -10,8 +10,12 @@
   "permissions": [
     "chat.send",
     "player.read",
+    "player.inventory",
+    "player.menu",
     "world.read",
-    "world.write"
+    "world.write",
+    "entity.read",
+    "entity.spawn"
   ],
   "creative_tab": {
     "register": true,
@@ -27,6 +31,9 @@
   "blocks": [
     {
       "$import": "parts/blocks/crystal_block.json"
+    },
+    {
+      "$import": "parts/blocks/altar.json"
     }
   ],
   "structures": [
