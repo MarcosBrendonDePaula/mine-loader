@@ -60,6 +60,12 @@ O adaptador NeoForge existe e compila contra o mesmo `core`, sem uma linha alter
 de ser promessa e virou verificacao: o CI compila os dois em todo push, e a release publica um jar
 por plataforma.
 
+**Uma restricao de plataforma que moldou o adaptador:** o registro do Minecraft fecha durante a
+inicializacao, e um bloco declarado depois disso simplesmente nao existe. Por isso a descoberta dos
+mods acontece no construtor do adaptador NeoForge, muito antes de qualquer servidor -- enquanto no
+Fabric ela cabe no ponto de entrada comum. O runtime Lua nasce depois, e reusa o que ja foi
+descoberto em vez de ler o disco de novo.
+
 A cobertura ainda e desigual, e de proposito. O Fabric e o completo; o NeoForge cobre o caminho
 central -- descobrir mods, executar Lua, ler e escrever no mundo e em inventarios -- e **recusa com
 o nome da operacao** o que ainda nao implementa, em vez de devolver vazio. Um mod que dependa de
@@ -70,8 +76,12 @@ algo ausente descobre na primeira chamada, e nao por um comportamento estranho m
 | Nucleo: manifesto, Lua, protocolo | o mesmo | o mesmo |
 | Mundo e blocos basicos | sim | sim |
 | Inventario de bloco | Transfer API | Capabilities |
-| Registro de itens | sim | sim |
-| Blocos declarativos, telas, receitas, entidades | sim | ainda nao |
+| Blocos e itens declarativos | sim | sim |
+| Receitas, drops, processos | sim | sim |
+| Comandos de mod | sim | sim |
+| Som, particulas, entidades | sim | sim |
+| Variantes, estados, formas, resource pack | sim | ainda nao |
+| Telas, HUD, sobreposicao | sim | ainda nao |
 
 ### Acrescentar outra plataforma
 
