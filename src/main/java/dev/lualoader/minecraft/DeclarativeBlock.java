@@ -171,9 +171,17 @@ public class DeclarativeBlock extends Block {
                 ? 1
                 : LuaLoaderMod.blockRegistrar().variantCount(id);
 
-        runtime.triggerBlock(event,
-                player == null ? null : new FabricPlayerHandle(player),
-                new BlockEventData(id.toString(), pos.getX(), pos.getY(), pos.getZ(), variant, variantCount));
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge != null && world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+            bridge.setCurrentWorld(serverWorld);
+        }
+        try {
+            runtime.triggerBlock(event,
+                    player == null ? null : new FabricPlayerHandle(player),
+                    new BlockEventData(id.toString(), pos.getX(), pos.getY(), pos.getZ(), variant, variantCount));
+        } finally {
+            if (bridge != null) bridge.setCurrentWorld(null);
+        }
     }
 
     public void setDynamicProperty(String property, float value) {

@@ -47,6 +47,14 @@ public final class LuaRuntime {
     /** Teto de tarefas agendadas simultaneas, para um laco de agendamento nao consumir a memoria. */
     private static final int MAX_SCHEDULED = 4_096;
 
+    /**
+     * Tempo maximo de um callback, em milissegundos.
+     *
+     * <p>Um tick do servidor dura 50 ms; o limite fica bem abaixo disso para que um script lento
+     * atrase, mas nao pare o jogo. Passar do limite interrompe apenas aquele callback.
+     */
+    private static final long CALLBACK_LIMIT_MILLIS = 20;
+
     private static final Set<String> EVENTS = Set.of(
             "loader_ready", "server_started", "server_stopped", "player_joined", "player_left",
             "tick", "mod_reloaded",
@@ -133,6 +141,7 @@ public final class LuaRuntime {
             LoadedScript script = scripts.get(task.modId());
             if (script == null) continue;
             try {
+                script.budget().start();
                 task.callback().call(context(script.mod(), null, null));
             } catch (LuaError error) {
                 logger.error("Erro Lua em tarefa agendada do mod {}: {}", task.modId(), error.getMessage());
@@ -141,6 +150,8 @@ public final class LuaRuntime {
                         task.modId(), error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java em tarefa agendada do mod {}", task.modId(), error);
+            } finally {
+                script.budget().stop();
             }
         }
     }
@@ -164,6 +175,7 @@ public final class LuaRuntime {
         if (script == null) return false;
 
         try {
+            script.budget().start();
             LuaTable context = context(script.mod(), player, null);
             context.set("args", LuaValue.valueOf(arguments == null ? "" : arguments));
             command.callback().call(context);
@@ -174,6 +186,8 @@ public final class LuaRuntime {
                     name, command.modId(), error.getMessage());
         } catch (RuntimeException error) {
             logger.error("Erro Java no comando {} do mod {}", name, command.modId(), error);
+        } finally {
+            script.budget().stop();
         }
         return true;
     }
@@ -268,6 +282,7 @@ public final class LuaRuntime {
             if (callback == null) continue;
 
             try {
+                script.budget().start();
                 LuaValue result = callback.call(itemContext(script.mod(), player, item));
                 if (result.isboolean() && !result.toboolean()) cancelled = true;
             } catch (LuaError error) {
@@ -279,6 +294,8 @@ public final class LuaRuntime {
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}",
                         script.mod().manifest().id, event, error);
+            } finally {
+                script.budget().stop();
             }
         }
         return cancelled;
@@ -326,6 +343,7 @@ public final class LuaRuntime {
             if (callback == null) callback = script.callbacks().get(event);
             if (callback == null) continue;
             try {
+                script.budget().start();
                 LuaValue result = callback.call(context(script.mod(), player, block));
                 if (result.isboolean() && !result.toboolean()) {
                     cancelled = true;
@@ -336,13 +354,16 @@ public final class LuaRuntime {
                 logger.error("Erro de plataforma no mod {} durante {}: {}", script.mod().manifest().id, event, error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}", script.mod().manifest().id, event, error);
+            } finally {
+                script.budget().stop();
             }
         }
         return cancelled;
     }
 
     private LoadedScript compile(ModLoader.LoadedMod mod) throws IOException {
-        Globals globals = restrictedGlobals();
+        ExecutionBudget budget = new ExecutionBudget(CALLBACK_LIMIT_MILLIS);
+        Globals globals = restrictedGlobals(budget);
         Map<String, LuaFunction> callbacks = new LinkedHashMap<>();
         LuaTable modApi = createLogApi(mod.manifest().id);
         modApi.set("on", new TwoArgFunction() {
@@ -455,7 +476,7 @@ public final class LuaRuntime {
 
         return new LoadedScript(mod, Map.copyOf(callbacks),
                 loadBlockHandlers(mod, globals, exported),
-                loadItemHandlers(mod, globals, exported), exported);
+                loadItemHandlers(mod, globals, exported), exported, budget);
     }
 
     /**
@@ -647,8 +668,13 @@ public final class LuaRuntime {
         }
     }
 
-    private Globals restrictedGlobals() {
+    private Globals restrictedGlobals(ExecutionBudget budget) {
         Globals globals = JsePlatform.standardGlobals();
+
+        // A biblioteca de depuracao e carregada apenas para instalar o gancho de instrucoes; a
+        // tabela debug e removida logo em seguida, entao o script nao a alcanca.
+        globals.load(budget);
+
         String[] denied = {"io", "os", "package", "debug", "luajava", "require", "dofile", "loadfile", "load", "loadstring"};
         for (String name : denied) globals.set(name, LuaValue.NIL);
         return globals;
@@ -1019,8 +1045,8 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.inventory");
                 String id = requireIdentifier(args.arg(1).tojstring());
                 int count = requireCount(args.arg(2));
-                player.giveItem(id, count);
-                return LuaValue.valueOf(count);
+                // Devolve quantos nao couberam no inventario e cairam no chao.
+                return LuaValue.valueOf(player.giveItem(id, count));
             }
         });
         playerApi.set("take_item", new VarArgFunction() {
@@ -1170,7 +1196,8 @@ public final class LuaRuntime {
                                 Map<String, LuaFunction> callbacks,
                                 Map<String, Map<String, LuaFunction>> blockHandlers,
                                 Map<String, Map<String, LuaFunction>> itemHandlers,
-                                LuaTable exports) {
+                                LuaTable exports,
+                                ExecutionBudget budget) {
     }
 
     private static final class ListCopy {

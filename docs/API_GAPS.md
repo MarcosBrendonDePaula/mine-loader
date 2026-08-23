@@ -207,3 +207,39 @@ um mod de conversão total continua exigindo Java por um bom tempo.
 A ordem de prioridade acima já reflete isso: inventário, persistência, som e receitas destravam
 muitos mods pequenos e médios, enquanto dimensões e entidades, apesar de mais chamativas, só passam a
 valer quando a base estiver firme.
+
+## Revisao contra a API do jogo
+
+Uma revisao do que foi construido, comparando com o que a API do Minecraft realmente oferece,
+encontrou quatro problemas. Todos foram corrigidos.
+
+**Dimensao errada.** Treze operacoes chamavam `getOverworld()` diretamente. Um bloco usado no Nether
+leria e escreveria dados no overworld, sem erro visivel: o altar do exemplo teria contagens
+misturadas entre dimensoes. O adaptador passa a publicar o mundo do evento antes de entregar ao
+runtime, e todas as operacoes agem nele. Fora de um evento, como em uma tarefa agendada, o overworld
+continua sendo usado, por ser o comportamento previsivel quando o script nao informou onde atuar.
+
+**Retorno mentiroso em `give_item`.** O contrato prometia devolver a quantidade que nao coube, mas a
+implementacao devolvia sempre zero e o Lua recebia a quantidade pedida. Um script que checasse o
+retorno para avisar o jogador nunca detectaria inventario cheio. Agora o que nao cabe e derrubado no
+mundo e reportado de verdade.
+
+**Nenhum limite de execucao.** Um `while true do end` em qualquer mod prendia a thread principal do
+servidor para sempre, e o Minecraft nao tem como recuperar uma thread travada. Isso e o que separa
+rodar mods proprios de aceitar mods de terceiros. O interpretador passa a ser interrompido por um
+gancho de instrucoes com limite de tempo por callback; a tabela `debug` continua fora do alcance do
+script.
+
+**Particulas com parametro.** `spawn_particles` so aceita particulas simples. Tipos que exigem
+parametros, como `dust` e `block`, sao recusados com mensagem clara em vez de falharem em silencio.
+
+### Limite de execucao
+
+| Aspecto | Valor |
+|---|---|
+| Tempo por callback | 20 ms, bem abaixo dos 50 ms de um tick |
+| Verificacao | a cada 2.048 instrucoes, para nao pesar no caso normal |
+| Alcance | vale por callback: interromper um nao afeta o proximo nem outros mods |
+
+Um script comum nao percebe o limite. Um script que passa dele e interrompido com erro no log,
+identificando o mod.

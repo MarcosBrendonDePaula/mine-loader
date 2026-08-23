@@ -132,10 +132,15 @@ class PlatformBridgeTest {
             return inventory.getOrDefault(itemId, 0);
         }
 
+        /** Capacidade simulada: acima disso o item nao cabe e e reportado como derrubado. */
+        int capacity = Integer.MAX_VALUE;
+
         @Override
         public int giveItem(String itemId, int count) {
-            inventory.merge(itemId, count, Integer::sum);
-            return 0;
+            int atual = inventory.getOrDefault(itemId, 0);
+            int cabe = Math.max(0, Math.min(count, capacity - atual));
+            if (cabe > 0) inventory.put(itemId, atual + cabe);
+            return count - cabe;
         }
 
         @Override

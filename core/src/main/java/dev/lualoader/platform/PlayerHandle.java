@@ -25,7 +25,7 @@ public interface PlayerHandle {
     /**
      * Coloca itens no inventário.
      *
-     * @return quantidade que não coube e foi devolvida ao mundo ou perdida
+     * @return quantidade que não coube no inventário e foi derrubada no mundo
      */
     int giveItem(String itemId, int count);
 

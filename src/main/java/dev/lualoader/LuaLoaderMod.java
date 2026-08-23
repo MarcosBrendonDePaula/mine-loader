@@ -110,6 +110,11 @@ public final class LuaLoaderMod implements ModInitializer {
         return loadedMods;
     }
 
+    /** Adaptador de plataforma em uso, necessario para publicar a dimensao do evento. */
+    public static FabricGameBridge gameBridge() {
+        return gameBridge;
+    }
+
     public static ContentRegistrar contentRegistrar() {
         return contentRegistrar;
     }

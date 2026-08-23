@@ -85,6 +85,14 @@ public class DeclarativeItem extends Item {
                 position == null ? 0 : position[2],
                 position != null
         );
-        return runtime.triggerItem(event, new FabricPlayerHandle(serverPlayer), data);
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge != null && world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+            bridge.setCurrentWorld(serverWorld);
+        }
+        try {
+            return runtime.triggerItem(event, new FabricPlayerHandle(serverPlayer), data);
+        } finally {
+            if (bridge != null) bridge.setCurrentWorld(null);
+        }
     }
 }

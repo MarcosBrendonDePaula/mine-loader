@@ -55,19 +55,22 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     public int giveItem(String itemId, int count) {
         Item item = resolveItem(itemId);
         int restante = count;
+        int derrubados = 0;
 
-        // insertStack respeita empilhamento e slots livres; o que sobrar cai no mundo, para o
-        // item nao desaparecer silenciosamente quando o inventario esta cheio.
         while (restante > 0) {
             int lote = Math.min(restante, item.getMaxCount());
             ItemStack stack = new ItemStack(item, lote);
-            boolean coube = player.getInventory().insertStack(stack);
-            if (!coube || !stack.isEmpty()) {
+
+            player.getInventory().insertStack(stack);
+            if (!stack.isEmpty()) {
+                // O que nao coube cai no mundo, para o item nao sumir em silencio, e e reportado
+                // ao script, que pode querer avisar o jogador ou desfazer a operacao.
+                derrubados += stack.getCount();
                 player.dropItem(stack, false);
             }
             restante -= lote;
         }
-        return 0;
+        return derrubados;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package dev.lualoader.minecraft;
 
+import dev.lualoader.LuaLoaderMod;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.platform.BlockEventData;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
@@ -71,6 +72,15 @@ public final class BlockInteractionEvents {
                 state.get(DeclarativeBlock.LUA_VARIANT),
                 registrar.variantCount(id)
         );
-        return runtime.triggerBlock(event, new FabricPlayerHandle(serverPlayer), data);
+        // O evento carrega a dimensao em que aconteceu, para o script atuar no lugar certo.
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge != null && world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+            bridge.setCurrentWorld(serverWorld);
+        }
+        try {
+            return runtime.triggerBlock(event, new FabricPlayerHandle(serverPlayer), data);
+        } finally {
+            if (bridge != null) bridge.setCurrentWorld(null);
+        }
     }
 }

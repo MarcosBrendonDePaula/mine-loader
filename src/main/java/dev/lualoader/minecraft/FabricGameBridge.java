@@ -12,6 +12,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
@@ -26,6 +27,18 @@ public final class FabricGameBridge implements GameBridge {
     private final BlockRegistrar registrar;
     private MinecraftServer server;
 
+    /**
+     * Mundo em que o evento corrente aconteceu.
+     *
+     * <p>Sem isto todas as operacoes agiriam no overworld: um bloco usado no Nether leria e
+     * escreveria dados na dimensao errada, sem erro visivel. O adaptador publica o mundo antes de
+     * entregar o evento ao runtime e o limpa depois, de modo que o script atue onde a acao ocorreu.
+     *
+     * <p>E um campo por thread porque os eventos chegam na thread do servidor, mas o valor nao pode
+     * vazar entre eventos.
+     */
+    private final ThreadLocal<ServerWorld> currentWorld = new ThreadLocal<>();
+
     public FabricGameBridge(BlockRegistrar registrar) {
         this.registrar = registrar;
     }
@@ -33,6 +46,24 @@ public final class FabricGameBridge implements GameBridge {
     /** Atualiza o servidor ativo. Recebe {@code null} quando o servidor para. */
     public void setServer(MinecraftServer server) {
         this.server = server;
+    }
+
+    /** Publica o mundo do evento corrente. Deve ser limpo ao fim do evento. */
+    public void setCurrentWorld(ServerWorld world) {
+        if (world == null) currentWorld.remove();
+        else currentWorld.set(world);
+    }
+
+    /**
+     * Mundo onde as operacoes devem agir.
+     *
+     * <p>Fora de um evento, como em uma tarefa agendada, nao ha dimensao de origem e o overworld e
+     * usado, que e o comportamento previsivel para um script que nao informou onde atuar.
+     */
+    private ServerWorld requireWorld() {
+        ServerWorld world = currentWorld.get();
+        if (world != null) return world;
+        return requireServer().getOverworld();
     }
 
     @Override
@@ -49,7 +80,7 @@ public final class FabricGameBridge implements GameBridge {
     public void setBlockVariant(String blockId, int x, int y, int z, int variant) {
         DeclarativeBlock block = requireDeclarativeBlock(blockId);
         BlockPos pos = new BlockPos(x, y, z);
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
         var current = world.getBlockState(pos);
         // Preserva os demais estados do bloco; usar o estado padrao descartaria
         // luminancia e qualquer propriedade declarada no manifesto.
@@ -73,7 +104,7 @@ public final class FabricGameBridge implements GameBridge {
     public void setBlockLuminance(String blockId, int x, int y, int z, int luminance) {
         DeclarativeBlock block = requireDeclarativeBlock(blockId);
         BlockPos pos = new BlockPos(x, y, z);
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
         var current = world.getBlockState(pos);
         var state = current.isOf(block)
                 ? current.with(DeclarativeBlock.LUA_LUMINANCE, luminance)
@@ -83,7 +114,7 @@ public final class FabricGameBridge implements GameBridge {
 
     @Override
     public String getBlock(int x, int y, int z) {
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
         var state = world.getBlockState(new BlockPos(x, y, z));
         Identifier id = Registries.BLOCK.getId(state.getBlock());
         return id == null ? "minecraft:air" : id.toString();
@@ -92,13 +123,13 @@ public final class FabricGameBridge implements GameBridge {
     @Override
     public void setBlock(String blockId, int x, int y, int z) {
         Block block = requireAnyBlock(blockId);
-        requireServer().getOverworld().setBlockState(new BlockPos(x, y, z), block.getDefaultState(), 3);
+        requireWorld().setBlockState(new BlockPos(x, y, z), block.getDefaultState(), 3);
     }
 
     @Override
     public int fillBlocks(String blockId, int x1, int y1, int z1, int x2, int y2, int z2) {
         Block block = requireAnyBlock(blockId);
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
         var state = block.getDefaultState();
 
         int minX = Math.min(x1, x2);
@@ -138,7 +169,7 @@ public final class FabricGameBridge implements GameBridge {
         SoundEvent sound = Registries.SOUND_EVENT.get(id);
         if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
 
-        requireServer().getOverworld().playSound(
+        requireWorld().playSound(
                 null, new BlockPos(x, y, z), sound, SoundCategory.BLOCKS, volume, pitch);
     }
 
@@ -152,19 +183,19 @@ public final class FabricGameBridge implements GameBridge {
         }
         // A dispersao vale para os tres eixos; a velocidade fica em zero para a particula
         // apenas aparecer, sem ser lancada em uma direcao.
-        requireServer().getOverworld().spawnParticles(effect, x, y, z, count, spread, spread, spread, 0.0);
+        requireWorld().spawnParticles(effect, x, y, z, count, spread, spread, spread, 0.0);
     }
 
     @Override
     public String getBlockData(int x, int y, int z) {
-        var entity = requireServer().getOverworld().getBlockEntity(new BlockPos(x, y, z));
+        var entity = requireWorld().getBlockEntity(new BlockPos(x, y, z));
         if (entity instanceof DeclarativeBlockEntity data) return data.data();
         return "{}";
     }
 
     @Override
     public void setBlockData(int x, int y, int z, String json) {
-        var entity = requireServer().getOverworld().getBlockEntity(new BlockPos(x, y, z));
+        var entity = requireWorld().getBlockEntity(new BlockPos(x, y, z));
         if (!(entity instanceof DeclarativeBlockEntity data)) {
             throw new BridgeException("o bloco em " + x + "," + y + "," + z
                     + " nao foi declarado com block_data");
@@ -179,7 +210,7 @@ public final class FabricGameBridge implements GameBridge {
             throw new BridgeException("entidade desconhecida: " + entityId);
         }
         EntityType<?> type = Registries.ENTITY_TYPE.get(id);
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
 
         Entity entity = type.spawn(world, new BlockPos((int) x, (int) y, (int) z), SpawnReason.COMMAND);
         if (entity == null) throw new BridgeException("nao foi possivel invocar " + entityId);
@@ -190,7 +221,7 @@ public final class FabricGameBridge implements GameBridge {
 
     @Override
     public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
-        var world = requireServer().getOverworld();
+        var world = requireWorld();
         var caixa = new net.minecraft.util.math.Box(
                 x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
 
@@ -216,8 +247,8 @@ public final class FabricGameBridge implements GameBridge {
         Entity entity = findEntity(entityUuid);
         if (entity == null) return false;
 
-        var world = requireServer().getOverworld();
-        return entity.damage(world.getDamageSources().magic(), amount);
+        var world = requireWorld();
+        return entity.damage(requireWorld().getDamageSources().magic(), amount);
     }
 
     private Entity findEntity(String entityUuid) {
