@@ -68,8 +68,8 @@ public class LuaMenu extends GenericContainerScreenHandler {
     @Override
     public void onSlotClick(int slotIndex, int button, SlotActionType actionType, PlayerEntity player) {
         // Cliques no inventário do jogador seguem o comportamento normal do jogo.
-        int gradeSlots = rows * 9;
-        if (slotIndex < 0 || slotIndex >= gradeSlots) {
+        int gridSlots = rows * 9;
+        if (slotIndex < 0 || slotIndex >= gridSlots) {
             super.onSlotClick(slotIndex, button, actionType, player);
             return;
         }
@@ -78,8 +78,8 @@ public class LuaMenu extends GenericContainerScreenHandler {
         var runtime = LuaLoaderMod.luaRuntime();
         if (runtime == null) return;
 
-        ItemStack clicado = contents.getStack(slotIndex);
-        Identifier id = clicado.isEmpty() ? null : Registries.ITEM.getId(clicado.getItem());
+        ItemStack clicked = contents.getStack(slotIndex);
+        Identifier id = clicked.isEmpty() ? null : Registries.ITEM.getId(clicked.getItem());
 
         runtime.triggerMenuClick(
                 modId,
@@ -118,33 +118,33 @@ public class LuaMenu extends GenericContainerScreenHandler {
         inventory.clear();
         int index = 0;
 
-        for (String linha : items) {
+        for (String line : items) {
             if (index >= rows * 9) break;
-            if (linha == null || linha.isBlank()) {
+            if (line == null || line.isBlank()) {
                 index++;
                 continue;
             }
 
-            String[] partes = linha.split(";", 3);
-            Identifier id = Identifier.tryParse(partes[0].trim());
+            String[] parts = line.split(";", 3);
+            Identifier id = Identifier.tryParse(parts[0].trim());
             if (id == null || !Registries.ITEM.containsId(id)) {
                 index++;
                 continue;
             }
 
             int count = 1;
-            if (partes.length > 1 && !partes[1].isBlank()) {
+            if (parts.length > 1 && !parts[1].isBlank()) {
                 try {
-                    count = Math.max(1, Math.min(64, Integer.parseInt(partes[1].trim())));
+                    count = Math.max(1, Math.min(64, Integer.parseInt(parts[1].trim())));
                 } catch (NumberFormatException ignored) {
                     count = 1;
                 }
             }
 
             ItemStack stack = new ItemStack(Registries.ITEM.get(id), count);
-            if (partes.length > 2 && !partes[2].isBlank()) {
+            if (parts.length > 2 && !parts[2].isBlank()) {
                 stack.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME,
-                        Text.literal(partes[2].trim()));
+                        Text.literal(parts[2].trim()));
             }
             inventory.setStack(index++, stack);
         }

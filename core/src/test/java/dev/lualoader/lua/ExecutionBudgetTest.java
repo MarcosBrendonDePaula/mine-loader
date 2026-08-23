@@ -66,13 +66,13 @@ class ExecutionBudgetTest {
                 end)
                 """));
 
-        long inicio = System.nanoTime();
+        long start = System.nanoTime();
         runtime.triggerBlock("block_used", null, new BlockEventData("budget_mod:b", 0, 0, 0, 0, 1));
-        long decorrido = (System.nanoTime() - inicio) / 1_000_000L;
+        long elapsed = (System.nanoTime() - start) / 1_000_000L;
 
         // O tempo exato varia com a maquina; o que importa e ter terminado, e rapido.
-        assertTrue(decorrido < 5_000,
-                "o laco infinito deveria ter sido cortado, mas levou " + decorrido + " ms");
+        assertTrue(elapsed < 5_000,
+                "o laco infinito deveria ter sido cortado, mas levou " + elapsed + " ms");
     }
 
     @Test
@@ -94,9 +94,9 @@ class ExecutionBudgetTest {
                 end)
                 """));
 
-        var evento = new BlockEventData("budget_mod:b", 0, 0, 0, 0, 1);
-        runtime.triggerBlock("block_used", null, evento);
-        runtime.triggerBlock("block_used", null, evento);
+        var event = new BlockEventData("budget_mod:b", 0, 0, 0, 0, 1);
+        runtime.triggerBlock("block_used", null, event);
+        runtime.triggerBlock("block_used", null, event);
 
         assertEquals(List.of("segunda chamada rodou"), bridge.calls,
                 "o limite vale por callback: o seguinte precisa rodar normalmente");

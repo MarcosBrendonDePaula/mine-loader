@@ -185,13 +185,13 @@ public final class ModLoader {
             if ("shaped".equals(type)) {
                 require(recipe.pattern != null && !recipe.pattern.isEmpty() && recipe.pattern.size() <= 3,
                         "receita " + recipe.id + " precisa de 1 a 3 linhas em pattern");
-                for (String linha : recipe.pattern) {
-                    require(linha != null && !linha.isEmpty() && linha.length() <= 3,
-                            "linha de pattern invalida em " + recipe.id + ": " + linha);
-                    for (char simbolo : linha.toCharArray()) {
+                for (String line : recipe.pattern) {
+                    require(line != null && !line.isEmpty() && line.length() <= 3,
+                            "linha de pattern invalida em " + recipe.id + ": " + line);
+                    for (char symbol : line.toCharArray()) {
                         // Espaco significa slot vazio e nao precisa estar na chave.
-                        require(simbolo == ' ' || recipe.key.containsKey(String.valueOf(simbolo)),
-                                "simbolo fora da key em " + recipe.id + ": " + simbolo);
+                        require(symbol == ' ' || recipe.key.containsKey(String.valueOf(symbol)),
+                                "simbolo fora da key em " + recipe.id + ": " + symbol);
                     }
                 }
                 for (Map.Entry<String, String> entry : recipe.key.entrySet()) {
@@ -204,8 +204,8 @@ public final class ModLoader {
                 require(recipe.ingredients != null && !recipe.ingredients.isEmpty()
                                 && recipe.ingredients.size() <= 9,
                         "receita " + recipe.id + " precisa de 1 a 9 ingredientes");
-                for (String ingrediente : recipe.ingredients) {
-                    require(ingrediente != null && ingrediente.indexOf(':') > 0,
+                for (String ingredient : recipe.ingredients) {
+                    require(ingredient != null && ingredient.indexOf(':') > 0,
                             "ingrediente precisa do formato mod:item em " + recipe.id);
                 }
             }

@@ -35,10 +35,10 @@ class ModuleImportTest {
         }
     }
 
-    private void write(Path dir, String nome, String conteudo) throws IOException {
-        Path arquivo = dir.resolve(nome);
-        Files.createDirectories(arquivo.getParent());
-        Files.writeString(arquivo, conteudo, StandardCharsets.UTF_8);
+    private void write(Path dir, String name, String content) throws IOException {
+        Path file = dir.resolve(name);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, content, StandardCharsets.UTF_8);
     }
 
     private ModLoader.LoadedMod writeMod(Path root, String main) throws IOException {

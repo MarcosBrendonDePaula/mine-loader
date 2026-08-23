@@ -76,8 +76,8 @@ public final class ResourcePackAssembler {
         for (ModManifest.RecipeDefinition recipe : mod.manifest().recipes) {
             if (recipe == null || recipe.id == null || recipe.result == null) continue;
 
-            String tipo = recipe.type == null ? "shaped" : recipe.type.trim().toLowerCase(java.util.Locale.ROOT);
-            String json = switch (tipo) {
+            String type = recipe.type == null ? "shaped" : recipe.type.trim().toLowerCase(java.util.Locale.ROOT);
+            String json = switch (type) {
                 case "shapeless" -> shapelessRecipe(recipe);
                 case "shaped" -> shapedRecipe(recipe);
                 default -> null;
@@ -89,40 +89,40 @@ public final class ResourcePackAssembler {
 
             write(generatedRoot.resolve("data").resolve(namespace).resolve("recipe")
                     .resolve(recipe.id + ".json"), json);
-            logger.info("Receita {}:{} gerada ({})", namespace, recipe.id, tipo);
+            logger.info("Receita {}:{} gerada ({})", namespace, recipe.id, type);
         }
     }
 
     private String shapedRecipe(ModManifest.RecipeDefinition recipe) {
-        List<String> linhas = new ArrayList<>();
-        for (String linha : recipe.pattern) linhas.add(quote(linha));
+        List<String> lines = new ArrayList<>();
+        for (String line : recipe.pattern) lines.add(quote(line));
 
-        List<String> chaves = new ArrayList<>();
+        List<String> keys = new ArrayList<>();
         for (Map.Entry<String, String> entry : recipe.key.entrySet()) {
-            chaves.add("    " + quote(entry.getKey()) + ": {" + quote("item") + ": "
+            keys.add("    " + quote(entry.getKey()) + ": {" + quote("item") + ": "
                     + quote(entry.getValue()) + "}");
         }
 
         return "{" + NEWLINE
                 + "  " + quote("type") + ": " + quote("minecraft:crafting_shaped") + "," + NEWLINE
                 + groupLine(recipe)
-                + "  " + quote("pattern") + ": [" + String.join(", ", linhas) + "]," + NEWLINE
-                + "  " + quote("key") + ": {" + NEWLINE + String.join("," + NEWLINE, chaves) + NEWLINE
+                + "  " + quote("pattern") + ": [" + String.join(", ", lines) + "]," + NEWLINE
+                + "  " + quote("key") + ": {" + NEWLINE + String.join("," + NEWLINE, keys) + NEWLINE
                 + "  }," + NEWLINE
                 + resultLine(recipe) + NEWLINE
                 + "}" + NEWLINE;
     }
 
     private String shapelessRecipe(ModManifest.RecipeDefinition recipe) {
-        List<String> itens = new ArrayList<>();
-        for (String ingrediente : recipe.ingredients) {
-            itens.add("{" + quote("item") + ": " + quote(ingrediente) + "}");
+        List<String> items = new ArrayList<>();
+        for (String ingredient : recipe.ingredients) {
+            items.add("{" + quote("item") + ": " + quote(ingredient) + "}");
         }
 
         return "{" + NEWLINE
                 + "  " + quote("type") + ": " + quote("minecraft:crafting_shapeless") + "," + NEWLINE
                 + groupLine(recipe)
-                + "  " + quote("ingredients") + ": [" + String.join(", ", itens) + "]," + NEWLINE
+                + "  " + quote("ingredients") + ": [" + String.join(", ", items) + "]," + NEWLINE
                 + resultLine(recipe) + NEWLINE
                 + "}" + NEWLINE;
     }

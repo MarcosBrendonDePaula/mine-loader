@@ -417,13 +417,13 @@ class PlatformBridgeTest {
                 """);
         runtime.load(mod);
 
-        var evento = new BlockEventData("test_mod:bloco", 0, 0, 0, 0, 1);
-        runtime.triggerBlock("block_used", null, evento);
-        runtime.triggerBlock("block_used", null, evento);
+        var event = new BlockEventData("test_mod:bloco", 0, 0, 0, 0, 1);
+        runtime.triggerBlock("block_used", null, event);
+        runtime.triggerBlock("block_used", null, event);
 
         // Recarregar o script nao pode apagar o que o mod acumulou.
         runtime.reload("test_mod");
-        runtime.triggerBlock("block_used", null, evento);
+        runtime.triggerBlock("block_used", null, event);
 
         assertEquals(List.of(
                 "broadcast:cliques: 1",
@@ -827,13 +827,13 @@ class PlatformBridgeTest {
                 end)
                 """));
 
-        var primeiro = new BlockEventData("test_mod:bloco", 1, 1, 1, 0, 1);
-        var segundo = new BlockEventData("test_mod:bloco", 9, 9, 9, 0, 1);
+        var first = new BlockEventData("test_mod:bloco", 1, 1, 1, 0, 1);
+        var second = new BlockEventData("test_mod:bloco", 9, 9, 9, 0, 1);
 
-        runtime.triggerBlock("block_used", null, primeiro);
-        runtime.triggerBlock("block_used", null, primeiro);
+        runtime.triggerBlock("block_used", null, first);
+        runtime.triggerBlock("block_used", null, first);
         // Outra posicao tem contagem propria: o dado pertence ao bloco, nao ao mod.
-        runtime.triggerBlock("block_used", null, segundo);
+        runtime.triggerBlock("block_used", null, second);
 
         assertEquals(List.of(
                 "broadcast:usos aqui: 1",

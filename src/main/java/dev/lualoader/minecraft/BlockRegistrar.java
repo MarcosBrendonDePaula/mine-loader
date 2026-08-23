@@ -46,7 +46,7 @@ public final class BlockRegistrar {
             DeclarativeBlock.beginConstruction(declaredState);
             try {
                 // Um bloco so paga o custo de guardar dados quando o manifesto pede.
-                boolean comDados = definition.blockData;
+                boolean withData = definition.blockData;
                 var outline = definition.shape == null
                         ? null
                         : DeclarativeShapes.byName(definition.shape.outline);
@@ -55,7 +55,7 @@ public final class BlockRegistrar {
                         : DeclarativeShapes.byName(definition.shape.collision);
 
                 var settings = BlockSettingsFactory.create(definition);
-                if (comDados) {
+                if (withData) {
                     block = new DeclarativeDataBlock(settings,
                             values.hardness, values.resistance, values.slipperiness,
                             values.velocityMultiplier, values.jumpVelocityMultiplier);

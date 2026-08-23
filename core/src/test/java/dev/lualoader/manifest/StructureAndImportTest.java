@@ -276,13 +276,13 @@ class StructureAndImportTest {
     void unpinnedImportFallsBackToLastKnownCopy(@TempDir Path root) throws Exception {
         // Sem hash o recurso e buscado a cada carga; se a rede falhar, a ultima copia conhecida
         // mantem o mod vivo em vez de derruba-lo.
-        String conteudo = "{\"id\": \"ultimo\", \"name\": \"Ultimo Conhecido\"}";
+        String content = "{\"id\": \"ultimo\", \"name\": \"Ultimo Conhecido\"}";
         String url = "https://exemplo.invalido/bloco.json";
 
         Path cache = root.resolve("cache");
         Files.createDirectories(cache);
-        String chaveDaUrl = sha256Hex(url);
-        Files.writeString(cache.resolve(chaveDaUrl + ".latest"), conteudo, StandardCharsets.UTF_8);
+        String urlKey = sha256Hex(url);
+        Files.writeString(cache.resolve(urlKey + ".latest"), content, StandardCharsets.UTF_8);
 
         writeMod(root, """
                 {
@@ -319,13 +319,13 @@ class StructureAndImportTest {
 
     @Test
     void remoteImportLoadsFromCacheWithoutNetwork(@TempDir Path root) throws Exception {
-        String conteudo = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
-        String hash = sha256Hex(conteudo);
+        String content = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
+        String hash = sha256Hex(content);
 
         // O cache e indexado por hash: um pedaco ja verificado nao volta a rede.
         Path cache = root.resolve("cache");
         Files.createDirectories(cache);
-        Files.writeString(cache.resolve(hash + ".fixed"), conteudo, StandardCharsets.UTF_8);
+        Files.writeString(cache.resolve(hash + ".fixed"), content, StandardCharsets.UTF_8);
 
         writeMod(root, """
                 {
@@ -348,12 +348,12 @@ class StructureAndImportTest {
     void cachedContentWithWrongHashIsNotSilentlyAccepted(@TempDir Path root) throws Exception {
         // Arquivo gravado sob um hash que nao corresponde ao conteudo: o nome do arquivo e a
         // garantia, entao o loader nao pode aceitar um manifesto adulterado no cache.
-        String conteudo = "{\"id\": \"adulterado\", \"name\": \"X\"}";
-        String hashDeOutraCoisa = sha256Hex("{\"id\": \"original\"}");
+        String content = "{\"id\": \"adulterado\", \"name\": \"X\"}";
+        String hashOfSomethingElse = sha256Hex("{\"id\": \"original\"}");
 
         Path cache = root.resolve("cache");
         Files.createDirectories(cache);
-        Files.writeString(cache.resolve(hashDeOutraCoisa + ".fixed"), conteudo, StandardCharsets.UTF_8);
+        Files.writeString(cache.resolve(hashOfSomethingElse + ".fixed"), content, StandardCharsets.UTF_8);
 
         writeMod(root, """
                 {
@@ -364,7 +364,7 @@ class StructureAndImportTest {
                   "entrypoint": "main.lua",
                   "blocks": [{"$import": "https://exemplo.invalido/bloco.json", "sha256": "%s"}]
                 }
-                """.formatted(hashDeOutraCoisa));
+                """.formatted(hashOfSomethingElse));
 
         var mods = new ModLoader(LoggerFactory.getLogger("test"), cache).discover(root);
         assertEquals("adulterado", mods.get(0).manifest().blocks.get(0).id,
@@ -391,12 +391,12 @@ class StructureAndImportTest {
         // A base remota permite instalar um mod publicado na web com um manifesto pequeno: o
         // arquivo nao existe no disco e e buscado sob a base. Aqui o cache faz o papel da rede.
         String base = "https://exemplo.invalido/meu_mod/";
-        String bloco = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
+        String block = "{\"id\": \"remoto\", \"name\": \"Bloco Remoto\"}";
 
         Path cache = root.resolve("cache");
         Files.createDirectories(cache);
         Files.writeString(cache.resolve(sha256Hex(base + "parts/bloco.json") + ".latest"),
-                bloco, StandardCharsets.UTF_8);
+                block, StandardCharsets.UTF_8);
 
         writeMod(root, """
                 {
