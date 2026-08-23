@@ -9,6 +9,16 @@ package dev.lualoader.platform;
  * e por traduzir falhas para {@link BridgeException}.
  */
 public interface GameBridge {
+    /**
+     * Capacidades que um bloco pode oferecer, nomeadas pelo loader e não por nenhuma plataforma.
+     *
+     * <p>Cada adaptador traduz para o mecanismo da casa: no Fabric é a Transfer API, no NeoForge são
+     * as capabilities, no Paper é o inventário do Bukkit. Nenhuma das três aparece aqui, e é isso
+     * que faz um mod escrito para este loader rodar nas outras sem mudar uma linha — algo que
+     * escrever direto para Fabric ou NeoForge não permite.
+     */
+    java.util.Set<String> CAPABILITIES = java.util.Set.of("items", "fluid", "energy");
+
     /** Envia uma mensagem pública a todos os jogadores conectados. */
     void broadcast(String message);
 
@@ -171,6 +181,47 @@ public interface GameBridge {
      */
     java.util.List<String> droppedBy(String itemId, int limit);
 
+    /**
+     * Capacidades que o bloco naquela posição oferece.
+     *
+     * <p>É a fronteira com o resto do ecossistema. Um baú, um forno e a máquina de outro mod
+     * expõem, cada plataforma à sua maneira, a mesma ideia: aqui dentro há itens que podem ser
+     * lidos, tirados e postos. O núcleo nomeia essa ideia; o adaptador sabe como perguntá-la.
+     *
+     * <p>Os nomes são um vocabulário fechado — {@code items}, {@code fluid}, {@code energy} — e não
+     * os nomes de nenhuma API: {@code Storage} é do Fabric, {@code IItemHandler} é do NeoForge e
+     * {@code Inventory} é do Bukkit. Se o contrato citasse um deles, um mod escrito para este
+     * loader deixaria de rodar nos outros, que é exatamente o que esta camada existe para impedir.
+     *
+     * @return nomes das capacidades presentes, possivelmente vazio
+     */
+    java.util.Set<String> capabilitiesAt(int x, int y, int z);
+
+    /**
+     * Conteúdo do inventário naquela posição.
+     *
+     * @return uma linha por slot ocupado, no formato {@code slot;item;quantidade}
+     */
+    java.util.List<String> containerAt(int x, int y, int z);
+
+    /**
+     * Coloca itens no inventário daquela posição.
+     *
+     * <p>Devolve o que sobrou, e não o que entrou, pela mesma razão que {@code giveItem}: um script
+     * que ignora o retorno pelo menos não some com item, e um que o lê descobre o inventário cheio
+     * sem precisar contar antes.
+     *
+     * @return quantidade que não coube
+     */
+    int insertInto(int x, int y, int z, String itemId, int count);
+
+    /**
+     * Retira itens do inventário daquela posição.
+     *
+     * @return quantidade efetivamente retirada, que pode ser menor que a pedida
+     */
+    int extractFrom(int x, int y, int z, String itemId, int count);
+
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {
         @Override
@@ -281,6 +332,26 @@ public interface GameBridge {
 
         @Override
         public java.util.List<String> recipesUsing(String itemId, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.Set<String> capabilitiesAt(int x, int y, int z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> containerAt(int x, int y, int z) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public int insertInto(int x, int y, int z, String itemId, int count) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public int extractFrom(int x, int y, int z, String itemId, int count) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
 

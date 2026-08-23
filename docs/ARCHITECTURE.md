@@ -43,6 +43,17 @@ O `fill` existe como operacao propria porque preencher bloco a bloco a partir do
 
 Os limites ficam no nucleo, nao no adaptador, para valerem em qualquer plataforma e serem testaveis sem abrir o jogo: um `fill` aceita no maximo 32.768 blocos, o equivalente a um cubo de 32 de lado, e coordenadas fora de 30.000.000 sao recusadas. Sem esses limites, um erro de script pediria bilhoes de blocos e travaria a thread do servidor.
 
+### Vocabulario proprio para o que as plataformas nomeiam diferente
+
+Quando duas plataformas resolvem a mesma ideia com APIs incompativeis, o nucleo inventa o nome e o
+adaptador traduz. Inventario de bloco e o caso claro: `Storage<ItemVariant>` no Fabric,
+`IItemHandler` no NeoForge, `Inventory` no Bukkit. O contrato fala de `items` numa posicao, e nenhum
+dos tres aparece nele.
+
+O custo e um nome a mais para aprender. O ganho e que um mod escrito para o loader roda em qualquer
+plataforma que tenha adaptador, sem mudar uma linha -- e alcanca a maquina de um mod de terceiros
+sem que esse mod conheca o loader, porque o que ele implementou foi o padrao da propria plataforma.
+
 ### Acrescentar outra plataforma
 
 Um novo alvo (NeoForge, por exemplo) não altera o núcleo. Ele precisa de um módulo próprio que forneça quatro coisas: o entrypoint do loader, a implementação de `GameBridge`, a implementação de `PlayerHandle` e o registro de conteúdo declarativo equivalente ao `BlockRegistrar`, além da geração do resource pack virtual na API daquela plataforma. Manifesto, sandbox Lua, permissões e validação são compartilhados sem duplicação.

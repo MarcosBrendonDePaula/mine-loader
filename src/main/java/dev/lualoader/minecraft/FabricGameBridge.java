@@ -1,5 +1,6 @@
 package dev.lualoader.minecraft;
 
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.recipe.Ingredient;
 import net.minecraft.recipe.Recipe;
@@ -494,6 +495,95 @@ public final class FabricGameBridge implements GameBridge {
             }
         }
         return items;
+    }
+
+    @Override
+    public java.util.Set<String> capabilitiesAt(int x, int y, int z) {
+        java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        if (itemStorageAt(x, y, z) != null) found.add("items");
+
+        // Fluido e energia entram quando houver operacao para eles. Anunciar uma capacidade que o
+        // loader nao sabe usar faria o mod perguntar e nao ter o que fazer com a resposta.
+        return found;
+    }
+
+    @Override
+    public java.util.List<String> containerAt(int x, int y, int z) {
+        var storage = itemStorageAt(x, y, z);
+        if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+
+        java.util.List<String> contents = new java.util.ArrayList<>();
+        int slot = 0;
+
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            for (var view : storage) {
+                var resource = view.getResource();
+                long amount = view.getAmount();
+
+                // Um slot vazio ainda e um slot: contar a posicao dele mantem os indices estaveis
+                // entre leituras, que e o que permite a um script falar "o terceiro slot".
+                if (!resource.isBlank() && amount > 0) {
+                    contents.add(slot + ";"
+                            + Registries.ITEM.getId(resource.getItem()) + ";" + amount);
+                }
+                slot++;
+            }
+            transaction.abort();
+        }
+        return contents;
+    }
+
+    @Override
+    public int insertInto(int x, int y, int z, String itemId, int count) {
+        var storage = itemStorageAt(x, y, z);
+        if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+
+        var variant = net.fabricmc.fabric.api.transfer.v1.item.ItemVariant.of(
+                resolveItemForTransfer(itemId));
+
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            long inserted = storage.insert(variant, count, transaction);
+            transaction.commit();
+            return (int) (count - inserted);
+        }
+    }
+
+    @Override
+    public int extractFrom(int x, int y, int z, String itemId, int count) {
+        var storage = itemStorageAt(x, y, z);
+        if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+
+        var variant = net.fabricmc.fabric.api.transfer.v1.item.ItemVariant.of(
+                resolveItemForTransfer(itemId));
+
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            long extracted = storage.extract(variant, count, transaction);
+            transaction.commit();
+            return (int) extracted;
+        }
+    }
+
+    /**
+     * O inventario de um bloco, pelo contrato comum do Fabric.
+     *
+     * <p>E o que faz o loader alcancar a maquina de outro mod sem saber que ela existe: qualquer
+     * bloco que exponha o armazenamento padrao responde, seja um bau do jogo ou um forno de mod.
+     */
+    private net.fabricmc.fabric.api.transfer.v1.storage.Storage<
+            net.fabricmc.fabric.api.transfer.v1.item.ItemVariant> itemStorageAt(int x, int y, int z) {
+        return net.fabricmc.fabric.api.transfer.v1.item.ItemStorage.SIDED.find(
+                requireWorld(), new BlockPos(x, y, z), null);
+    }
+
+    private static Item resolveItemForTransfer(String itemId) {
+        Identifier id = parseIdentifier(itemId);
+        if (!Registries.ITEM.containsId(id)) {
+            throw new BridgeException("item desconhecido: " + itemId);
+        }
+        return Registries.ITEM.get(id);
     }
 
     private Entity findEntity(String entityUuid) {

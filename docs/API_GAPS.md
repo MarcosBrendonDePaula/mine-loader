@@ -21,6 +21,7 @@ que trata de quando o código roda; aqui a pergunta é o que o código consegue 
 | Tela do jogo | `set_overlay`, `clear_overlay` |
 | Registro do jogo | `items`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
 | Processos do mod | `mod.process`, `processes` |
+| Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
 | Tela do jogador | `screen_size` |
 | Leitura do servidor | `players`, `time_of_day`, `world_name` |
 | Entidades | `spawn_entity`, `entities_near`, `remove_entity`, `damage_entity` |
@@ -164,6 +165,44 @@ daquele mod, junto com as telas e as tarefas.
 O formato ficou proximo do de uma receita do jogo de proposito, para um catalogo desenhar os dois
 com o mesmo codigo em vez de manter dois desenhos paralelos.
 
+## Falar com o resto do ecossistema
+
+Um catalogo le o jogo. Operar o jogo -- tirar carvao de um bau, alimentar a maquina de outro mod --
+exige alcancar o inventario de um bloco, e e ai que a portabilidade fica em risco.
+
+Cada plataforma tem o proprio mecanismo para isso, e os tres sao incompativeis:
+
+| Plataforma | Mecanismo |
+|---|---|
+| Fabric | Transfer API, `Storage<ItemVariant>` |
+| NeoForge | Capabilities, `IItemHandler` |
+| Paper | `Inventory`, do Bukkit |
+
+Se o contrato citasse um deles, um mod escrito para este loader deixaria de rodar nos outros. Por
+isso o nucleo nomeia a **ideia**, e nao a API:
+
+```lua
+local capacidades = ctx.server.capabilities_at(x, y, z)   -- { "items" }
+local conteudo    = ctx.server.container_at(x, y, z)      -- { {slot=, item=, count=} }
+local sobrou      = ctx.server.insert_into(x, y, z, "minecraft:coal", 8)
+local pegou       = ctx.server.extract_from(x, y, z, "minecraft:iron_ingot", 4)
+```
+
+O vocabulario de capacidades e fechado -- `items`, `fluid`, `energy` -- e cada adaptador traduz para
+o mecanismo da casa. Hoje so `items` tem operacoes; as outras duas estao previstas e ainda nao
+respondem, porque anunciar uma capacidade que o loader nao sabe usar faria o mod perguntar e nao ter
+o que fazer com a resposta.
+
+**E isso que os mod loaders nao dao.** Quem escreve para Fabric reescreve para NeoForge, porque as
+duas APIs nao se conhecem. Um mod Lua escrito para este loader roda nas duas assim que houver
+adaptador, sem mudar uma linha -- e alcanca a maquina de um mod de terceiros sem que esse mod saiba
+que o loader existe, porque o que ele implementou foi o padrao da plataforma dele.
+
+**O que isso nao resolve.** Chamar codigo de outro mod continua fora: nao ha ponte para a API Java
+dele, e nem deveria haver -- um script de terceiros com acesso a JVM seria o fim do sandbox. E uma
+mecanica que o outro mod executa sem registrar receita nem expor inventario permanece invisivel,
+pelo mesmo motivo que a tosquia permanecia: o jogo sabe fazer e nao sabe dizer.
+
 ## Prioridade sugerida
 
 A ordem considera quantos tipos de mod cada item destrava, e não a dificuldade.
@@ -232,6 +271,7 @@ Dimensões próprias e geração de mundo seguem inteiramente fora do alcance.
 | `player.menu` | Abrir e fechar menus, telas, HUD e sobreposições |
 | `world.read` | Ler blocos, dados de bloco, tocar som e emitir partículas |
 | `world.write` | Alterar blocos, preencher regiões, posicionar estruturas, gravar dados |
+| `world.containers` | Ler e mexer no inventário de um bloco |
 | `entity.read` | Listar entidades próximas |
 | `entity.spawn` | Invocar entidades |
 | `entity.modify` | Remover e machucar entidades |

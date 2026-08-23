@@ -1139,6 +1139,77 @@ public final class LuaRuntime {
             }
         });
 
+        serverApi.set("capabilities_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("capabilities_at exige x, y e z");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String capability : bridge.capabilitiesAt(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)))) {
+                    list.set(index++, LuaValue.valueOf(capability));
+                }
+                return list;
+            }
+        });
+        serverApi.set("container_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 3) throw new LuaError("container_at exige x, y e z");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String line : bridge.containerAt(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)))) {
+                    String[] parts = line.split(";");
+                    if (parts.length < 3) continue;
+
+                    LuaTable entry = new LuaTable();
+                    entry.set("slot", LuaValue.valueOf(Integer.parseInt(parts[0])));
+                    entry.set("item", LuaValue.valueOf(parts[1]));
+                    entry.set("count", LuaValue.valueOf(Integer.parseInt(parts[2])));
+                    list.set(index++, entry);
+                }
+                return list;
+            }
+        });
+        serverApi.set("insert_into", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 5) {
+                    throw new LuaError("insert_into exige x, y, z, item e quantidade");
+                }
+                return LuaValue.valueOf(bridge.insertInto(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)),
+                        requireIdentifier(args.arg(4).tojstring()),
+                        requireCount(args.arg(5))));
+            }
+        });
+        serverApi.set("extract_from", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 5) {
+                    throw new LuaError("extract_from exige x, y, z, item e quantidade");
+                }
+                return LuaValue.valueOf(bridge.extractFrom(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)),
+                        requireIdentifier(args.arg(4).tojstring()),
+                        requireCount(args.arg(5))));
+            }
+        });
         serverApi.set("drops_of", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {

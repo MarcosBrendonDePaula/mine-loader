@@ -1340,6 +1340,79 @@ class ScreenTest {
     }
 
     @Test
+    void containersAreReachedThroughANeutralVocabulary(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.containers.put("10,64,20", new java.util.LinkedHashMap<>(
+                java.util.Map.of("minecraft:coal", 12)));
+
+        LuaRuntime runtime = runtime(bridge);
+
+        // O script fala de itens em uma posicao, e nao de Storage, IItemHandler ou Inventory. E o
+        // que faz o mesmo mod rodar em qualquer plataforma que tenha adaptador.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local capacidades = ctx.server.capabilities_at(10, 64, 20)
+                    local antes = ctx.server.container_at(10, 64, 20)
+
+                    local sobrou = ctx.server.insert_into(10, 64, 20, "minecraft:iron_ingot", 5)
+                    local pegou = ctx.server.extract_from(10, 64, 20, "minecraft:coal", 8)
+
+                    local depois = ctx.server.container_at(10, 64, 20)
+                    ctx.server.broadcast(capacidades[1] .. "|" .. antes[1].item
+                        .. "x" .. antes[1].count)
+                    ctx.server.broadcast(sobrou .. "|" .. pegou .. "|" .. #depois)
+                end)
+                """, "\"chat.send\", \"world.read\", \"world.containers\""));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("items|minecraft:coalx12", "0|8|2"), bridge.calls);
+    }
+
+    @Test
+    void containerAccessNeedsItsOwnPermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.containers.put("0,0,0", new java.util.LinkedHashMap<>());
+
+        LuaRuntime runtime = runtime(bridge);
+
+        // Mexer no inventario de um bloco e mais que ler o mundo: um mod que so consulta nao
+        // deveria conseguir esvaziar um bau.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function()
+                        ctx.server.extract_from(0, 0, 0, "minecraft:stone", 1)
+                    end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """, "\"chat.send\", \"world.read\""));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("false"), bridge.calls);
+    }
+
+    @Test
+    void aPlaceWithoutAContainerSaysSo(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local nada = ctx.server.capabilities_at(1, 2, 3)
+                    local ok, erro = pcall(function() ctx.server.container_at(1, 2, 3) end)
+                    ctx.server.broadcast(#nada .. "|" .. tostring(ok) .. "|" .. tostring(erro))
+                end)
+                """, "\"chat.send\", \"world.read\", \"world.containers\""));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(1, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).startsWith("0|false|"), bridge.calls.get(0));
+        assertTrue(bridge.calls.get(0).contains("nao ha inventario"), bridge.calls.get(0));
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);

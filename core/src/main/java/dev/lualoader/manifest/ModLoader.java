@@ -120,7 +120,7 @@ public final class ModLoader {
             Set<String> knownPermissions = Set.of(
                     "chat.send", "player.read", "player.inventory", "player.move", "player.menu",
                     "server.read", "server.command.register", "world.read", "world.write",
-                    "entity.read", "entity.spawn", "entity.modify");
+                    "entity.read", "entity.spawn", "entity.modify", "world.containers");
             for (String permission : manifest.permissions) {
                 require(knownPermissions.contains(permission), "permissão desconhecida: " + permission);
             }
