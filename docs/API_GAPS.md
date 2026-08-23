@@ -113,17 +113,28 @@ jogo nao mantem indice reverso, entao cada pergunta custa uma varredura -- do re
 receitas ou dos blocos. Um mod deve guardar o que ja perguntou em vez de repetir a consulta a cada
 quadro.
 
-**Limite dos drops.** So entradas de item da tabela de loot sao lidas. Uma entrada que aponta para
-outra tabela e ignorada, o que afeta alguns baus e mobs.
+**Como os drops sao descobertos.** O loader varre as tabelas de loot carregadas e deduz o dono de
+cada uma pelo nome: `blocks/stone` e do bloco, `entities/sheep/white` e da ovelha. Perguntar a
+tabela de cada bloco e de cada tipo de entidade seria o caminho obvio, e erra -- a ovelha tem uma
+tabela por cor, escolhida dentro da instancia, e o tipo so conhece a generica, que da carne e nao
+la. Varrer resolve os dois casos e ainda descobre variantes que ninguem precisou prever.
+
+**Limites.** So entradas de item sao lidas: uma entrada que aponta para outra tabela e ignorada.
+Tabelas sem dono -- bau de masmorra, pesca, presente de aldeao -- ficam de fora, porque nao
+respondem "o que este bloco derruba".
 
 **O que nao e loot.** Morte de mob e mineracao sao dados, e por isso consultaveis. Ja uma interacao
 que vive em codigo -- tosquiar uma ovelha, encher um balde numa vaca, pegar um peixe com balde --
 nao esta registrada em lugar nenhum do jogo: ele sabe fazer, mas nao sabe dizer. Para aparecer num
 catalogo, precisa ser declarada como processo.
 
-E o mesmo caso de uma mecanica inventada por um mod, e por isso a mesma solucao serve aos dois. Um
-mod de biblioteca pode declarar as interacoes do jogo uma vez, e todo catalogo passa a mostra-las,
-porque o registro de processos e global.
+E o mesmo caso de uma mecanica inventada por um mod, e por isso a mesma solucao serve aos dois. O
+exemplo `processos_vanilla` faz exatamente isso: declara tosquia, ordenha e balde de peixe, e todo
+catalogo passa a mostra-las so por ele estar instalado, porque o registro e global.
+
+Isso nao vive dentro do loader de proposito. O nucleo nao conhece conteudo do jogo -- e a regra que
+o mantem portavel -- e como dado em Lua qualquer um corrige uma linha errada sem esperar uma versao
+nova do loader.
 
 ### Processos: mecanica que o jogo nao conhece
 

@@ -71,6 +71,7 @@ diferente do loader.
 | `loja` | Inventário do jogador: dar, tirar e contar itens |
 | `painel` | Tela desenhada e HUD |
 | `catalogo` | Sobreposição no inventário, grade rolável, busca, receitas, drops e processos |
+| `processos_vanilla` | Declara as interações que o jogo executa em código: tosquia, ordenha, balde de peixe |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.

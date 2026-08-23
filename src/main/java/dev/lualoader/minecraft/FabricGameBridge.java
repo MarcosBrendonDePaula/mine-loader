@@ -52,6 +52,8 @@ public final class FabricGameBridge implements GameBridge {
 
     /** Atualiza o servidor ativo. Recebe {@code null} quando o servidor para. */
     public void setServer(MinecraftServer server) {
+        // Um servidor novo traz datapacks novos, e com eles outras tabelas de loot.
+        this.dropIndex = null;
         this.server = server;
     }
 
@@ -382,22 +384,13 @@ public final class FabricGameBridge implements GameBridge {
     @Override
     public java.util.List<String> dropsOf(String sourceId, int limit) {
         Identifier id = parseIdentifier(sourceId);
-
-        // Bloco ou entidade: um catalogo pergunta "o que isto derruba" sem saber de antemao qual
-        // dos dois e, e obrigar o mod a escolher a chamada certa so passaria o problema adiante.
-        java.util.Set<String> items = new java.util.LinkedHashSet<>();
-        if (Registries.BLOCK.containsId(id)) {
-            items.addAll(itemsOfLootTable(Registries.BLOCK.get(id).getLootTableKey()));
-        }
-        if (Registries.ENTITY_TYPE.containsId(id)) {
-            items.addAll(itemsOfLootTable(Registries.ENTITY_TYPE.get(id).getLootTableId()));
-        }
-        if (items.isEmpty() && !Registries.BLOCK.containsId(id)
-                && !Registries.ENTITY_TYPE.containsId(id)) {
+        if (!Registries.BLOCK.containsId(id) && !Registries.ENTITY_TYPE.containsId(id)) {
             throw new BridgeException("bloco ou entidade desconhecido: " + sourceId);
         }
 
-        java.util.List<String> found = new java.util.ArrayList<>(items);
+        java.util.List<String> found =
+                new java.util.ArrayList<>(dropIndex().getOrDefault(id.toString(),
+                        java.util.Set.of()));
         java.util.Collections.sort(found);
         return found.size() > limit ? found.subList(0, limit) : found;
     }
@@ -405,28 +398,80 @@ public final class FabricGameBridge implements GameBridge {
     @Override
     public java.util.List<String> droppedBy(String itemId, int limit) {
         String wanted = parseIdentifier(itemId).toString();
-        java.util.List<String> found = new java.util.ArrayList<>();
 
-        // Sem indice reverso: a pergunta custa uma varredura dos blocos e das entidades. E o mesmo
-        // custo de consultar receitas, e pelo mesmo motivo tem teto.
-        for (Block block : Registries.BLOCK) {
-            if (found.size() >= limit) break;
-            if (itemsOfLootTable(block.getLootTableKey()).contains(wanted)) {
-                found.add(Registries.BLOCK.getId(block).toString());
-            }
+        java.util.List<String> found = new java.util.ArrayList<>();
+        for (var entry : dropIndex().entrySet()) {
+            if (entry.getValue().contains(wanted)) found.add(entry.getKey());
         }
-        for (EntityType<?> type : Registries.ENTITY_TYPE) {
-            if (found.size() >= limit) break;
-            if (itemsOfLootTable(type.getLootTableId()).contains(wanted)) {
-                found.add(Registries.ENTITY_TYPE.getId(type).toString());
-            }
-        }
+
         java.util.Collections.sort(found);
-        return found;
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    /** Fonte para itens, montado uma vez a partir de todas as tabelas de loot carregadas. */
+    private java.util.Map<String, java.util.Set<String>> dropIndex;
+
+    /**
+     * Indice de quem derruba o que.
+     *
+     * <p>Perguntar a tabela de loot de cada bloco e de cada tipo de entidade parece o caminho
+     * obvio, e erra: a ovelha tem uma tabela por cor, escolhida dentro da instancia conforme a
+     * cor e se ela ja foi tosquiada, e o tipo so conhece a generica -- que da carne, e nao la. O
+     * mesmo vale para qualquer entidade cuja tabela dependa do estado.
+     *
+     * <p>Varrer as tabelas carregadas e olhar o nome de cada uma resolve os dois casos de uma vez,
+     * e ainda descobre variantes que ninguem precisou prever.
+     */
+    private java.util.Map<String, java.util.Set<String>> dropIndex() {
+        if (dropIndex != null) return dropIndex;
+
+        java.util.Map<String, java.util.Set<String>> index = new java.util.HashMap<>();
+        var lookup = requireServer().getReloadableRegistries();
+
+        for (Identifier tableId : lookup.getIds(net.minecraft.registry.RegistryKeys.LOOT_TABLE)) {
+            String owner = ownerOfLootTable(tableId);
+            if (owner == null) continue;
+
+            var key = net.minecraft.registry.RegistryKey.of(
+                    net.minecraft.registry.RegistryKeys.LOOT_TABLE, tableId);
+            java.util.Set<String> items = itemsOfLootTable(key);
+            if (items.isEmpty()) continue;
+
+            index.computeIfAbsent(owner, ignored -> new java.util.LinkedHashSet<>()).addAll(items);
+        }
+
+        dropIndex = index;
+        return index;
     }
 
     /**
-     * Itens que a tabela de loot de um bloco pode dar.
+     * De quem e uma tabela de loot, a julgar pelo nome dela.
+     *
+     * <p>{@code blocks/stone} e do bloco de mesmo nome; {@code entities/sheep/white} e da ovelha,
+     * porque o segundo trecho e a variante. Tabelas sem dono -- bau de masmorra, pesca, presente de
+     * aldeao -- ficam de fora: elas nao respondem "o que este bloco derruba".
+     */
+    private static String ownerOfLootTable(Identifier tableId) {
+        String path = tableId.getPath();
+        String prefix = path.startsWith("blocks/") ? "blocks/"
+                : path.startsWith("entities/") ? "entities/"
+                : null;
+        if (prefix == null) return null;
+
+        String rest = path.substring(prefix.length());
+        int slash = rest.indexOf('/');
+        String name = slash < 0 ? rest : rest.substring(0, slash);
+
+        Identifier owner = Identifier.of(tableId.getNamespace(), name);
+        boolean known = prefix.equals("blocks/")
+                ? Registries.BLOCK.containsId(owner)
+                : Registries.ENTITY_TYPE.containsId(owner);
+
+        return known ? owner.toString() : null;
+    }
+
+    /**
+     * Itens que uma tabela de loot pode dar.
      *
      * <p>Le a tabela em vez de sortear: sortear responderia por amostragem, e uma amostra nunca
      * prova que um item raro nao existe. So entradas de item sao consideradas -- uma entrada que

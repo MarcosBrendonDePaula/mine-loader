@@ -1301,6 +1301,45 @@ class ScreenTest {
     }
 
     @Test
+    void vanillaProcessExampleFillsTheGapInLoot(@TempDir Path root) throws IOException {
+        // Raizes separadas: writeMod devolve o primeiro mod da pasta em ordem alfabetica, e com os
+        // dois juntos ele devolveria o de processos em vez do de consulta.
+        Path declarante = root.resolve("declarante");
+        Path consultante = root.resolve("consultante");
+
+        Path origin = Path.of("..", "examples", "processos_vanilla");
+        Path target = declarante.resolve("processos_vanilla");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(declarante).get(0));
+
+        // Tosquiar vive no codigo da entidade, e nenhuma consulta ao jogo revela. Declarado, passa
+        // a existir para qualquer catalogo -- que e a razao de o registro de processos ser global.
+        runtime.load(writeMod(consultante, """
+                mod.on("player_joined", function(ctx)
+                    local la = ctx.server.processes({ produces = "minecraft:white_wool" })
+                    local balde = ctx.server.processes({ uses = "minecraft:bucket" })
+                    local vaca = ctx.server.processes({ by = "minecraft:cow" })
+
+                    ctx.server.broadcast(#la .. "|" .. la[1].title .. "|" .. la[1].inputs[1]
+                        .. "|" .. la[1].by)
+                    ctx.server.broadcast(#balde .. "," .. #vaca)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of(
+                "1|Tosquiar (Branca)|minecraft:shears|minecraft:sheep",
+                "1,1"), bridge.calls);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);
