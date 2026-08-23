@@ -128,6 +128,42 @@ public final class StateStore {
         return json;
     }
 
+    /**
+     * Indica se a tabela é uma sequência: chaves inteiras de 1 a n, sem buracos nem outras chaves.
+     *
+     * <p>É a mesma noção que o {@code #} do Lua usa, e a única em que a ordem tem significado.
+     */
+    private static boolean isSequence(LuaTable table) {
+        int length = table.length();
+        if (length == 0) return false;
+
+        int keys = 0;
+        for (LuaValue key : table.keys()) {
+            if (!key.isnumber()) return false;
+
+            double number = key.todouble();
+            if (number != Math.floor(number) || number < 1 || number > length) return false;
+            keys++;
+        }
+        return keys == length;
+    }
+
+    private JsonArray toJsonArray(String modId, LuaTable table, int depth) {
+        JsonArray array = new JsonArray();
+        if (depth > MAX_DEPTH) {
+            logger.warn("Estado de {} ignorado abaixo de {} niveis de profundidade", modId, MAX_DEPTH);
+            return array;
+        }
+
+        for (int index = 1; index <= table.length(); index++) {
+            JsonElement value = toJson(modId, table.get(index), depth);
+            // Um nulo no meio quebraria as posicoes seguintes, entao a lista para onde parou.
+            if (value == null) break;
+            array.add(value);
+        }
+        return array;
+    }
+
     private JsonElement toJson(String modId, LuaValue value, int depth) {
         if (value.isboolean()) return new JsonPrimitive(value.toboolean());
         if (value.isnumber()) {
@@ -139,7 +175,15 @@ public final class StateStore {
             return new JsonPrimitive(number);
         }
         if (value.isstring()) return new JsonPrimitive(value.tojstring());
-        if (value.istable()) return toJsonObject(modId, (LuaTable) value, depth + 1);
+        if (value.istable()) {
+            LuaTable table = (LuaTable) value;
+            // Uma lista precisa voltar como lista. Gravada como objeto, ela retornava com chaves
+            // de texto e fora de ordem: o Lua recebia algo em que # da zero e ipairs nao itera,
+            // ou seja, uma lista cheia virava uma lista vazia sem erro nenhum.
+            return isSequence(table)
+                    ? toJsonArray(modId, table, depth + 1)
+                    : toJsonObject(modId, table, depth + 1);
+        }
 
         if (!value.isnil()) {
             logger.warn("Estado de {} ignora um valor do tipo {}, que nao sobrevive a um reinicio",

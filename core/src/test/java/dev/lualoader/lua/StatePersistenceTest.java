@@ -42,17 +42,17 @@ class StatePersistenceTest {
                 """;
 
         // Primeira sessao: acumula e grava ao desligar.
-        LuaRuntime primeira = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
-        primeira.load(writeMod(root, lua));
-        primeira.saveAllStates();
+        LuaRuntime first = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
+        first.load(writeMod(root, lua));
+        first.saveAllStates();
 
         assertTrue(Files.isRegularFile(stateDir.resolve("persist_mod.json")),
                 "o estado deveria ter sido gravado");
 
         // Segunda sessao: um runtime novo, como depois de reiniciar o servidor.
-        LuaRuntime segunda = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
-        segunda.load(writeMod(root, lua));
-        segunda.saveAllStates();
+        LuaRuntime second = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
+        second.load(writeMod(root, lua));
+        second.saveAllStates();
 
         String json = Files.readString(stateDir.resolve("persist_mod.json"), StandardCharsets.UTF_8);
         assertTrue(json.contains("\"execucoes\": 2"),
@@ -81,5 +81,42 @@ class StatePersistenceTest {
 
         String json = Files.readString(stateDir.resolve("persist_mod.json"), StandardCharsets.UTF_8);
         assertTrue(json.contains("\"x\": 1"), "um estado corrompido deve recomecar vazio: " + json);
+    }
+
+    /**
+     * Uma lista guardada no estado precisa voltar como lista.
+     *
+     * <p>Gravada como objeto, ela voltava com chaves de texto e fora de ordem: no Lua, {@code #}
+     * dava zero e {@code ipairs} não iterava nenhuma vez. Uma lista cheia virava uma lista vazia
+     * sem erro nenhum — o pior tipo de falha, porque o mod continua rodando e não mostra nada.
+     */
+    @Test
+    void listsSurviveTheRoundTrip(@TempDir Path root, @TempDir Path stateDir) throws IOException {
+        LuaRuntime first = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
+        first.load(writeMod(root, """
+                mod.state.itens = { "minecraft:stone", "minecraft:dirt", "minecraft:sand" }
+                mod.state.mapa = { chave = "valor" }
+                return {}
+                """));
+        first.saveAllStates();
+
+        // O arquivo precisa trazer uma lista JSON, e nao um objeto com chaves numeradas.
+        String json = Files.readString(stateDir.resolve("persist_mod.json"), StandardCharsets.UTF_8);
+        assertTrue(json.contains("\"itens\": ["), "a lista deveria ser um array JSON: " + json);
+        assertTrue(json.contains("\"mapa\": {"), "um mapa continua sendo objeto: " + json);
+
+        // Segunda sessao: a lista precisa voltar utilizavel, com # e ipairs funcionando.
+        LuaRuntime second = new LuaRuntime(LoggerFactory.getLogger("test"), null, stateDir);
+        second.load(writeMod(root, """
+                local partes = {}
+                for _, item in ipairs(mod.state.itens) do partes[#partes + 1] = item end
+                mod.state.resumo = #mod.state.itens .. "|" .. table.concat(partes, ",")
+                return {}
+                """));
+        second.saveAllStates();
+
+        String depois = Files.readString(stateDir.resolve("persist_mod.json"), StandardCharsets.UTF_8);
+        assertTrue(depois.contains("3|minecraft:stone,minecraft:dirt,minecraft:sand"),
+                "a lista deveria ter voltado na ordem e com tamanho: " + depois);
     }
 }
