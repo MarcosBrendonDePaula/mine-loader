@@ -94,6 +94,7 @@ diferente do loader.
 | `processos_vanilla` | Declara as interações que o jogo executa em código: tosquia, ordenha, balde de peixe |
 | `inspetor` | Lê e abastece o inventário de qualquer bloco, inclusive de mods de terceiros |
 | `autoteste` | Exercita as APIs dentro do jogo e reporta OK ou FALHOU por verificação |
+| `ferraria` | Ferramentas e armaduras declaradas no manifesto, sem uma linha de Java |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.

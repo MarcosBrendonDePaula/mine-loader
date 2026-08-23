@@ -209,6 +209,69 @@ dele, e nem deveria haver -- um script de terceiros com acesso a JVM seria o fim
 mecanica que o outro mod executa sem registrar receita nem expor inventario permanece invisivel,
 pelo mesmo motivo que a tosquia permanecia: o jogo sabe fazer e nao sabe dizer.
 
+## Ferramentas e armaduras
+
+Era a categoria de mod mais obvia que o loader nao alcancava. Um item tinha empilhamento,
+durabilidade nominal e textura, e nada disso faz uma picareta: sem nivel de colheita ela nao derruba
+minerio, sem velocidade leva o mesmo tempo que a mao, e sem dano e enfeite.
+
+```json
+{
+  "id": "picareta_de_rubi",
+  "name": "Picareta de Rubi",
+  "max_stack_size": 1,
+  "tool": {
+    "type": "pickaxe",
+    "level": 3,
+    "speed": 9.0,
+    "damage": 2.0,
+    "durability": 1200,
+    "enchantability": 14,
+    "repair_item": "minecraft:diamond"
+  }
+}
+```
+
+| Campo | O que faz |
+|---|---|
+| `type` | `pickaxe`, `axe`, `shovel`, `hoe` ou `sword` -- define o que ela quebra bem |
+| `level` | 0 a 4, na escala do jogo: madeira, pedra, ferro, diamante, netherita |
+| `speed` | multiplicador sobre os blocos da classe |
+| `damage` | dano somado ao ataque |
+| `durability` | usos ate quebrar; zero usa o padrao do nivel |
+| `repair_item` | o que conserta na bigorna; sem ele, a ferramenta nao e consertavel |
+
+O nivel segue a escala do jogo de proposito. Uma escala propria obrigaria quem escreve o mod a
+traduzir mentalmente a cada bloco que quisesse minerar.
+
+Armadura e declarada por peca, e nao por conjunto:
+
+```json
+{
+  "id": "elmo_de_rubi",
+  "name": "Elmo de Rubi",
+  "max_stack_size": 1,
+  "armor": {
+    "slot": "helmet",
+    "protection": 3,
+    "toughness": 2.0,
+    "knockback_resistance": 0.1,
+    "durability": 400
+  }
+}
+```
+
+Um mod pode ter so um capacete, sem inventar o conjunto inteiro: cada peca responde pela propria
+protecao.
+
+**O que fica de fora.** Ferramenta e armadura sao itens de classes proprias do jogo -- uma picareta
+precisa *ser* uma picareta para quebrar pedra rapido, e nao um item com dano declarado. Por isso
+elas nao passam pelo item declarativo comum, e os eventos `on_use` do manifesto **nao valem** para
+elas. A textura tambem depende do resource pack: sem ele, a ferramenta aparece sem icone proprio e
+a armadura veste a textura de couro.
+
+Ver o exemplo `ferraria`.
+
 ## Prioridade sugerida
 
 A ordem considera quantos tipos de mod cada item destrava, e não a dificuldade.
@@ -318,9 +381,9 @@ bioma, nem regra de distribuição.
 Não há nada de entidades: nem criar, nem invocar, nem reagir a dano ou morte. Um mod inteiro de
 criaturas está fora de alcance.
 
-**Ferramentas e armaduras.** As linhas de skyroot, holystone, zanite, gravitite e phoenix. Itens hoje
-têm apenas empilhamento, durabilidade nominal, raridade e textura: não existe material de ferramenta,
-dano, velocidade de mineração, nível de colheita, proteção nem encantamento.
+**Ferramentas e armaduras.** As linhas de skyroot, holystone, zanite, gravitite e phoenix passaram a
+ser possiveis: material, dano, velocidade, nivel de colheita, protecao e encantabilidade sao
+declaraveis. O que continua fora e encantamento proprio e efeito ligado a peca.
 
 **Máquinas com interface.** Enchanter, Freezer, Incubator e Altar são blocos com inventário próprio,
 progresso e tela. Faltam as três pernas disso: estado por bloco, interface e receitas de tipo

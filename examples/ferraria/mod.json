@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "id": "ferraria",
+  "name": "Ferraria de Rubi",
+  "version": "1.0.0",
+  "description": "Ferramentas e armaduras declaradas no manifesto, sem uma linha de Java.",
+  "permissions": [],
+  "items": [
+    {
+      "id": "picareta_de_rubi",
+      "name": "Picareta de Rubi",
+      "max_stack_size": 1,
+      "rarity": "rare",
+      "tool": {
+        "type": "pickaxe",
+        "level": 3,
+        "speed": 9.0,
+        "damage": 2.0,
+        "durability": 1200,
+        "enchantability": 14,
+        "repair_item": "minecraft:diamond"
+      }
+    },
+    {
+      "id": "espada_de_rubi",
+      "name": "Espada de Rubi",
+      "max_stack_size": 1,
+      "rarity": "rare",
+      "tool": {
+        "type": "sword",
+        "level": 3,
+        "speed": 1.0,
+        "damage": 7.0,
+        "durability": 1200,
+        "enchantability": 14,
+        "repair_item": "minecraft:diamond"
+      }
+    },
+    {
+      "id": "machado_de_rubi",
+      "name": "Machado de Rubi",
+      "max_stack_size": 1,
+      "tool": {
+        "type": "axe",
+        "level": 3,
+        "speed": 9.0,
+        "damage": 6.0,
+        "durability": 1200
+      }
+    },
+    {
+      "id": "elmo_de_rubi",
+      "name": "Elmo de Rubi",
+      "max_stack_size": 1,
+      "rarity": "rare",
+      "armor": {
+        "slot": "helmet",
+        "protection": 3,
+        "toughness": 2.0,
+        "durability": 400,
+        "repair_item": "minecraft:diamond"
+      }
+    },
+    {
+      "id": "peitoral_de_rubi",
+      "name": "Peitoral de Rubi",
+      "max_stack_size": 1,
+      "rarity": "rare",
+      "armor": {
+        "slot": "chestplate",
+        "protection": 8,
+        "toughness": 2.0,
+        "knockback_resistance": 0.1,
+        "durability": 600
+      }
+    }
+  ],
+  "enabled": true
+}

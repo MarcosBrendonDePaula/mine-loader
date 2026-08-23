@@ -150,6 +150,71 @@ public final class ModLoader {
         }
     }
 
+    /** Classes de ferramenta que o loader sabe registrar. */
+    private static final Set<String> TOOL_TYPES =
+            Set.of("pickaxe", "axe", "shovel", "hoe", "sword");
+
+    /** Onde uma peca de armadura veste. */
+    private static final Set<String> ARMOR_SLOTS =
+            Set.of("helmet", "chestplate", "leggings", "boots");
+
+    /**
+     * Confere ferramenta e armadura de um item.
+     *
+     * <p>Um item nao pode ser as duas coisas: nao existe capacete que quebre pedra, e aceitar a
+     * combinacao produziria um item que o jogo nao sabe representar.
+     */
+    private void validateToolAndArmor(ModManifest.ItemEntryDefinition item) {
+        require(item.tool == null || item.armor == null,
+                "item " + item.id + " nao pode ser ferramenta e armadura ao mesmo tempo");
+
+        if (item.tool != null) {
+            String type = item.tool.type == null
+                    ? ""
+                    : item.tool.type.toLowerCase(java.util.Locale.ROOT);
+            require(TOOL_TYPES.contains(type),
+                    "tipo de ferramenta desconhecido em " + item.id + ": " + item.tool.type
+                            + " (use um de " + TOOL_TYPES + ")");
+
+            // A escala e a do jogo -- madeira a netherita -- porque uma propria obrigaria quem
+            // escreve o mod a traduzir mentalmente a cada bloco.
+            require(item.tool.level >= 0 && item.tool.level <= 4,
+                    "level de ferramenta em " + item.id + " deve estar entre 0 e 4");
+            require(item.tool.speed > 0 && item.tool.speed <= 100,
+                    "speed de ferramenta em " + item.id + " deve estar entre 0 e 100");
+            require(item.tool.damage >= 0 && item.tool.damage <= 100,
+                    "damage de ferramenta em " + item.id + " deve estar entre 0 e 100");
+            require(item.tool.durability >= 0,
+                    "durability de ferramenta em " + item.id + " nao pode ser negativa");
+            require(item.tool.enchantability >= 0 && item.tool.enchantability <= 50,
+                    "enchantability em " + item.id + " deve estar entre 0 e 50");
+
+            // Uma ferramenta empilhada nao teria como guardar o desgaste de cada copia.
+            require(item.maxStackSize == 1,
+                    "ferramenta " + item.id + " precisa de max_stack_size 1");
+        }
+
+        if (item.armor != null) {
+            String slot = item.armor.slot == null
+                    ? ""
+                    : item.armor.slot.toLowerCase(java.util.Locale.ROOT);
+            require(ARMOR_SLOTS.contains(slot),
+                    "slot de armadura desconhecido em " + item.id + ": " + item.armor.slot
+                            + " (use um de " + ARMOR_SLOTS + ")");
+
+            require(item.armor.protection >= 0 && item.armor.protection <= 20,
+                    "protection em " + item.id + " deve estar entre 0 e 20");
+            require(item.armor.toughness >= 0 && item.armor.toughness <= 20,
+                    "toughness em " + item.id + " deve estar entre 0 e 20");
+            require(item.armor.knockbackResistance >= 0 && item.armor.knockbackResistance <= 1,
+                    "knockback_resistance em " + item.id + " deve estar entre 0 e 1");
+            require(item.armor.durability >= 0,
+                    "durability de armadura em " + item.id + " nao pode ser negativa");
+            require(item.maxStackSize == 1,
+                    "armadura " + item.id + " precisa de max_stack_size 1");
+        }
+    }
+
     private void validateItems(ModManifest manifest) {
         if (manifest.items == null) return;
         Set<String> itemIds = new HashSet<>();
@@ -159,6 +224,7 @@ public final class ModLoader {
             require(itemIds.add(item.id), "item duplicado no mod: " + item.id);
             require(item.maxStackSize >= 1 && item.maxStackSize <= 64, "max_stack_size de item deve estar entre 1 e 64");
             require(item.maxDamage >= 0, "max_damage de item nao pode ser negativo");
+            validateToolAndArmor(item);
             require(item.maxDamage == 0 || item.maxStackSize == 1,
                     "item com durabilidade precisa de max_stack_size igual a 1: " + item.id);
             require(RARITIES.contains(rarityOf(item.rarity)), "rarity de item desconhecida: " + item.rarity);

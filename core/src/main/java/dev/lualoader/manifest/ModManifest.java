@@ -197,6 +197,83 @@ public final class ModManifest {
         public ItemBehaviorDefinition behavior = new ItemBehaviorDefinition();
         /** Fixa a versao dos scripts remotos declarados em {@code behavior}. Opcional. */
         public String behaviorSha256;
+
+        /** Faz do item uma ferramenta. Opcional. */
+        public ToolDefinition tool;
+
+        /** Faz do item uma peca de armadura. Opcional. */
+        public ArmorDefinition armor;
+    }
+
+    /**
+     * Uma ferramenta: o que ela quebra bem, quanto dano faz e quanto aguenta.
+     *
+     * <p>Ferramenta era a categoria de mod mais obvia que o loader nao alcancava. Um item tinha
+     * empilhamento, durabilidade nominal e textura, e nada disso faz uma picareta: sem nivel de
+     * colheita ela nao quebra minerio, sem velocidade ela leva o mesmo tempo que a mao, e sem dano
+     * ela e um enfeite.
+     */
+    public static final class ToolDefinition {
+        /**
+         * Que classe de bloco a ferramenta quebra bem: {@code pickaxe}, {@code axe},
+         * {@code shovel}, {@code hoe} ou {@code sword}.
+         *
+         * <p>Define tambem que blocos ela consegue colher: uma picareta de ferro nao derruba
+         * diamante por ser rapida, e sim por ter nivel suficiente.
+         */
+        public String type = "pickaxe";
+
+        /**
+         * Nivel de colheita, de zero a quatro.
+         *
+         * <p>Segue a escala do jogo -- madeira, pedra, ferro, diamante, netherita -- porque uma
+         * escala propria obrigaria quem escreve o mod a traduzir mentalmente a cada bloco.
+         */
+        public int level = 1;
+
+        /** Multiplicador de velocidade sobre os blocos da classe. */
+        public double speed = 4.0;
+
+        /** Dano somado ao ataque. */
+        public double damage = 1.0;
+
+        /** Quantos usos ate quebrar. Zero herda o {@code max_damage} do item. */
+        public int durability = 0;
+
+        /** Quao bem aceita encantamentos. */
+        public int enchantability = 5;
+
+        /** Item que conserta a ferramenta na bigorna. Opcional. */
+        public String repairItem;
+    }
+
+    /**
+     * Uma peca de armadura: onde veste e quanto protege.
+     */
+    public static final class ArmorDefinition {
+        /** Onde a peca veste: {@code helmet}, {@code chestplate}, {@code leggings} ou {@code boots}. */
+        public String slot = "chestplate";
+
+        /** Pontos de protecao daquela peca. */
+        public int protection = 2;
+
+        /**
+         * Resistencia a dano alto, como a netherita tem.
+         *
+         * <p>Zero para armaduras comuns: e o que separa uma armadura boa de uma de fim de jogo.
+         */
+        public double toughness = 0.0;
+
+        /** Empurrao resistido, de zero a um. */
+        public double knockbackResistance = 0.0;
+
+        /** Quantos pontos de durabilidade. Zero usa o padrao da armadura de couro. */
+        public int durability = 0;
+
+        public int enchantability = 9;
+
+        /** Item que conserta a peca na bigorna. Opcional. */
+        public String repairItem;
     }
 
     /** Logica associada a um item. Cada campo aponta um arquivo .lua, uma URL ou uma funcao. */

@@ -107,6 +107,28 @@ TESTES.container = function(ctx)
     ctx.server.set_block(antes, x, y, z)
 end
 
+-- Ferramenta declarada precisa virar ferramenta de verdade, e nao um item com numeros.
+--
+-- O que separa as duas coisas nao aparece no manifesto: e o item ser da classe que o jogo usa para
+-- minerar. Aqui a verificacao possivel pelo servidor e que o item existe registrado; o resto --
+-- velocidade, nivel de colheita -- so o cliente com o bloco na frente responde.
+TESTES.ferramentas = function(ctx)
+    local achados = ctx.server.items({ namespace = "ferraria", limit = 32 })
+    exigir(#achados == 5, "a ferraria deveria registrar 5 pecas, registrou " .. #achados)
+
+    local esperados = {
+        "ferraria:picareta_de_rubi", "ferraria:espada_de_rubi", "ferraria:machado_de_rubi",
+        "ferraria:elmo_de_rubi", "ferraria:peitoral_de_rubi"
+    }
+    for _, id in ipairs(esperados) do
+        local existe = false
+        for _, achado in ipairs(achados) do
+            if achado == id then existe = true end
+        end
+        exigir(existe, id .. " nao foi registrado")
+    end
+end
+
 TESTES.mundo = function(ctx)
     local nome = ctx.server.world_name()
     exigir(nome ~= "", "world_name nao deveria ser vazio")

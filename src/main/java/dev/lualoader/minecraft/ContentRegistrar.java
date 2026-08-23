@@ -56,8 +56,19 @@ public final class ContentRegistrar {
                 settings = settings.fireproof();
             }
 
-            // DeclarativeItem entrega ao runtime os eventos declarados no manifesto.
-            Item item = new DeclarativeItem(settings);
+            // Ferramenta e armadura sao itens de classes proprias do jogo: uma picareta precisa
+            // ser PickaxeItem para quebrar pedra rapido, e nao um item com dano declarado. Por isso
+            // elas nao passam por DeclarativeItem -- e o preco e que os eventos on_use declarados
+            // no manifesto nao valem para elas, o que esta documentado.
+            Item item;
+            if (definition.tool != null) {
+                item = DeclarativeToolMaterial.create(definition.tool, settings);
+            } else if (definition.armor != null) {
+                item = DeclarativeArmorMaterial.create(definition.armor, settings);
+            } else {
+                // DeclarativeItem entrega ao runtime os eventos declarados no manifesto.
+                item = new DeclarativeItem(settings);
+            }
             Registry.register(Registries.ITEM, id, item);
             items.put(id, item);
             logger.info("Lua Loader registrou item {} ({})", id, definition.name);

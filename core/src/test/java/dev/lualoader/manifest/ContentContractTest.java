@@ -13,6 +13,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Contratos de conteúdo declarados no manifesto: loot, tags, itens e aba criativa. */
@@ -238,5 +240,155 @@ class ContentContractTest {
         assertFalse(ignored.stream().anyMatch(f -> f.contains("loot")), "loot esta implementado");
         assertFalse(ignored.stream().anyMatch(f -> f.contains("tags")), "tags estao implementadas");
         assertFalse(ignored.stream().anyMatch(f -> f.contains("state")), "state esta implementado");
+    }
+
+    /**
+     * Uma ferramenta declarada chega ao registro com o que a faz ferramenta.
+     *
+     * <p>Item com durabilidade e textura nao e ferramenta: sem nivel de colheita nao derruba
+     * minerio, sem velocidade leva o mesmo tempo que a mao, e sem dano e enfeite. O teste guarda os
+     * quatro campos que separam uma coisa da outra.
+     */
+    @Test
+    void toolsCarryWhatMakesThemTools(@TempDir Path root) throws IOException {
+        Path dir = root.resolve("ferramentas");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "ferramentas",
+                  "name": "Ferramentas",
+                  "version": "1.0.0",
+                  "items": [{
+                    "id": "picareta_de_rubi",
+                    "name": "Picareta de Rubi",
+                    "max_stack_size": 1,
+                    "tool": {
+                      "type": "pickaxe",
+                      "level": 3,
+                      "speed": 8.0,
+                      "damage": 2.0,
+                      "durability": 900,
+                      "enchantability": 12,
+                      "repair_item": "minecraft:diamond"
+                    }
+                  }]
+                }
+                """, StandardCharsets.UTF_8);
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test")).discover(root);
+        assertEquals(1, mods.size());
+
+        var tool = mods.get(0).manifest().items.get(0).tool;
+        assertNotNull(tool, "a ferramenta deveria ter sido lida");
+        assertEquals("pickaxe", tool.type);
+        assertEquals(3, tool.level);
+        assertEquals(8.0, tool.speed);
+        assertEquals(2.0, tool.damage);
+        assertEquals(900, tool.durability);
+        assertEquals("minecraft:diamond", tool.repairItem);
+    }
+
+    @Test
+    void armorCarriesWhereItGoesAndHowMuchItProtects(@TempDir Path root) throws IOException {
+        Path dir = root.resolve("armaduras");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "armaduras",
+                  "name": "Armaduras",
+                  "version": "1.0.0",
+                  "items": [{
+                    "id": "elmo_de_rubi",
+                    "name": "Elmo de Rubi",
+                    "max_stack_size": 1,
+                    "armor": {
+                      "slot": "helmet",
+                      "protection": 3,
+                      "toughness": 1.5,
+                      "knockback_resistance": 0.1,
+                      "durability": 200
+                    }
+                  }]
+                }
+                """, StandardCharsets.UTF_8);
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test")).discover(root);
+        var armor = mods.get(0).manifest().items.get(0).armor;
+
+        assertNotNull(armor, "a armadura deveria ter sido lida");
+        assertEquals("helmet", armor.slot);
+        assertEquals(3, armor.protection);
+        assertEquals(1.5, armor.toughness);
+        assertEquals(200, armor.durability);
+    }
+
+    /**
+     * Manifesto invalido de ferramenta ou armadura nao carrega.
+     *
+     * <p>A recusa e verificada pela ausencia na lista, e nao por excecao: discover registra a falha
+     * no log e segue, para um mod defeituoso nao impedir a carga dos outros.
+     */
+    @Test
+    void invalidToolsAndArmorAreRefused(@TempDir Path root) throws IOException {
+        record Caso(String nome, String corpo, String esperado) {
+        }
+
+        var casos = java.util.List.of(
+                new Caso("tipo",
+                        """
+                        "tool": { "type": "chave_inglesa" }
+                        """,
+                        "tipo de ferramenta desconhecido"),
+                new Caso("nivel",
+                        """
+                        "tool": { "type": "pickaxe", "level": 9 }
+                        """,
+                        "level de ferramenta"),
+                new Caso("empilha",
+                        """
+                        "tool": { "type": "pickaxe" }, "max_stack_size": 64
+                        """,
+                        "precisa de max_stack_size 1"),
+                new Caso("slot",
+                        """
+                        "armor": { "slot": "capa" }
+                        """,
+                        "slot de armadura desconhecido"),
+                new Caso("ambos",
+                        """
+                        "tool": { "type": "pickaxe" }, "armor": { "slot": "helmet" }
+                        """,
+                        "nao pode ser ferramenta e armadura"));
+
+        for (Caso caso : casos) {
+            // Cada caso ganha a propria raiz: discover varre as subpastas do que recebe, entao
+            // apontar direto para a pasta do mod nao encontraria mod nenhum -- e um teste que
+            // espera recusa passaria por nao ter validado nada.
+            Path raiz = root.resolve("raiz_" + caso.nome());
+            Path dir = raiz.resolve("mod_" + caso.nome());
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("mod.json"), """
+                    {
+                      "schema": 1,
+                      "id": "teste_%s",
+                      "name": "Teste",
+                      "version": "1.0.0",
+                      "items": [{
+                        "id": "peca",
+                        "name": "Peca",
+                        "max_stack_size": 1,
+                        %s
+                      }]
+                    }
+                    """.formatted(caso.nome(), caso.corpo()), StandardCharsets.UTF_8);
+
+            // discover nao propaga: um mod defeituoso e registrado no log e os outros seguem
+            // carregando. A recusa aparece como ausencia na lista, e nao como excecao.
+            var carregados = new ModLoader(LoggerFactory.getLogger("test")).discover(raiz);
+            assertTrue(carregados.isEmpty(),
+                    "o caso " + caso.nome() + " deveria ter sido recusado, mas carregou");
+        }
     }
 }
