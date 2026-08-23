@@ -104,6 +104,55 @@ class PlatformBridgeTest {
         public void sendMessage(String message) {
             received.add(message);
         }
+
+        /** Inventario simulado: item -> quantidade. */
+        final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
+        String held = "minecraft:air";
+        int[] where = {0, 64, 0};
+
+        @Override
+        public void sendActionBar(String message) {
+            received.add("[bar] " + message);
+        }
+
+        @Override
+        public String heldItem() {
+            return held;
+        }
+
+        @Override
+        public int countItem(String itemId) {
+            return inventory.getOrDefault(itemId, 0);
+        }
+
+        @Override
+        public int giveItem(String itemId, int count) {
+            inventory.merge(itemId, count, Integer::sum);
+            return 0;
+        }
+
+        @Override
+        public int takeItem(String itemId, int count) {
+            int atual = inventory.getOrDefault(itemId, 0);
+            int retirado = Math.min(atual, count);
+            if (retirado > 0) inventory.put(itemId, atual - retirado);
+            return retirado;
+        }
+
+        @Override
+        public int[] position() {
+            return where;
+        }
+
+        @Override
+        public float[] health() {
+            return new float[]{18.0f, 20.0f};
+        }
+
+        @Override
+        public void teleport(double x, double y, double z) {
+            where = new int[]{(int) x, (int) y, (int) z};
+        }
     }
 
     private ModLoader.LoadedMod writeMod(Path root, String permissions, String lua) throws IOException {
@@ -577,5 +626,92 @@ class PlatformBridgeTest {
                 new ItemEventData("outro_mod:varinha", null, 0, 0, 0, false));
 
         assertTrue(bridge.calls.isEmpty(), "evento de item pertence ao mod que declarou o item");
+    }
+
+    @Test
+    void scriptCanMovePlayerInventory(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        player.inventory.put("minecraft:diamond", 5);
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"player.read\", \"player.inventory\"", """
+                mod.on("player_joined", function(ctx)
+                    local tinha = ctx.player.count_item("minecraft:diamond")
+                    local pagou = ctx.player.take_item("minecraft:diamond", 3)
+                    ctx.player.give_item("minecraft:emerald", 1)
+                    ctx.player.send_message("tinha " .. tinha .. ", paguei " .. pagou)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("tinha 5, paguei 3"), player.received);
+        assertEquals(2, player.inventory.get("minecraft:diamond"));
+        assertEquals(1, player.inventory.get("minecraft:emerald"));
+    }
+
+    @Test
+    void inventoryNeedsItsOwnPermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+        player.inventory.put("minecraft:diamond", 5);
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // Declara player.read, mas nao player.inventory: pode ver, nao pode mexer.
+        runtime.load(writeMod(root, "\"player.read\"", """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.take_item("minecraft:diamond", 5)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(5, player.inventory.get("minecraft:diamond"),
+                "sem player.inventory o script nao pode remover itens");
+    }
+
+    @Test
+    void readingPlayerNeedsPermissionToo(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // player.read passou a proteger algo: antes era uma permissao sem uso.
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.send_message("mao: " .. ctx.player.held_item())
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.received.isEmpty(), "ler o item na mao exige player.read");
+    }
+
+    @Test
+    void teleportNeedsMovePermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        FakePlayer player = new FakePlayer();
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeMod(root, "\"player.move\"", """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.teleport(10, 70, -20)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(10, player.position()[0]);
+        assertEquals(70, player.position()[1]);
+        assertEquals(-20, player.position()[2]);
     }
 }

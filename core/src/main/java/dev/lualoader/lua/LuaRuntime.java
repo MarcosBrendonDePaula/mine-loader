@@ -15,6 +15,7 @@ import org.luaj.vm2.LuaFunction;
 import org.luaj.vm2.LuaTable;
 import org.luaj.vm2.LuaValue;
 import org.luaj.vm2.lib.OneArgFunction;
+import org.luaj.vm2.lib.ZeroArgFunction;
 import org.luaj.vm2.lib.TwoArgFunction;
 import org.luaj.vm2.lib.VarArgFunction;
 import org.luaj.vm2.Varargs;
@@ -63,19 +64,22 @@ public final class LuaRuntime {
      */
     private final Map<String, LuaTable> states = new LinkedHashMap<>();
     private final Path remoteCache;
+    private final StateStore stateStore;
     private GameBridge bridge = GameBridge.DETACHED;
 
-    /** Runtime apenas local: scripts remotos serao recusados. */
+    /** Runtime apenas local, sem persistencia: usado em validacao offline e testes. */
     public LuaRuntime(Logger logger) {
-        this(logger, null);
+        this(logger, null, null);
     }
 
     /**
-     * @param remoteCache diretorio para scripts baixados; {@code null} recusa script remoto
+     * @param remoteCache   diretorio para scripts baixados; {@code null} recusa script remoto
+     * @param stateDirectory onde gravar o estado dos mods; {@code null} mantem tudo em memoria
      */
-    public LuaRuntime(Logger logger, Path remoteCache) {
+    public LuaRuntime(Logger logger, Path remoteCache, Path stateDirectory) {
         this.logger = logger;
         this.remoteCache = remoteCache;
+        this.stateStore = new StateStore(logger, stateDirectory);
     }
 
     /** Conecta o adaptador de plataforma. Chamado pelo bootstrap antes de disparar eventos. */
@@ -87,6 +91,21 @@ public final class LuaRuntime {
         LoadedScript script = compile(mod);
         scripts.put(mod.manifest().id, script);
         logger.info("Script Lua carregado: {}", mod.manifest().id);
+    }
+
+    /** Grava em disco o estado de todos os mods. Chamado quando o servidor para. */
+    public void saveAllStates() {
+        if (!stateStore.isEnabled()) return;
+        for (Map.Entry<String, LuaTable> entry : states.entrySet()) {
+            stateStore.save(entry.getKey(), entry.getValue());
+        }
+        logger.info("Estado de {} mod(s) gravado", states.size());
+    }
+
+    /** Grava o estado de um mod especifico. */
+    public void saveState(String modId) {
+        LuaTable state = states.get(modId);
+        if (state != null) stateStore.save(modId, state);
     }
 
     /** Descarta o estado acumulado por um mod. Usado quando o mod e removido, nao em recarga. */
@@ -251,7 +270,7 @@ public final class LuaRuntime {
             }
         });
         // Tabela compartilhada por todos os scripts deste mod, preservada entre recargas.
-        LuaTable state = states.computeIfAbsent(mod.manifest().id, key -> new LuaTable());
+        LuaTable state = states.computeIfAbsent(mod.manifest().id, key -> stateStore.load(key));
         modApi.set("state", state);
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
@@ -690,11 +709,119 @@ public final class LuaRuntime {
         return serverApi;
     }
 
+    /**
+     * Constroi a API de jogador amarrada a um mod.
+     *
+     * <p>Ler dados do jogador exige {@code player.read} e mexer no inventario exige
+     * {@code player.inventory}: sao poderes diferentes, e ate agora {@code player.read} era uma
+     * permissao que nao protegia nada.
+     */
+    private LuaTable playerApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
+        LuaTable playerApi = new LuaTable();
+        playerApi.set("name", LuaValue.valueOf(player.name()));
+        playerApi.set("uuid", LuaValue.valueOf(player.uuid()));
+
+        playerApi.set("send_message", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "chat.send");
+                player.sendMessage(value.tojstring());
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("send_action_bar", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "chat.send");
+                player.sendActionBar(value.tojstring());
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("held_item", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(player.heldItem());
+            }
+        });
+        playerApi.set("count_item", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(player.countItem(requireIdentifier(value.tojstring())));
+            }
+        });
+        playerApi.set("position", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                int[] position = player.position();
+                LuaTable table = new LuaTable();
+                table.set("x", LuaValue.valueOf(position[0]));
+                table.set("y", LuaValue.valueOf(position[1]));
+                table.set("z", LuaValue.valueOf(position[2]));
+                return table;
+            }
+        });
+        playerApi.set("health", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                float[] health = player.health();
+                LuaTable table = new LuaTable();
+                table.set("current", LuaValue.valueOf(health[0]));
+                table.set("max", LuaValue.valueOf(health[1]));
+                return table;
+            }
+        });
+        playerApi.set("give_item", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.inventory");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int count = requireCount(args.arg(2));
+                player.giveItem(id, count);
+                return LuaValue.valueOf(count);
+            }
+        });
+        playerApi.set("take_item", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.inventory");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int count = requireCount(args.arg(2));
+                return LuaValue.valueOf(player.takeItem(id, count));
+            }
+        });
+        playerApi.set("teleport", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.move");
+                if (args.narg() < 3) throw new LuaError("teleport exige x, y e z");
+                player.teleport(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)));
+                return LuaValue.NIL;
+            }
+        });
+        return playerApi;
+    }
+
+    /** Quantidade de itens aceita em uma operacao de inventario. */
+    private static int requireCount(LuaValue value) {
+        int count = value.isnil() ? 1 : value.checkint();
+        if (count < 1 || count > 1024) {
+            throw new LuaError("quantidade precisa estar entre 1 e 1024: " + count);
+        }
+        return count;
+    }
+
     private LuaTable context(ModLoader.LoadedMod mod, PlayerHandle player, BlockEventData block) {
         LuaTable context = createLogApi(mod.manifest().id);
         context.set("time", LuaValue.valueOf(System.currentTimeMillis()));
         // O mesmo estado alcancado por mod.state, para o callback nao precisar do global.
-        context.set("state", states.computeIfAbsent(mod.manifest().id, key -> new LuaTable()));
+        context.set("state", states.computeIfAbsent(mod.manifest().id, key -> stateStore.load(key)));
 
         LuaTable serverApi = serverApiFor(mod);
         context.set("server", serverApi);
@@ -713,18 +840,7 @@ public final class LuaRuntime {
         }
 
         if (player != null) {
-            LuaTable playerApi = new LuaTable();
-            playerApi.set("name", LuaValue.valueOf(player.name()));
-            playerApi.set("uuid", LuaValue.valueOf(player.uuid()));
-            playerApi.set("send_message", new OneArgFunction() {
-                @Override
-                public LuaValue call(LuaValue value) {
-                    requirePermission(mod.manifest(), "chat.send");
-                    player.sendMessage(value.tojstring());
-                    return LuaValue.NIL;
-                }
-            });
-            context.set("player", playerApi);
+            context.set("player", playerApiFor(mod, player));
         } else {
             context.set("player", LuaValue.NIL);
         }

@@ -43,7 +43,8 @@ public final class LuaLoaderMod implements ModInitializer {
         ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"));
         blockRegistrar = new BlockRegistrar(LOGGER);
         contentRegistrar = new ContentRegistrar(LOGGER);
-        luaRuntime = new LuaRuntime(LOGGER, resourceCache.resolve("scripts"));
+        luaRuntime = new LuaRuntime(LOGGER, resourceCache.resolve("scripts"),
+                gameDirectory.resolve("lua-loader/state"));
         gameBridge = new FabricGameBridge(blockRegistrar);
         luaRuntime.attach(gameBridge);
 
@@ -87,6 +88,8 @@ public final class LuaLoaderMod implements ModInitializer {
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             luaRuntime.triggerAll("server_stopped", null);
+            // O estado e gravado depois do evento, para o mod poder ajusta-lo antes de sair.
+            luaRuntime.saveAllStates();
             gameBridge.setServer(null);
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
