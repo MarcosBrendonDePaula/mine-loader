@@ -993,6 +993,55 @@ class ScreenTest {
     }
 
     @Test
+    void catalogExamplePagesThroughEveryRecipe(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        // La e o caso real: barbante, tingimento a partir de cada cor, e a ovelha. Mostrar as tres
+        // primeiras e esconder o resto em silencio faz quem le concluir que aquilo e tudo.
+        bridge.recipes.clear();
+        for (int index = 0; index < 8; index++) {
+            bridge.recipes.add(("""
+                    {"id":"minecraft:wool_%d","type":"minecraft:crafting_shaped",\
+                    "output":{"item":"minecraft:white_wool","count":1},"width":1,"height":1,\
+                    "ingredients":[["minecraft:string"]]}\
+                    """).formatted(index));
+        }
+        bridge.items.add("minecraft:white_wool");
+        bridge.drops.put("minecraft:sheep", List.of("minecraft:white_wool"));
+
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "white_wool", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+
+        // Oito receitas mais um drop, tres por pagina: quatro paginas, e o total fica visivel.
+        assertTrue(player.screenJson.contains("1/3"), player.screenJson);
+        assertTrue(player.screenJson.contains("(9)"), player.screenJson);
+
+        runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
+        assertTrue(player.screenJson.contains("2/3"), player.screenJson);
+
+        // A ultima pagina traz o drop, que vem depois das receitas na lista unificada.
+        runtime.triggerScreenEvent("catalogo:livro", "receita_proxima", "click", "", player);
+        assertTrue(player.screenJson.contains("3/3"), player.screenJson);
+        assertTrue(player.screenJson.contains("minecraft:sheep"), player.screenJson);
+
+        // Trocar de modo volta para a primeira pagina, senao a tela abriria vazia.
+        runtime.triggerScreenEvent("catalogo:livro", "alternar", "click", "", player);
+        assertFalse(player.screenJson.contains("3/3"), player.screenJson);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);

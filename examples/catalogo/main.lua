@@ -44,7 +44,7 @@ local function meu(ctx)
     local uuid = ctx.player.uuid
     ctx.state.jogadores = ctx.state.jogadores or {}
     ctx.state.jogadores[uuid] = ctx.state.jogadores[uuid]
-            or { busca = "", modo = "produz", pagina = 1, pagina_busca = 1 }
+            or { busca = "", modo = "produz", pagina = 1, pagina_busca = 1, pagina_receita = 1 }
     return ctx.state.jogadores[uuid]
 end
 
@@ -266,6 +266,45 @@ local function desenhar_drop(bloco, item, x, y)
     }, CELULA + 4
 end
 
+-- Reune as tres fontes numa lista unica, para poderem ser paginadas juntas.
+--
+-- Sem isto o painel mostrava as tres primeiras receitas e escondia o resto sem avisar, que e o pior
+-- jeito de truncar: quem le conclui que aquilo e tudo. Um item com dez receitas agora diz que tem
+-- dez.
+local POR_PAGINA_DE_FONTE = 3
+
+local function fontes(ctx, item, modo)
+    local lista = {}
+
+    if modo == "produz" then
+        for _, receita in ipairs(ctx.server.recipes_for(item, 32)) do
+            lista[#lista + 1] = { tipo = "receita", dados = receita }
+        end
+        for _, processo in ipairs(ctx.server.processes({ produces = item, limit = 32 })) do
+            lista[#lista + 1] = { tipo = "processo", dados = processo }
+        end
+        for _, fonte in ipairs(ctx.server.dropped_by(item, 32)) do
+            lista[#lista + 1] = { tipo = "drop", de = fonte, para = item }
+        end
+    else
+        for _, receita in ipairs(ctx.server.recipes_using(item, 32)) do
+            lista[#lista + 1] = { tipo = "receita", dados = receita }
+        end
+        for _, processo in ipairs(ctx.server.processes({ uses = item, limit = 32 })) do
+            lista[#lista + 1] = { tipo = "processo", dados = processo }
+        end
+        -- drops_of recusa um item que nao seja bloco nem entidade; pcall evita quebrar a tela.
+        local ok, drops = pcall(function() return ctx.server.drops_of(item, 32) end)
+        if ok then
+            for _, saida in ipairs(drops) do
+                lista[#lista + 1] = { tipo = "drop", de = item, para = saida }
+            end
+        end
+    end
+
+    return lista
+end
+
 local function livro(ctx)
     local estado = meu(ctx)
     local itens = filtrar(ctx, estado.busca)
@@ -300,58 +339,43 @@ local function livro(ctx)
                                       x = largura + 24, y = 36, w = 80, h = 18,
                                       text = estado.modo == "produz" and "Ver usos" or "Ver receita" }
 
+        local lista = fontes(ctx, estado.item, estado.modo)
+        local paginas = math.max(1, math.ceil(#lista / POR_PAGINA_DE_FONTE))
+        local pagina = math.min(estado.pagina_receita or 1, paginas)
+        local primeiro = (pagina - 1) * POR_PAGINA_DE_FONTE
+
         local topo = 66
         local mostrou = false
 
-        if estado.modo == "produz" then
-            -- Como se obtem: receita, processo declarado por mod, ou mineracao.
-            for _, receita in ipairs(ctx.server.recipes_for(estado.item, 3)) do
-                local desenho, altura = desenhar_receita(receita, largura + 24, topo)
-                for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                topo = topo + altura + 8
-                mostrou = true
+        for posicao = 1, POR_PAGINA_DE_FONTE do
+            local fonte = lista[primeiro + posicao]
+            if not fonte then break end
+
+            local desenho, altura
+            if fonte.tipo == "receita" then
+                desenho, altura = desenhar_receita(fonte.dados, largura + 24, topo)
+                altura = altura + 8
+            elseif fonte.tipo == "processo" then
+                desenho, altura = desenhar_processo(fonte.dados, largura + 24, topo + 10)
+                altura = altura + 12
+            else
+                desenho, altura = desenhar_drop(fonte.de, fonte.para, largura + 24, topo)
             end
 
-            for _, processo in ipairs(ctx.server.processes({ produces = estado.item, limit = 3 })) do
-                local desenho, altura = desenhar_processo(processo, largura + 24, topo + 10)
-                for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                topo = topo + altura + 12
-                mostrou = true
-            end
+            for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
+            topo = topo + altura
+            mostrou = true
+        end
 
-            for _, bloco in ipairs(ctx.server.dropped_by(estado.item, 3)) do
-                local desenho, altura = desenhar_drop(bloco, estado.item, largura + 24, topo)
-                for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                topo = topo + altura
-                mostrou = true
-            end
-        else
-            -- Para que serve: receita que o consome, processo que o consome, e o que ele derruba
-            -- quando o proprio item e um bloco.
-            for _, receita in ipairs(ctx.server.recipes_using(estado.item, 3)) do
-                local desenho, altura = desenhar_receita(receita, largura + 24, topo)
-                for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                topo = topo + altura + 8
-                mostrou = true
-            end
-
-            for _, processo in ipairs(ctx.server.processes({ uses = estado.item, limit = 3 })) do
-                local desenho, altura = desenhar_processo(processo, largura + 24, topo + 10)
-                for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                topo = topo + altura + 12
-                mostrou = true
-            end
-
-            -- drops_of recusa um item que nao seja bloco; pcall evita quebrar a tela por isso.
-            local ok, drops = pcall(function() return ctx.server.drops_of(estado.item, 3) end)
-            if ok then
-                for _, item in ipairs(drops) do
-                    local desenho, altura = desenhar_drop(estado.item, item, largura + 24, topo)
-                    for _, elemento in ipairs(desenho) do elementos[#elementos + 1] = elemento end
-                    topo = topo + altura
-                    mostrou = true
-                end
-            end
+        -- A navegacao so aparece quando ha mais de uma pagina; dizer "1/1" seria ruido.
+        if paginas > 1 then
+            elementos[#elementos + 1] = { type = "button", id = "receita_anterior",
+                                          x = largura + 24, y = 172, w = 24, h = 18, text = "<" }
+            elementos[#elementos + 1] = { type = "label", x = largura + 54, y = 177,
+                                          text = pagina .. "/" .. paginas .. "  (" .. #lista .. ")",
+                                          color = "#404040", shadow = false }
+            elementos[#elementos + 1] = { type = "button", id = "receita_proxima",
+                                          x = largura + 120, y = 172, w = 24, h = 18, text = ">" }
         end
 
         if not mostrou then
@@ -387,6 +411,7 @@ mod.screen("hud", function(ctx)
         estado.item = itens[primeiro + tonumber(ctx.ui.value)]
         estado.modo = "produz"
         estado.pagina_busca = 1
+        estado.pagina_receita = 1
         ctx.player.open_screen("livro", livro(ctx))
         return
     elseif ctx.ui.element == "proxima" then
@@ -415,8 +440,17 @@ mod.screen("livro", function(ctx)
         local _, primeiro = fatia(itens, estado.pagina_busca or 1, colunas)
         estado.item = itens[primeiro + tonumber(ctx.ui.value)]
         estado.modo = "produz"
+        estado.pagina_receita = 1
     elseif ctx.ui.element == "alternar" then
         estado.modo = estado.modo == "produz" and "usa" or "produz"
+        estado.pagina_receita = 1
+    elseif ctx.ui.element == "receita_proxima" or ctx.ui.element == "receita_anterior" then
+        local total = #fontes(ctx, estado.item, estado.modo)
+        local paginas = math.max(1, math.ceil(total / POR_PAGINA_DE_FONTE))
+        local passo = ctx.ui.element == "receita_proxima" and 1 or -1
+
+        estado.pagina_receita =
+                math.max(1, math.min(paginas, (estado.pagina_receita or 1) + passo))
     elseif ctx.ui.element == "proxima" then
         estado.pagina_busca = math.min(paginas_de(#itens, colunas),
                                        (estado.pagina_busca or 1) + 1)
