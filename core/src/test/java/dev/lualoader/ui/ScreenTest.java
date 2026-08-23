@@ -1042,6 +1042,79 @@ class ScreenTest {
     }
 
     @Test
+    void bigRecipesGetFewerPerPage(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        bridge.items.add("minecraft:beacon");
+        bridge.drops.clear();
+
+        // Seis receitas 3x3. Uma ocupa 62 px contra 26 de uma 1x1, entao um numero fixo por pagina
+        // empurraria a terceira para fora da janela -- que foi o que aconteceu em jogo.
+        bridge.recipes.clear();
+        for (int index = 0; index < 6; index++) {
+            StringBuilder ingredients = new StringBuilder();
+            for (int slot = 0; slot < 9; slot++) {
+                ingredients.append(slot == 0 ? "" : ",").append("[\"minecraft:glass\"]");
+            }
+            bridge.recipes.add(("""
+                    {"id":"minecraft:beacon_%d","type":"minecraft:crafting_shaped",\
+                    "output":{"item":"minecraft:beacon","count":1},"width":3,"height":3,\
+                    "ingredients":[%s]}\
+                    """).formatted(index, ingredients));
+        }
+
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", player);
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "beacon", player);
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+
+        // Seis receitas de 62 px em uma area de 104: uma por pagina, e nao tres.
+        assertTrue(player.screenJson.contains("(6)"), player.screenJson);
+        assertTrue(player.screenJson.contains("1/6"),
+                "receita 3x3 deveria render uma por pagina: " + player.screenJson);
+    }
+
+    @Test
+    void theBookWindowFollowsTheScreen(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        // Uma janela fixa sobra numa tela grande e aperta numa pequena. Com o tamanho informado
+        // pelo cliente, ela usa quase tudo, respeitando um teto.
+        TestPlayer grande = new TestPlayer();
+        grande.screenSize = new int[]{854, 480};
+        runtime.triggerAll("player_joined", grande);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", grande);
+        assertTrue(grande.screenJson.contains("\"width\":560"), grande.screenJson);
+        assertTrue(grande.screenJson.contains("\"height\":320"), grande.screenJson);
+
+        TestPlayer pequena = new TestPlayer();
+        pequena.screenSize = new int[]{427, 240};
+        runtime.triggerAll("player_joined", pequena);
+        runtime.triggerScreenEvent("catalogo:hud", "abrir_livro", "click", "", pequena);
+        assertTrue(pequena.screenJson.contains("\"width\":387"), pequena.screenJson);
+        assertTrue(pequena.screenJson.contains("\"height\":200"), pequena.screenJson);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);

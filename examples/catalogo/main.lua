@@ -271,7 +271,63 @@ end
 -- Sem isto o painel mostrava as tres primeiras receitas e escondia o resto sem avisar, que e o pior
 -- jeito de truncar: quem le conclui que aquilo e tudo. Um item com dez receitas agora diz que tem
 -- dez.
-local POR_PAGINA_DE_FONTE = 3
+-- A pagina se enche por altura, e nao por contagem.
+--
+-- Uma receita 3x3 ocupa 62 px e uma 1x1 ocupa 26: um numero fixo por pagina ou desperdicava metade
+-- da janela ou empurrava a terceira receita para fora dela. Quem decide quantas cabem e a soma das
+-- alturas.
+local function altura_da_fonte(fonte)
+    if fonte.tipo == "receita" then
+        local receita = fonte.dados
+        local colunas = receita.width > 0 and receita.width or #receita.ingredients
+        local linhas = math.ceil(#receita.ingredients / math.max(1, colunas))
+        return math.max(CELULA, linhas * CELULA) + 8
+    elseif fonte.tipo == "processo" then
+        -- O rotulo do processo fica acima da grade, e por isso ele comeca 10 px mais abaixo.
+        return CELULA + 22
+    end
+    return CELULA + 4
+end
+
+-- Divide a lista em paginas que cabem na altura disponivel, mantendo a ordem.
+local function paginar(lista, disponivel)
+    local paginas = {}
+    local atual = {}
+    local altura = 0
+
+    for _, fonte in ipairs(lista) do
+        local ocupa = altura_da_fonte(fonte)
+
+        -- Uma fonte sozinha maior que a area ainda ocupa uma pagina inteira: melhor mostra-la
+        -- transbordando um pouco do que nunca mostra-la.
+        if #atual > 0 and altura + ocupa > disponivel then
+            paginas[#paginas + 1] = atual
+            atual = {}
+            altura = 0
+        end
+
+        atual[#atual + 1] = fonte
+        altura = altura + ocupa
+    end
+
+    if #atual > 0 then paginas[#paginas + 1] = atual end
+    if #paginas == 0 then paginas[1] = {} end
+    return paginas
+end
+
+-- Tamanho da janela do livro, em funcao da tela de quem joga.
+--
+-- Uma janela fixa de 300 por 200 sobra numa tela grande e aperta numa pequena. Com o tamanho
+-- informado pelo cliente, ela usa quase tudo -- deixando uma margem para nao encostar na borda --
+-- e o teto existe porque uma janela de mil pixels de largura teria a lista de um lado e a receita
+-- do outro longe demais para olhar as duas.
+local function janela_do_livro(ctx)
+    local tela = ctx.player.screen_size()
+    if not tela then return 300, 200 end
+
+    return math.max(260, math.min(tela.width - 40, 560)),
+           math.max(180, math.min(tela.height - 40, 320))
+end
 
 local function fontes(ctx, item, modo)
     local lista = {}
@@ -308,13 +364,20 @@ end
 local function livro(ctx)
     local estado = meu(ctx)
     local itens = filtrar(ctx, estado.busca)
-    local colunas = colunas_para(ctx)
+    local janela_w, janela_h = janela_do_livro(ctx)
+
+    -- A lista ocupa um terco da janela, e o resto e o painel de receitas. As colunas saem dessa
+    -- largura, e nao do espaco ao lado do inventario: aqui a janela e propria.
+    local colunas = math.max(3, math.min(9, math.floor((janela_w / 3) / CELULA)))
+    local largura = colunas * CELULA
     local pagina = math.min(estado.pagina_busca or 1, paginas_de(#itens, colunas))
     local recorte = fatia(itens, pagina, colunas)
-    local largura = colunas * CELULA
+
+    local rodape = janela_h - 26
+    local altura_lista = rodape - 60
 
     local elementos = {
-        { type = "panel", style = "vanilla", x = 0, y = 0, w = 300, h = 200 },
+        { type = "panel", style = "vanilla", x = 0, y = 0, w = janela_w, h = janela_h },
         { type = "label", x = 8, y = 8, text = "Catalogo", color = "#404040", shadow = false },
 
         { type = "input", id = "busca", x = 8, y = 22, w = largura, h = 18,
@@ -323,13 +386,12 @@ local function livro(ctx)
           text = #itens .. " resultado(s) - pag " .. pagina .. "/" .. paginas_de(#itens, colunas),
           color = "#404040", shadow = false },
 
-        { type = "viewport", id = "area", x = 8, y = 56, w = largura,
-          h = LINHAS_VISIVEIS * CELULA,
+        { type = "viewport", id = "area", x = 8, y = 56, w = largura, h = altura_lista,
           content = altura_da_grade(#recorte, colunas) },
         grade("itens", "area", recorte, colunas),
 
-        { type = "button", id = "anterior", x = 8, y = 170, w = 30, h = 18, text = "<" },
-        { type = "button", id = "proxima", x = largura - 22, y = 170, w = 30, h = 18, text = ">" }
+        { type = "button", id = "anterior", x = 8, y = rodape, w = 30, h = 18, text = "<" },
+        { type = "button", id = "proxima", x = largura - 22, y = rodape, w = 30, h = 18, text = ">" }
     }
 
     if estado.item then
@@ -340,17 +402,14 @@ local function livro(ctx)
                                       text = estado.modo == "produz" and "Ver usos" or "Ver receita" }
 
         local lista = fontes(ctx, estado.item, estado.modo)
-        local paginas = math.max(1, math.ceil(#lista / POR_PAGINA_DE_FONTE))
-        local pagina = math.min(estado.pagina_receita or 1, paginas)
-        local primeiro = (pagina - 1) * POR_PAGINA_DE_FONTE
+        local disponivel = rodape - 70
+        local paginas = paginar(lista, disponivel)
+        local pagina_atual = math.min(estado.pagina_receita or 1, #paginas)
 
         local topo = 66
         local mostrou = false
 
-        for posicao = 1, POR_PAGINA_DE_FONTE do
-            local fonte = lista[primeiro + posicao]
-            if not fonte then break end
-
+        for _, fonte in ipairs(paginas[pagina_atual]) do
             local desenho, altura
             if fonte.tipo == "receita" then
                 desenho, altura = desenhar_receita(fonte.dados, largura + 24, topo)
@@ -368,14 +427,15 @@ local function livro(ctx)
         end
 
         -- A navegacao so aparece quando ha mais de uma pagina; dizer "1/1" seria ruido.
-        if paginas > 1 then
+        if #paginas > 1 then
             elementos[#elementos + 1] = { type = "button", id = "receita_anterior",
-                                          x = largura + 24, y = 172, w = 24, h = 18, text = "<" }
-            elementos[#elementos + 1] = { type = "label", x = largura + 54, y = 177,
-                                          text = pagina .. "/" .. paginas .. "  (" .. #lista .. ")",
+                                          x = largura + 24, y = rodape, w = 24, h = 18, text = "<" }
+            elementos[#elementos + 1] = { type = "label", x = largura + 54, y = rodape + 5,
+                                          text = pagina_atual .. "/" .. #paginas
+                                                 .. "  (" .. #lista .. ")",
                                           color = "#404040", shadow = false }
             elementos[#elementos + 1] = { type = "button", id = "receita_proxima",
-                                          x = largura + 120, y = 172, w = 24, h = 18, text = ">" }
+                                          x = largura + 120, y = rodape, w = 24, h = 18, text = ">" }
         end
 
         if not mostrou then
@@ -389,7 +449,8 @@ local function livro(ctx)
                                       shadow = false }
     end
 
-    return { title = "Catalogo", width = 300, height = 200, dim = true, elements = elementos }
+    return { title = "Catalogo", width = janela_w, height = janela_h,
+             dim = true, elements = elementos }
 end
 
 ---------------------------------------------------------------------------- eventos
@@ -431,7 +492,10 @@ end)
 mod.screen("livro", function(ctx)
     local estado = meu(ctx)
     local itens = filtrar(ctx, estado.busca)
-    local colunas = colunas_para(ctx)
+
+    -- A mesma conta de livro(): a grade da janela propria nao depende do espaco do inventario.
+    local janela_w = janela_do_livro(ctx)
+    local colunas = math.max(3, math.min(9, math.floor((janela_w / 3) / CELULA)))
 
     if ctx.ui.element == "busca" and ctx.ui.action == "change" then
         estado.busca = ctx.ui.value
@@ -445,8 +509,10 @@ mod.screen("livro", function(ctx)
         estado.modo = estado.modo == "produz" and "usa" or "produz"
         estado.pagina_receita = 1
     elseif ctx.ui.element == "receita_proxima" or ctx.ui.element == "receita_anterior" then
-        local total = #fontes(ctx, estado.item, estado.modo)
-        local paginas = math.max(1, math.ceil(total / POR_PAGINA_DE_FONTE))
+        -- A mesma divisao por altura que livro() faz, senao a navegacao andaria para paginas
+        -- que a tela nao mostra.
+        local _, janela_h = janela_do_livro(ctx)
+        local paginas = #paginar(fontes(ctx, estado.item, estado.modo), janela_h - 96)
         local passo = ctx.ui.element == "receita_proxima" and 1 or -1
 
         estado.pagina_receita =
