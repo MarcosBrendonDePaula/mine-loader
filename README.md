@@ -72,6 +72,7 @@ diferente do loader.
 | `painel` | Tela desenhada e HUD |
 | `catalogo` | Sobreposição no inventário, grade rolável, busca, receitas, drops e processos |
 | `processos_vanilla` | Declara as interações que o jogo executa em código: tosquia, ordenha, balde de peixe |
+| `inspetor` | Lê e abastece o inventário de qualquer bloco, inclusive de mods de terceiros |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "inspetor",
+  "name": "Inspetor de Inventarios",
+  "version": "1.0.0",
+  "description": "Le e abastece o inventario de qualquer bloco, inclusive de mods que nao conhecem o loader.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "world.read", "world.containers", "server.command.register"],
+  "enabled": true
+}

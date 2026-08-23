@@ -66,7 +66,9 @@ introduza operação que bloqueie — rede, disco síncrono — dentro de um cal
 
 ## Armadilhas ao escrever ou revisar um mod de exemplo
 
-- `ctx.player.name` e `ctx.player.uuid` são **valores**, não funções. `ctx.player.uuid()` falha.
+- `ctx.player.name` e `ctx.player.uuid` são **valores**; `position()`, `health()` e `held_item()` são
+  **funções**. A distinção não é óbvia e já custou tempo duas vezes: `uuid()` e `position` falham,
+  cada um pelo motivo oposto. Confira em `LuaRuntime.playerApiFor` antes de usar.
 - O mapeamento `"events"` do `mod.json` só enxerga o que o script **retorna**:
   termine com `return { on_player_joined = on_player_joined }`. Uma função global não basta.
 - `ctx.state` é por mod, não por jogador. Para estado por jogador, chaveie por `ctx.player.uuid`.

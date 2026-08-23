@@ -198,6 +198,12 @@ duas APIs nao se conhecem. Um mod Lua escrito para este loader roda nas duas ass
 adaptador, sem mudar uma linha -- e alcanca a maquina de um mod de terceiros sem que esse mod saiba
 que o loader existe, porque o que ele implementou foi o padrao da plataforma dele.
 
+**Verificado em jogo.** Com o Tom's Simple Storage instalado ao lado do loader -- um mod que nao
+conhece este projeto --, um script Lua leu o inventario do `filing_cabinet` dele, com item e
+quantidade, sem uma linha de codigo especifica para aquele mod. A escrita chegou ate ele e foi
+recusada pelo filtro do proprio mod, que e o comportamento correto: `insert_into` devolveu "sobrou
+8 de 8" em vez de fingir sucesso. No bau do jogo, a mesma escrita entra.
+
 **O que isso nao resolve.** Chamar codigo de outro mod continua fora: nao ha ponte para a API Java
 dele, e nem deveria haver -- um script de terceiros com acesso a JVM seria o fim do sandbox. E uma
 mecanica que o outro mod executa sem registrar receita nem expor inventario permanece invisivel,
