@@ -1,6 +1,5 @@
 package dev.lualoader.client;
 
-import dev.lualoader.network.ScreenNetwork;
 import dev.lualoader.network.ScreenPayloads;
 import dev.lualoader.ui.ScreenProtocol;
 import net.fabricmc.api.ClientModInitializer;
@@ -17,9 +16,9 @@ import net.minecraft.client.MinecraftClient;
 public class LuaLoaderClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        // As cargas precisam ser conhecidas dos dois lados, com os mesmos codecs.
-        ScreenNetwork.registerPayloads();
-
+        // As cargas ja foram registradas pelo entrypoint principal, que tambem roda no cliente.
+        // Registrar de novo aqui derruba o jogo com "packet type already registered", porque em
+        // um mundo local os dois entrypoints vivem no mesmo processo.
         ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.OpenScreen.ID,
                 (payload, context) -> context.client().execute(() -> abrir(payload)));
 
