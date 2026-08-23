@@ -1,0 +1,14 @@
+{
+  "id": "emblema",
+  "name": "Emblema da Guilda",
+  "max_stack_size": 1,
+  "rarity": "rare",
+  "texture": {
+    "source": "local",
+    "path": "assets/guilda/textures/item/emblema.png",
+    "fallback": "minecraft:item/gold_ingot"
+  },
+  "behavior": {
+    "on_use": "scripts/emblema/on_use.lua"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "id": "quadro",
+  "name": "Quadro de Missoes",
+  "material": {
+    "map_color": "wood",
+    "sound": "wood"
+  },
+  "settings": {
+    "hardness": 2.0,
+    "resistance": 3.0,
+    "luminance": 2
+  },
+  "shape": {
+    "collision": "pane",
+    "outline": "pane"
+  },
+  "state": {
+    "properties": [
+      {
+        "name": "completo",
+        "type": "bool",
+        "values": [
+          "false",
+          "true"
+        ]
+      }
+    ],
+    "default": {
+      "completo": "false"
+    }
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/guilda/textures/block/quadro.png",
+      "fallback": "minecraft:block/oak_planks"
+    },
+    "variant_textures": {
+      "0": {
+        "source": "local",
+        "path": "assets/guilda/textures/block/quadro.png",
+        "fallback": "minecraft:block/oak_planks"
+      },
+      "1": {
+        "source": "local",
+        "path": "assets/guilda/textures/block/quadro_completo.png",
+        "fallback": "minecraft:block/emerald_block"
+      }
+    }
+  },
+  "loot": {
+    "mode": "self"
+  },
+  "tags": [
+    "minecraft:mineable/axe"
+  ],
+  "item": {
+    "register": true
+  },
+  "block_data": true,
+  "behavior": {
+    "on_use": "scripts/quadro/on_use.lua",
+    "on_placed": "scripts/quadro/on_placed.lua"
+  }
+}

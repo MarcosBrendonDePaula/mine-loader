@@ -23,10 +23,7 @@ public final class ModLoader {
     private static final Pattern MOD_ID = Pattern.compile("^[a-z0-9][a-z0-9_-]{1,63}$");
     private static final Pattern LUA_FILE = Pattern.compile("^[^/\\\\][^:]*\\.lua$");
     private static final Set<String> RARITIES = Set.of("common", "uncommon", "rare", "epic");
-    private static final Set<String> EVENTS = Set.of(
-            "loader_ready", "server_started", "server_stopped", "player_joined", "tick",
-            "block_used", "block_attacked"
-    );
+    private static final Set<String> EVENTS = LoaderEvents.ALL;
 
     private final Gson gson = new GsonBuilder()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)

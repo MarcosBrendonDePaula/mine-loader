@@ -1,0 +1,29 @@
+{
+  "id": "posto",
+  "name": "Posto da Guilda",
+  "origin": "bottom_center",
+  "palette": {
+    "P": "minecraft:oak_planks",
+    "T": "minecraft:oak_log",
+    "L": "minecraft:lantern",
+    ".": "minecraft:air",
+    " ": null
+  },
+  "layers": [
+    [
+      "TPT",
+      "P.P",
+      "TPT"
+    ],
+    [
+      "T.T",
+      "...",
+      "T.T"
+    ],
+    [
+      "TPT",
+      "PLP",
+      "TPT"
+    ]
+  ]
+}

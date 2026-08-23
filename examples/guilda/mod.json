@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "id": "guilda",
+  "name": "Guilda dos Mineradores",
+  "version": "1.0.0",
+  "description": "Exemplo completo: missoes de mineracao com progresso persistido, quadro, emblema e recompensas.",
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "player.inventory",
+    "player.menu",
+    "server.read",
+    "server.command.register",
+    "world.read",
+    "world.write",
+    "entity.spawn"
+  ],
+  "events": {
+    "loader_ready": "on_loader_ready",
+    "player_joined": "on_player_joined",
+    "block_broken": "on_block_broken"
+  },
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "Guilda",
+    "icon": "guilda:emblema"
+  },
+  "items": [
+    {
+      "$import": "parts/items/emblema.json"
+    }
+  ],
+  "blocks": [
+    {
+      "$import": "parts/blocks/quadro.json"
+    }
+  ],
+  "structures": [
+    {
+      "$import": "parts/structures/posto.json"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "emblema",
+      "type": "shaped",
+      "pattern": [
+        " G ",
+        "GDG",
+        " G "
+      ],
+      "key": {
+        "G": "minecraft:gold_ingot",
+        "D": "minecraft:diamond"
+      },
+      "result": "guilda:emblema",
+      "count": 1
+    },
+    {
+      "id": "quadro",
+      "type": "shaped",
+      "pattern": [
+        "PPP",
+        "PSP",
+        "PPP"
+      ],
+      "key": {
+        "P": "minecraft:oak_planks",
+        "S": "minecraft:stick"
+      },
+      "result": "guilda:quadro",
+      "count": 1
+    }
+  ],
+  "enabled": true
+}

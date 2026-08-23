@@ -1,5 +1,6 @@
 package dev.lualoader.lua;
 
+import dev.lualoader.manifest.LoaderEvents;
 import dev.lualoader.manifest.ManifestImports;
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
@@ -63,13 +64,8 @@ public final class LuaRuntime {
      */
     private static final int AUTOSAVE_TICKS = 6_000;
 
-    private static final Set<String> EVENTS = Set.of(
-            "loader_ready", "server_started", "server_stopped", "player_joined", "player_left",
-            "tick", "mod_reloaded",
-            "block_used", "block_attacked", "block_placed", "block_broken",
-            "block_random_tick", "block_neighbor_update",
-            "item_used", "item_used_on_block"
-    );
+    /** Fonte unica dos nomes de evento, compartilhada com a validacao do manifesto. */
+    private static final Set<String> EVENTS = LoaderEvents.ALL;
 
     private final Logger logger;
     private final Map<String, LoadedScript> scripts = new LinkedHashMap<>();
