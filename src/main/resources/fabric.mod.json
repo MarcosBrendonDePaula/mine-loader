@@ -21,7 +21,11 @@
     ]
   },
   "mixins": [
-    "lua_loader.mixins.json"
+    "lua_loader.mixins.json",
+    {
+      "config": "lua_loader.client.mixins.json",
+      "environment": "client"
+    }
   ],
   "depends": {
     "fabricloader": ">=0.16.0",

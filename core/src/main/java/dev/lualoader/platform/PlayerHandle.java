@@ -109,6 +109,40 @@ public interface PlayerHandle {
      */
     void setHud(String descriptionJson);
 
+    /**
+     * Desenha sobre uma tela que o próprio jogo abre.
+     *
+     * <p>É a diferença entre abrir uma tela e participar de uma existente: a sobreposição fica
+     * registrada no cliente e passa a aparecer sempre que a tela alvo abrir, até ser removida. Um
+     * botão ao lado do inventário, um painel colado ao forno ou um aviso na tela de morte dependem
+     * disso, porque nenhum deles pode substituir a tela em que aparece.
+     *
+     * <p>Enviar de novo com o mesmo identificador substitui a anterior.
+     *
+     * @param overlayId       identificador, devolvido junto com cada evento como se fosse uma tela
+     * @param descriptionJson descrição já validada pelo núcleo, com o alvo dentro
+     * @return {@code false} quando o cliente não entende o protocolo
+     */
+    boolean setOverlay(String overlayId, String descriptionJson);
+
+    /**
+     * Remove uma sobreposição registrada.
+     *
+     * @return {@code false} quando o cliente não entende o protocolo
+     */
+    boolean clearOverlay(String overlayId);
+
+    /**
+     * Tamanho da tela do jogador, em unidades de interface, ou {@code null}.
+     *
+     * <p>É {@code null} quando o cliente não tem o loader ou ainda não informou. Um mod que desenha
+     * precisa disto para caber: a escala da interface divide a resolução, então a mesma janela que
+     * sobra espaço em escala 2 transborda em escala 3.
+     *
+     * @return largura e altura, nesta ordem
+     */
+    int[] screenSize();
+
     /** Fecha o menu aberto, se houver. */
     void closeMenu();
 }

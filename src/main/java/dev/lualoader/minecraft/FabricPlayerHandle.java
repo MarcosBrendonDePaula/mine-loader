@@ -54,41 +54,41 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     @Override
     public int giveItem(String itemId, int count) {
         Item item = resolveItem(itemId);
-        int restante = count;
-        int derrubados = 0;
+        int remaining = count;
+        int dropped = 0;
 
-        while (restante > 0) {
-            int lote = Math.min(restante, item.getMaxCount());
-            ItemStack stack = new ItemStack(item, lote);
+        while (remaining > 0) {
+            int batch = Math.min(remaining, item.getMaxCount());
+            ItemStack stack = new ItemStack(item, batch);
 
             player.getInventory().insertStack(stack);
             if (!stack.isEmpty()) {
                 // O que nao coube cai no mundo, para o item nao sumir em silencio, e e reportado
                 // ao script, que pode querer avisar o jogador ou desfazer a operacao.
-                derrubados += stack.getCount();
+                dropped += stack.getCount();
                 player.dropItem(stack, false);
             }
-            restante -= lote;
+            remaining -= batch;
         }
-        return derrubados;
+        return dropped;
     }
 
     @Override
     public int takeItem(String itemId, int count) {
         Item item = resolveItem(itemId);
-        int restante = count;
+        int remaining = count;
         var inventory = player.getInventory();
 
-        for (int slot = 0; slot < inventory.size() && restante > 0; slot++) {
+        for (int slot = 0; slot < inventory.size() && remaining > 0; slot++) {
             ItemStack stack = inventory.getStack(slot);
             if (stack.getItem() != item) continue;
 
-            int retirado = Math.min(restante, stack.getCount());
-            stack.decrement(retirado);
-            restante -= retirado;
+            int removed = Math.min(remaining, stack.getCount());
+            stack.decrement(removed);
+            remaining -= removed;
             if (stack.isEmpty()) inventory.setStack(slot, ItemStack.EMPTY);
         }
-        return count - restante;
+        return count - remaining;
     }
 
     @Override
@@ -109,13 +109,13 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
 
     @Override
     public void openMenu(String menuId, String title, int rows, java.util.List<String> items) {
-        int linhas = Math.max(1, Math.min(6, rows));
-        var conteudo = LuaMenu.build(items, linhas);
+        int lines = Math.max(1, Math.min(6, rows));
+        var content = LuaMenu.build(items, lines);
         String modId = menuId.contains(":") ? menuId.substring(0, menuId.indexOf(':')) : menuId;
 
         player.openHandledScreen(new net.minecraft.screen.SimpleNamedScreenHandlerFactory(
                 (syncId, playerInventory, ignored) ->
-                        new LuaMenu(syncId, playerInventory, conteudo, linhas, menuId, modId),
+                        new LuaMenu(syncId, playerInventory, content, lines, menuId, modId),
                 Text.literal(title)));
     }
 
@@ -199,6 +199,48 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
 
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
                 new dev.lualoader.network.ScreenPayloads.SetHud(descriptionJson));
+    }
+
+    @Override
+    public boolean setOverlay(String overlayId, String descriptionJson) {
+        if (!supportsScreens()) {
+            dev.lualoader.LuaLoaderMod.LOGGER.warn(
+                    "Cliente de {} nao registrou o canal de telas; a sobreposicao {} nao foi enviada",
+                    player.getName().getString(), overlayId);
+            return false;
+        }
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.SetOverlay(
+                        dev.lualoader.ui.ScreenProtocol.VERSION, overlayId, descriptionJson));
+        return true;
+    }
+
+    @Override
+    public boolean clearOverlay(String overlayId) {
+        if (!supportsScreens()) return false;
+
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+                new dev.lualoader.network.ScreenPayloads.ClearOverlay(overlayId));
+        return true;
+    }
+
+    /** Tamanho de tela informado por cada cliente, em unidades de interface. */
+    private static final java.util.Map<java.util.UUID, int[]> TAMANHOS_DE_TELA =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Chamado quando o cliente informa o tamanho, ao entrar e a cada mudanca de escala. */
+    public static void rememberScreenSize(java.util.UUID playerId, int width, int height) {
+        TAMANHOS_DE_TELA.put(playerId, new int[]{width, height});
+    }
+
+    public static void forgetScreenSize(java.util.UUID playerId) {
+        TAMANHOS_DE_TELA.remove(playerId);
+    }
+
+    @Override
+    public int[] screenSize() {
+        int[] size = TAMANHOS_DE_TELA.get(player.getUuid());
+        return size == null ? null : size.clone();
     }
 
     private static Item resolveItem(String itemId) {

@@ -20,8 +20,8 @@ public final class ScreenPayloads {
     private ScreenPayloads() {
     }
 
-    private static Identifier channel(String nome) {
-        return Identifier.of(NAMESPACE, nome);
+    private static Identifier channel(String name) {
+        return Identifier.of(NAMESPACE, name);
     }
 
     /** Abre uma tela desenhada no cliente. */
@@ -79,6 +79,65 @@ public final class ScreenPayloads {
         public static final PacketCodec<RegistryByteBuf, SetHud> CODEC = PacketCodec.tuple(
                 PacketCodecs.STRING, SetHud::description,
                 SetHud::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    /**
+     * Registra uma sobreposição que aparece sobre uma tela do jogo.
+     *
+     * <p>Vai junto o alvo, dentro da descrição: o cliente precisa saber sobre qual tela desenhar
+     * antes de qualquer tela abrir, porque o registro sobrevive a abrir e fechar o inventário.
+     */
+    public record SetOverlay(int version, String overlayId, String description) implements CustomPayload {
+        public static final CustomPayload.Id<SetOverlay> ID =
+                new CustomPayload.Id<>(channel(ScreenProtocol.CHANNEL_OVERLAY));
+
+        public static final PacketCodec<RegistryByteBuf, SetOverlay> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, SetOverlay::version,
+                PacketCodecs.STRING, SetOverlay::overlayId,
+                PacketCodecs.STRING, SetOverlay::description,
+                SetOverlay::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    /** Remove uma sobreposição registrada. */
+    public record ClearOverlay(String overlayId) implements CustomPayload {
+        public static final CustomPayload.Id<ClearOverlay> ID =
+                new CustomPayload.Id<>(channel(ScreenProtocol.CHANNEL_OVERLAY_CLEAR));
+
+        public static final PacketCodec<RegistryByteBuf, ClearOverlay> CODEC = PacketCodec.tuple(
+                PacketCodecs.STRING, ClearOverlay::overlayId,
+                ClearOverlay::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    /**
+     * Tamanho da tela do cliente, em unidades de interface.
+     *
+     * <p>Enviado ao entrar e sempre que muda — a janela é redimensionada ou o jogador troca a escala
+     * da interface. É o que permite ao mod montar uma tela que caiba naquele cliente.
+     */
+    public record ClientInfo(int version, int width, int height) implements CustomPayload {
+        public static final CustomPayload.Id<ClientInfo> ID =
+                new CustomPayload.Id<>(channel(ScreenProtocol.CHANNEL_CLIENT_INFO));
+
+        public static final PacketCodec<RegistryByteBuf, ClientInfo> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, ClientInfo::version,
+                PacketCodecs.VAR_INT, ClientInfo::width,
+                PacketCodecs.VAR_INT, ClientInfo::height,
+                ClientInfo::new);
 
         @Override
         public Id<? extends CustomPayload> getId() {
