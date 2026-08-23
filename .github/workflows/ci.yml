@@ -1,7 +1,10 @@
 name: CI
 
-# Roda em todo push e pull request: o build compila os tres lados (nucleo, adaptador e cliente)
-# e executa os testes unitarios mais os GameTests, que sobem um servidor Minecraft headless.
+# Roda em todo push e pull request: o build compila o nucleo e os dois adaptadores -- Fabric e
+# NeoForge -- e executa os testes unitarios mais os GameTests, que sobem um servidor headless.
+#
+# O adaptador NeoForge compila em um passo proprio porque ele baixa outro Minecraft, e uma falha ali
+# precisa aparecer como falha dele, e nao confundida com a do Fabric.
 on:
   push:
     branches: ["**"]
@@ -35,6 +38,10 @@ jobs:
       - name: Compilar e rodar os testes
         run: ./gradlew build --stacktrace
 
+      - name: Compilar o adaptador NeoForge
+        # Prova que o nucleo nao depende de plataforma: o mesmo core, outra casa.
+        run: ./gradlew :neoforge:build --stacktrace
+
       - name: Aceitar o EULA para os GameTests
         # Os GameTests sobem um servidor de verdade, que exige o EULA aceito.
         run: |
@@ -61,9 +68,16 @@ jobs:
             build/gametest-results.xml
           retention-days: 7
 
-      - name: Publicar o jar da execucao
+      - name: Publicar o jar do Fabric
         uses: actions/upload-artifact@v4
         with:
-          name: minecraft-lua-loader
+          name: minecraft-lua-loader-fabric
           path: build/libs/*.jar
+          retention-days: 14
+
+      - name: Publicar o jar do NeoForge
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-lua-loader-neoforge
+          path: neoforge/build/libs/*.jar
           retention-days: 14

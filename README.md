@@ -16,7 +16,9 @@
 - [Roadmap de implementação](docs/ROADMAP.md)
 - [Pipeline de geração por IA](docs/AI_PIPELINE.md)
 
-Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java inicia pelo Fabric, descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
+Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
+
+O núcleo não conhece plataforma: existem dois adaptadores, **Fabric** e **NeoForge**, e o mesmo mod em Lua roda nos dois sem mudança. O Fabric é o completo; o NeoForge cobre o caminho central e recusa com mensagem clara o que ainda não implementa.
 
 ## Requisitos
 
@@ -27,7 +29,8 @@ O projeto usa Java 21. No Windows, o Gradle Wrapper já está disponível em `gr
 Linux/macOS:
 
 ```bash
-./gradlew build
+./gradlew build              # nucleo, testes e adaptador Fabric
+./gradlew :neoforge:build    # adaptador NeoForge
 ```
 
 Windows PowerShell:

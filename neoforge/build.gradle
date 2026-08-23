@@ -1,0 +1,58 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    // Sem isto o jar se chamaria neoforge.jar, e na pagina de uma release ele nao diria de que
+    // projeto e -- so de qual pasta saiu.
+    archivesName = "${project.archives_base_name}-neoforge"
+}
+
+neoForge {
+    version = project.neoforge_version
+
+    runs {
+        server {
+            server()
+            gameDirectory = file('run')
+        }
+    }
+
+    mods {
+        "lua_loader" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    // O mesmo nucleo do adaptador Fabric, sem uma linha diferente: e o que esta em teste aqui.
+    //
+    // Gson e slf4j sao excluidos porque o Minecraft ja os fornece, e em versao fixa: o nucleo pede
+    // uma mais nova, e empacotar as duas daria conflito de classe em vez de erro de resolucao.
+    implementation(project(':core')) {
+        exclude group: 'com.google.code.gson', module: 'gson'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation "org.luaj:luaj-jse:${project.luaj_version}"
+
+    jarJar(project(':core'))
+    jarJar("org.luaj:luaj-jse:${project.luaj_version}")
+}
+
+processResources {
+    def version = project.mod_version
+    inputs.property "version", version
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}

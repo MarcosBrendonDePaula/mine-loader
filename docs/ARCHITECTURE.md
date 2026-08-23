@@ -54,6 +54,25 @@ O custo e um nome a mais para aprender. O ganho e que um mod escrito para o load
 plataforma que tenha adaptador, sem mudar uma linha -- e alcanca a maquina de um mod de terceiros
 sem que esse mod conheca o loader, porque o que ele implementou foi o padrao da propria plataforma.
 
+### O segundo adaptador, na pratica
+
+O adaptador NeoForge existe e compila contra o mesmo `core`, sem uma linha alterada la. Isso deixou
+de ser promessa e virou verificacao: o CI compila os dois em todo push, e a release publica um jar
+por plataforma.
+
+A cobertura ainda e desigual, e de proposito. O Fabric e o completo; o NeoForge cobre o caminho
+central -- descobrir mods, executar Lua, ler e escrever no mundo e em inventarios -- e **recusa com
+o nome da operacao** o que ainda nao implementa, em vez de devolver vazio. Um mod que dependa de
+algo ausente descobre na primeira chamada, e nao por um comportamento estranho meia hora depois.
+
+| Camada | Fabric | NeoForge |
+|---|---|---|
+| Nucleo: manifesto, Lua, protocolo | o mesmo | o mesmo |
+| Mundo e blocos basicos | sim | sim |
+| Inventario de bloco | Transfer API | Capabilities |
+| Registro de itens | sim | sim |
+| Blocos declarativos, telas, receitas, entidades | sim | ainda nao |
+
 ### Acrescentar outra plataforma
 
 Um novo alvo (NeoForge, por exemplo) não altera o núcleo. Ele precisa de um módulo próprio que forneça quatro coisas: o entrypoint do loader, a implementação de `GameBridge`, a implementação de `PlayerHandle` e o registro de conteúdo declarativo equivalente ao `BlockRegistrar`, além da geração do resource pack virtual na API daquela plataforma. Manifesto, sandbox Lua, permissões e validação são compartilhados sem duplicação.
