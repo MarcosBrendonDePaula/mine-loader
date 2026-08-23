@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "autoteste",
+  "name": "Autoteste das APIs",
+  "version": "1.0.0",
+  "description": "Exercita as APIs do loader dentro do jogo e reporta o resultado no log.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "world.read", "world.write", "world.containers", "server.read", "server.command.register"],
+  "enabled": true
+}

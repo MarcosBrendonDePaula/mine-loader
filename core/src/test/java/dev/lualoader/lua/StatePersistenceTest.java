@@ -1,6 +1,8 @@
 package dev.lualoader.lua;
 
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.platform.TestBridge;
+import dev.lualoader.platform.TestPlayer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -9,6 +11,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -166,5 +169,65 @@ class StatePersistenceTest {
             Files.deleteIfExists(relativo);
             Files.deleteIfExists(relativo.getParent());
         }
+    }
+
+    /**
+     * A recarga alcanca o manifesto, e nao so o Lua.
+     *
+     * <p>Recompilar apenas o script deixava metade da recarga de fora: acrescentar uma permissao ao
+     * {@code mod.json} nao surtia efeito, e nada avisava -- o comando respondia "recarregado" e o
+     * mod continuava com as regras antigas. Foi descoberto em jogo, com um mod que ganhou
+     * {@code world.write} e continuou sendo recusado depois do reload.
+     */
+    @Test
+    void reloadRereadsTheManifest(@TempDir Path root) throws IOException {
+        Path dir = root.resolve("persist_mod");
+        Files.createDirectories(dir);
+
+        String manifesto = """
+                {
+                  "schema": 1,
+                  "id": "persist_mod",
+                  "name": "Persist Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "permissions": [%s]
+                }
+                """;
+        String script = """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function() ctx.server.broadcast("oi") end)
+                    resultado = tostring(ok)
+                end)
+                return {}
+                """;
+
+        Files.writeString(dir.resolve("mod.json"), manifesto.formatted(""), StandardCharsets.UTF_8);
+        Files.writeString(dir.resolve("main.lua"), script, StandardCharsets.UTF_8);
+
+        List<String> falas = new java.util.ArrayList<>();
+        TestBridge bridge = new TestBridge() {
+            @Override
+            public void broadcast(String message) {
+                falas.add(message);
+            }
+        };
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        // Sem a permissao, o broadcast e recusado.
+        runtime.triggerAll("player_joined", new TestPlayer());
+        assertTrue(falas.isEmpty(), "sem chat.send nao deveria falar");
+
+        // O manifesto ganha a permissao, e a recarga precisa enxergar isso.
+        Files.writeString(dir.resolve("mod.json"),
+                manifesto.formatted("\"chat.send\""), StandardCharsets.UTF_8);
+        assertTrue(runtime.reload("persist_mod"), "a recarga deveria encontrar o mod");
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+        assertEquals(List.of("oi"), falas,
+                "depois da recarga, a permissao nova deveria valer");
     }
 }

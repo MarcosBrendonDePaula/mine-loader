@@ -490,11 +490,33 @@ public final class FabricGameBridge implements GameBridge {
             if (!(pool instanceof dev.lualoader.mixin.LootPoolAccessor poolAccessor)) continue;
 
             for (var entry : poolAccessor.lua_loader$entries()) {
-                if (!(entry instanceof dev.lualoader.mixin.ItemEntryAccessor itemAccessor)) continue;
-                items.add(Registries.ITEM.getId(itemAccessor.lua_loader$item().value()).toString());
+                collectItems(entry, items, 0);
             }
         }
         return items;
+    }
+
+    /**
+     * Recolhe os itens de uma entrada de loot, descendo nas compostas.
+     *
+     * <p>Uma tabela raramente e uma lista plana. Minerio e folha usam alternativa -- "com Toque
+     * Suave da isto, sem da aquilo" -- e a alternativa e uma entrada que contem outras. Lendo so o
+     * nivel de cima, um minerio parecia nao derrubar nada.
+     */
+    private static void collectItems(net.minecraft.loot.entry.LootPoolEntry entry,
+                                     java.util.Set<String> items, int depth) {
+        // Uma tabela nao aninha muito, e o teto evita percorrer para sempre se alguma o fizer.
+        if (depth > 8) return;
+
+        if (entry instanceof dev.lualoader.mixin.ItemEntryAccessor itemAccessor) {
+            items.add(Registries.ITEM.getId(itemAccessor.lua_loader$item().value()).toString());
+            return;
+        }
+        if (entry instanceof dev.lualoader.mixin.CombinedEntryAccessor combined) {
+            for (var child : combined.lua_loader$children()) {
+                collectItems(child, items, depth + 1);
+            }
+        }
     }
 
     @Override

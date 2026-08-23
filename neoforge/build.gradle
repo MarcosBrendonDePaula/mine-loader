@@ -18,6 +18,13 @@ neoForge {
         client {
             client()
             gameDirectory = file('run')
+
+            // O mesmo atalho do adaptador Fabric:
+            //   ./gradlew :neoforge:runClient -Pmundo="New World"
+            if (project.hasProperty('mundo')) {
+                programArguments.addAll('--quickPlaySingleplayer',
+                        project.property('mundo').toString())
+            }
         }
 
         server {

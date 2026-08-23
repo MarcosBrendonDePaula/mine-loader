@@ -348,6 +348,36 @@ public final class LuaRuntime {
         if (state != null) stateStore.save(modId, state);
     }
 
+    /**
+     * Le o manifesto do disco de novo, para a recarga alcancar o {@code mod.json}.
+     *
+     * <p>Recompilar so o Lua deixava metade da recarga de fora: acrescentar uma permissao, um evento
+     * ou um script por bloco no manifesto nao surtia efeito, e nada avisava -- o comando dizia
+     * "recarregado" e o mod continuava com as regras antigas.
+     *
+     * <p>Conteudo declarado -- bloco, item, aba criativa -- continua exigindo reinicio, porque ja
+     * foi registrado no jogo e o registro nao aceita troca em execucao. O que muda aqui sao as
+     * regras que o runtime consulta a cada chamada.
+     *
+     * <p>Um manifesto que passou a ser invalido nao derruba a recarga: o mod segue com o anterior,
+     * que e melhor que ficar sem nenhum.
+     */
+    private ModLoader.LoadedMod rereadManifest(ModLoader.LoadedMod current) {
+        Path directory = current.directory().toAbsolutePath().normalize();
+        Path parent = directory.getParent();
+        if (parent == null) return current;
+
+        try {
+            for (ModLoader.LoadedMod found : new ModLoader(logger).discover(parent)) {
+                if (found.manifest().id.equals(current.manifest().id)) return found;
+            }
+        } catch (IOException | RuntimeException error) {
+            logger.warn("Manifesto de {} nao pode ser relido, mantendo o anterior: {}",
+                    current.manifest().id, error.getMessage());
+        }
+        return current;
+    }
+
     /** Descarta o estado acumulado por um mod. Usado quando o mod e removido, nao em recarga. */
     public void forgetState(String modId) {
         states.remove(modId);
@@ -371,7 +401,7 @@ public final class LuaRuntime {
         screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
 
-        LoadedScript replacement = compile(previous.mod());
+        LoadedScript replacement = compile(rereadManifest(previous.mod()));
         scripts.put(modId, replacement);
 
         logger.info("Script Lua recarregado: {}{}", modId,

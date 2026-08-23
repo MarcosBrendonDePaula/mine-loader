@@ -93,6 +93,7 @@ diferente do loader.
 | `catalogo` | Sobreposição no inventário, grade rolável, busca, receitas, drops e processos |
 | `processos_vanilla` | Declara as interações que o jogo executa em código: tosquia, ordenha, balde de peixe |
 | `inspetor` | Lê e abastece o inventário de qualquer bloco, inclusive de mods de terceiros |
+| `autoteste` | Exercita as APIs dentro do jogo e reporta OK ou FALHOU por verificação |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
@@ -170,5 +171,21 @@ O sistema de IA será adicionado sobre este contrato: a IA produzirá um pacote 
 ./gradlew test
 ./gradlew build
 ```
+
+Os testes do repositorio rodam contra um dublê, e por isso nao alcancam o que so aparece com o jogo
+de verdade: um registro com mil e trezentos itens, uma tabela de loot com entradas condicionais, o
+inventario de um bloco de outro mod. Para isso ha o servidor dirigivel e o mod `autoteste`:
+
+```bash
+tools/servidor-dirigivel.sh iniciar
+tools/servidor-dirigivel.sh esperar
+tools/servidor-dirigivel.sh cmd "mod autoteste"
+tools/servidor-dirigivel.sh log 20
+tools/servidor-dirigivel.sh parar
+```
+
+O servidor le comandos do console, e o script redireciona esse console para um arquivo -- entao
+verificar uma mudanca de ponta a ponta deixa de exigir alguem no jogo no momento certo. Telas, HUD e
+sobreposicao continuam fora: sem cliente, nao ha o que desenhar.
 
 O teste de integração do servidor deve mostrar no log o registro de `hello_lua:ruby_block`, o carregamento do script, a montagem das variantes `ruby_block_v0.png` e `ruby_block_v1.png` e mensagens periódicas de alternância de variante e dureza.

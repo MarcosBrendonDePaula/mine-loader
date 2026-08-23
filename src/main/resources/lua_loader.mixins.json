@@ -6,7 +6,8 @@
     "ResourcePackManagerMixin",
     "LootTableAccessor",
     "LootPoolAccessor",
-    "ItemEntryAccessor"
+    "ItemEntryAccessor",
+    "CombinedEntryAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

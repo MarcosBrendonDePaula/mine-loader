@@ -12,6 +12,16 @@ loom {
 
     // Servidor headless que executa os @GameTest e escreve um relatorio JUnit.
     runs {
+        // Entra direto em um mundo, para nao repetir menu e carregamento a cada teste:
+        //   ./gradlew runClient -Pmundo="New World"
+        // Sem a propriedade, o cliente abre no menu como sempre.
+        client {
+            client()
+            if (project.hasProperty('mundo')) {
+                programArgs '--quickPlaySingleplayer', project.property('mundo').toString()
+            }
+        }
+
         gametest {
             server()
             name = "Game Test"
