@@ -2,6 +2,7 @@ package dev.lualoader.platform;
 
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.platform.ItemEventData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -475,5 +476,106 @@ class PlatformBridgeTest {
                 "broadcast:alpha_mod vê alpha_mod",
                 "broadcast:beta_mod vê beta_mod"
         ), bridge.calls, "cada mod so pode enxergar o proprio estado");
+    }
+
+    private ModLoader.LoadedMod writeItemMod(Path root, String lua) throws IOException {
+        Path dir = root.resolve("test_mod");
+        Files.createDirectories(dir);
+        Files.createDirectories(dir.resolve("scripts"));
+        Files.writeString(dir.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "test_mod",
+                  "name": "Test Mod",
+                  "version": "0.1.0",
+                  "permissions": ["chat.send", "world.write"],
+                  "items": [
+                    {
+                      "id": "varinha",
+                      "name": "Varinha",
+                      "behavior": {
+                        "on_use": "scripts/on_use.lua",
+                        "on_use_on_block": "scripts/on_use_on_block.lua"
+                      }
+                    }
+                  ]
+                }
+                """, StandardCharsets.UTF_8);
+        Files.writeString(dir.resolve("scripts/on_use.lua"), lua, StandardCharsets.UTF_8);
+        Files.writeString(dir.resolve("scripts/on_use_on_block.lua"), """
+                return function(ctx)
+                    ctx.server.broadcast("usei em " .. ctx.item.target_block ..
+                        " (" .. ctx.item.x .. "," .. ctx.item.y .. "," .. ctx.item.z .. ")")
+                end
+                """, StandardCharsets.UTF_8);
+
+        var mods = new ModLoader(LoggerFactory.getLogger("test")).discover(root);
+        assertEquals(1, mods.size(), "o mod de item deveria carregar");
+        return mods.get(0);
+    }
+
+    @Test
+    void itemHandlerReceivesItsOwnEvent(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeItemMod(root, """
+                return function(ctx)
+                    ctx.server.broadcast("usei " .. ctx.item.id)
+                end
+                """));
+
+        runtime.triggerItem("item_used", null,
+                new ItemEventData("test_mod:varinha", null, 0, 0, 0, false));
+
+        assertEquals(List.of("broadcast:usei test_mod:varinha"), bridge.calls);
+    }
+
+    @Test
+    void itemUsedOnBlockCarriesTargetAndPosition(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeItemMod(root, """
+                return function(ctx) end
+                """));
+
+        runtime.triggerItem("item_used_on_block", null,
+                new ItemEventData("test_mod:varinha", "minecraft:stone", 4, 5, 6, true));
+
+        assertEquals(List.of("broadcast:usei em minecraft:stone (4,5,6)"), bridge.calls);
+    }
+
+    @Test
+    void itemEventCanBeCancelled(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeItemMod(root, """
+                return function(ctx) return false end
+                """));
+
+        boolean cancelled = runtime.triggerItem("item_used", null,
+                new ItemEventData("test_mod:varinha", null, 0, 0, 0, false));
+
+        assertTrue(cancelled, "um item tambem deve poder impedir a acao padrao");
+    }
+
+    @Test
+    void itemEventDoesNotLeakToOtherMods(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeItemMod(root, """
+                return function(ctx)
+                    ctx.server.broadcast("nao deveria ver")
+                end
+                """));
+
+        // Item de outro mod: o handler declarado aqui nao pode ser chamado.
+        runtime.triggerItem("item_used", null,
+                new ItemEventData("outro_mod:varinha", null, 0, 0, 0, false));
+
+        assertTrue(bridge.calls.isEmpty(), "evento de item pertence ao mod que declarou o item");
     }
 }

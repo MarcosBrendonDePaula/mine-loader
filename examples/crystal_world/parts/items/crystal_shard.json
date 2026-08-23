@@ -7,5 +7,9 @@
     "source": "local",
     "path": "assets/crystal_world/textures/item/crystal_shard.png",
     "fallback": "minecraft:item/amethyst_shard"
+  },
+  "behavior": {
+    "on_use": "scripts/crystal_shard/on_use.lua",
+    "on_use_on_block": "scripts/crystal_shard/on_use_on_block.lua"
   }
 }

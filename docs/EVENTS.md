@@ -38,6 +38,8 @@ do mod não é chamado para aquele bloco.
 | `block_broken` | O bloco deixou de existir na posição | `ctx.block` |
 | `block_random_tick` | Tick aleatório, com `settings.random_ticks` ligado | `ctx.block` |
 | `block_neighbor_update` | Um bloco vizinho mudou | `ctx.block` |
+| `item_used` | Item usado na mão, sem alvo | `ctx.item`, `ctx.player` |
+| `item_used_on_block` | Item usado sobre um bloco | `ctx.item` com `target_block` e posição, `ctx.player` |
 
 ### Por objeto (bloco)
 
@@ -50,6 +52,17 @@ do mod não é chamado para aquele bloco.
 | `on_random_tick` | `block_random_tick` |
 | `on_neighbor_update` | `block_neighbor_update` |
 | `on_break` | apelido antigo de `on_attack`, ainda aceito |
+
+### Por objeto (item)
+
+| `behavior` | Evento correspondente |
+|---|---|
+| `on_use` | `item_used` |
+| `on_use_on_block` | `item_used_on_block` |
+
+O contexto de um evento de item traz `ctx.item.id` e, quando o uso teve alvo, `ctx.item.target_block`
+com as coordenadas em `ctx.item.x/y/z`. Ambos aceitam cancelamento: devolver `false` impede o efeito
+padrão do item.
 
 ## Cancelamento
 
@@ -67,8 +80,8 @@ Devolver `nil`, nada ou qualquer outro valor deixa o jogo seguir normalmente, pa
 que apenas observa não precise se preocupar com o retorno. Se vários mods reagem ao mesmo evento,
 basta um pedir cancelamento para a ação ser bloqueada.
 
-Hoje o cancelamento vale para `block_used` e `block_attacked`. Eventos de notificação, como
-`block_broken`, informam algo que já aconteceu e ignoram o retorno.
+Hoje o cancelamento vale para `block_used`, `block_attacked`, `item_used` e `item_used_on_block`.
+Eventos de notificação, como `block_broken`, informam algo que já aconteceu e ignoram o retorno.
 
 ## Estado compartilhado
 
@@ -116,12 +129,8 @@ A ordem reflete utilidade para quem cria conteúdo, não facilidade de implement
 
 ### Item, por objeto
 
-Nenhum evento de item existe hoje: itens são registrados, mas não têm comportamento.
-
 | Evento | Quando ocorre | Prioridade |
 |---|---|---|
-| `on_use` | Clique com o item na mão, no ar | alta |
-| `on_use_on_block` | Clique com o item sobre um bloco | alta |
 | `on_attack_entity` | O item foi usado para atacar | média |
 | `on_crafted` | O item saiu de uma receita | baixa |
 | `on_inventory_tick` | A cada tick, com o item no inventário | baixa, custo alto |

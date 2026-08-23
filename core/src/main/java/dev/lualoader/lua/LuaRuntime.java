@@ -5,6 +5,7 @@ import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.platform.BlockEventData;
 import dev.lualoader.platform.BridgeException;
+import dev.lualoader.platform.ItemEventData;
 import dev.lualoader.platform.GameBridge;
 import dev.lualoader.platform.PlayerHandle;
 import dev.lualoader.structure.StructurePlacer;
@@ -138,6 +139,70 @@ public final class LuaRuntime {
      * valor deixa o jogo seguir normalmente, para que um script que apenas observa nao precise se
      * preocupar com o retorno.
      */
+    /**
+     * Dispara um evento originado por um item declarado.
+     *
+     * @return {@code true} se algum script pediu para cancelar a acao padrao
+     */
+    public boolean triggerItem(String event, PlayerHandle player, ItemEventData item) {
+        if (!EVENTS.contains(event)) return false;
+        boolean cancelled = false;
+
+        for (LoadedScript script : scripts.values()) {
+            // Assim como nos blocos, o evento pertence ao mod que declarou o item.
+            if (!ownsId(script.mod(), item.itemId())) continue;
+
+            LuaFunction callback = script.itemHandlers()
+                    .getOrDefault(item.itemId(), Map.of())
+                    .get(itemHandlerName(event));
+            if (callback == null) callback = script.callbacks().get(event);
+            if (callback == null) continue;
+
+            try {
+                LuaValue result = callback.call(itemContext(script.mod(), player, item));
+                if (result.isboolean() && !result.toboolean()) cancelled = true;
+            } catch (LuaError error) {
+                logger.error("Erro Lua no mod {} durante {}: {}",
+                        script.mod().manifest().id, event, error.getMessage());
+            } catch (BridgeException error) {
+                logger.error("Erro de plataforma no mod {} durante {}: {}",
+                        script.mod().manifest().id, event, error.getMessage());
+            } catch (RuntimeException error) {
+                logger.error("Erro Java na ponte Lua do mod {} durante {}",
+                        script.mod().manifest().id, event, error);
+            }
+        }
+        return cancelled;
+    }
+
+    private static String itemHandlerName(String event) {
+        return switch (event) {
+            case "item_used" -> "on_use";
+            case "item_used_on_block" -> "on_use_on_block";
+            default -> "";
+        };
+    }
+
+    /** Contexto de um evento de item: {@code ctx.item} descreve o que foi usado e sobre o que. */
+    private LuaTable itemContext(ModLoader.LoadedMod mod, PlayerHandle player, ItemEventData item) {
+        LuaTable context = context(mod, player, null);
+
+        LuaTable itemApi = new LuaTable();
+        itemApi.set("id", LuaValue.valueOf(item.itemId()));
+        if (item.targetBlock() != null) {
+            itemApi.set("target_block", LuaValue.valueOf(item.targetBlock()));
+        } else {
+            itemApi.set("target_block", LuaValue.NIL);
+        }
+        if (item.hasPosition()) {
+            itemApi.set("x", LuaValue.valueOf(item.x()));
+            itemApi.set("y", LuaValue.valueOf(item.y()));
+            itemApi.set("z", LuaValue.valueOf(item.z()));
+        }
+        context.set("item", itemApi);
+        return context;
+    }
+
     private boolean trigger(String event, PlayerHandle player, BlockEventData block) {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
@@ -239,7 +304,8 @@ public final class LuaRuntime {
         }
 
         return new LoadedScript(mod, Map.copyOf(callbacks),
-                loadBlockHandlers(mod, globals, exported), exported);
+                loadBlockHandlers(mod, globals, exported),
+                loadItemHandlers(mod, globals, exported), exported);
     }
 
     /**
@@ -331,6 +397,68 @@ public final class LuaRuntime {
         }
     }
 
+    /** Carrega a logica declarada por item, do mesmo modo que a dos blocos. */
+    private Map<String, Map<String, LuaFunction>> loadItemHandlers(ModLoader.LoadedMod mod,
+                                                                   Globals globals,
+                                                                   LuaTable exported) throws IOException {
+        Map<String, Map<String, LuaFunction>> handlers = new LinkedHashMap<>();
+        if (mod.manifest().items == null) return handlers;
+
+        Path root = mod.directory().toAbsolutePath().normalize();
+
+        for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
+            if (item == null || item.id == null || item.behavior == null) continue;
+            String itemId = mod.manifest().id + ":" + item.id;
+
+            Map<String, String> declared = new LinkedHashMap<>();
+            if (item.behavior.onUse != null) declared.put("on_use", item.behavior.onUse);
+            if (item.behavior.onUseOnBlock != null) declared.put("on_use_on_block", item.behavior.onUseOnBlock);
+
+            for (Map.Entry<String, String> entry : declared.entrySet()) {
+                String reference = entry.getValue();
+                if (reference == null || reference.isBlank()) continue;
+
+                LuaFunction function = resolveHandler(mod, globals, exported, root, reference,
+                        item.behaviorSha256, itemId, entry.getKey());
+                if (function == null) continue;
+
+                handlers.computeIfAbsent(itemId, key -> new LinkedHashMap<>()).put(entry.getKey(), function);
+                logger.info("Item {} associou {} a {}", itemId, entry.getKey(), reference);
+            }
+        }
+        return handlers;
+    }
+
+    /** Resolve um handler declarado, seja arquivo, URL ou funcao exportada. */
+    private LuaFunction resolveHandler(ModLoader.LoadedMod mod,
+                                       Globals globals,
+                                       LuaTable exported,
+                                       Path root,
+                                       String reference,
+                                       String expectedHash,
+                                       String ownerId,
+                                       String event) throws IOException {
+        String lower = reference.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("http://") || lower.startsWith("https://")) {
+            return loadHandlerRemote(mod, globals, reference, expectedHash);
+        }
+        if (lower.endsWith(".lua")) {
+            return loadHandlerFile(mod, globals, root, reference);
+        }
+        if (exported == null) {
+            logger.warn("{} aponta a funcao {} para {}, mas o mod nao exporta nada",
+                    ownerId, reference, event);
+            return null;
+        }
+        LuaValue candidate = exported.get(reference);
+        if (!candidate.isfunction()) {
+            logger.warn("{} aponta {} para {}, mas o entrypoint nao exporta essa funcao",
+                    ownerId, reference, event);
+            return null;
+        }
+        return (LuaFunction) candidate;
+    }
+
     /** Compila um arquivo de comportamento, que precisa devolver uma funcao. */
     private LuaFunction loadHandlerFile(ModLoader.LoadedMod mod,
                                         Globals globals,
@@ -406,10 +534,14 @@ public final class LuaRuntime {
 
     /** Indica se o bloco do evento pertence ao mod, comparando o namespace com o id do mod. */
     private static boolean ownsBlock(ModLoader.LoadedMod mod, BlockEventData block) {
-        String blockId = block.blockId();
-        int separator = blockId.indexOf(':');
+        return ownsId(mod, block.blockId());
+    }
+
+    /** Indica se o identificador pertence ao mod, comparando o namespace com o id do mod. */
+    private static boolean ownsId(ModLoader.LoadedMod mod, String fullId) {
+        int separator = fullId.indexOf(':');
         if (separator <= 0) return false;
-        return blockId.substring(0, separator).equals(mod.manifest().id);
+        return fullId.substring(0, separator).equals(mod.manifest().id);
     }
 
     /**
@@ -622,6 +754,7 @@ public final class LuaRuntime {
     private record LoadedScript(ModLoader.LoadedMod mod,
                                 Map<String, LuaFunction> callbacks,
                                 Map<String, Map<String, LuaFunction>> blockHandlers,
+                                Map<String, Map<String, LuaFunction>> itemHandlers,
                                 LuaTable exports) {
     }
 

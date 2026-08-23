@@ -56,7 +56,8 @@ public final class ContentRegistrar {
                 settings = settings.fireproof();
             }
 
-            Item item = new Item(settings);
+            // DeclarativeItem entrega ao runtime os eventos declarados no manifesto.
+            Item item = new DeclarativeItem(settings);
             Registry.register(Registries.ITEM, id, item);
             items.put(id, item);
             logger.info("Lua Loader registrou item {} ({})", id, definition.name);

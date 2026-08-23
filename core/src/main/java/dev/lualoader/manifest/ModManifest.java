@@ -182,11 +182,16 @@ public final class ModManifest {
         public TextureDefinition texture = new TextureDefinition();
         public String model = "item/generated";
         public ItemBehaviorDefinition behavior = new ItemBehaviorDefinition();
+        /** Fixa a versao dos scripts remotos declarados em {@code behavior}. Opcional. */
+        public String behaviorSha256;
     }
 
-    /** Callbacks Lua associados a um item. */
+    /** Logica associada a um item. Cada campo aponta um arquivo .lua, uma URL ou uma funcao. */
     public static final class ItemBehaviorDefinition {
+        /** Clique com o item na mao, sem alvo. */
         public String onUse;
+        /** Clique com o item sobre um bloco. */
+        public String onUseOnBlock;
     }
 
     /** Aba propria do mod no inventario criativo. */
