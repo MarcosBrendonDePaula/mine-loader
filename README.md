@@ -7,6 +7,7 @@
 - [Blocos dinâmicos e Lua](docs/DYNAMIC_BLOCKS.md)
 - [Especificação de segurança](docs/SECURITY_SPEC.md)
 - [Catálogo de eventos](docs/EVENTS.md)
+- [O que falta para um modder construir](docs/API_GAPS.md)
 - [Roadmap de implementação](docs/ROADMAP.md)
 - [Pipeline de geração por IA](docs/AI_PIPELINE.md)
 
