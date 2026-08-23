@@ -14,8 +14,8 @@ local COR_BARRA   = ui.CORES.barra
 --- Monta a descricao da tela a partir do estado.
 -- Uma tela e apenas dados: uma lista de elementos com posicao e tamanho.
 local function desenhar(ctx)
-    local contador = ctx.state.contador or 0
-    local progresso = math.min(1.0, contador / 10)
+    local contador = math.min(META, ctx.state.contador or 0)
+    local progresso = contador / META
 
     return {
         title = "Painel do Loader",
@@ -29,7 +29,7 @@ local function desenhar(ctx)
             ui.titulo(10, 10, "Painel do Loader"),
 
             { type = "label", x = 10, y = 34, text = "Cliques: " .. contador, color = COR_TEXTO },
-            { type = "label", x = 10, y = 46, text = "Meta: 10", color = COR_TEXTO },
+            { type = "label", x = 10, y = 46, text = "Meta: " .. META, color = COR_TEXTO },
 
             -- Barra proporcional, de 0 a 1.
             { type = "progress", x = 10, y = 62, w = 200, h = 8, progress = progresso, color = COR_BARRA },
@@ -51,13 +51,16 @@ end
 --- Redesenha o HUD a partir do estado.
 -- O HUD nao se atualiza sozinho: quem muda o estado precisa reenvia-lo. Sem isso ele congela
 -- no valor que tinha quando foi definido, que e o erro mais facil de cometer aqui.
+local META = 10
+
 local function atualizar_hud(ctx)
-    local contador = ctx.state.contador or 0
-    local progresso = math.min(1.0, contador / 10)
+    -- O contador nao passa da meta: mostrar 11/10 confundiria mais do que informaria.
+    local contador = math.min(META, ctx.state.contador or 0)
+    local progresso = contador / META
 
     ctx.player.set_hud({
         { type = "panel", x = 2, y = 2, w = 96, h = 28, color = "#00000080" },
-        { type = "label", x = 6, y = 6, text = "Painel: " .. contador .. "/10", color = COR_TITULO },
+        { type = "label", x = 6, y = 6, text = "Painel: " .. contador .. "/" .. META, color = COR_TITULO },
         { type = "progress", x = 6, y = 20, w = 88, h = 5, progress = progresso, color = COR_BARRA }
     })
 end
@@ -74,7 +77,7 @@ mod.screen("principal", function(ctx)
     end
 
     if ctx.ui.element == "somar" then
-        ctx.state.contador = (ctx.state.contador or 0) + 1
+        ctx.state.contador = math.min(META, (ctx.state.contador or 0) + 1)
     elseif ctx.ui.element == "zerar" then
         ctx.state.contador = 0
     elseif ctx.ui.element == "fechar" then
@@ -122,9 +125,10 @@ mod.command("painel", function(ctx)
 
     -- Testar o HUD sem depender da tela: /mod painel somar
     if ctx.subcommand == "somar" then
-        ctx.state.contador = (ctx.state.contador or 0) + 1
+        ctx.state.contador = math.min(META, (ctx.state.contador or 0) + 1)
         atualizar_hud(ctx)
-        ctx.player.send_message("Contador: " .. ctx.state.contador .. "/10 (veja o HUD no canto)")
+        ctx.player.send_message("Contador: " .. ctx.state.contador .. "/" .. META
+            .. " (veja o HUD no canto)")
         return
     end
 
