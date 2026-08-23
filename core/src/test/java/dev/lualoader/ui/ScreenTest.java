@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,6 +39,10 @@ class ScreenTest {
     }
 
     private ModLoader.LoadedMod writeMod(Path root, String lua) throws IOException {
+        return writeMod(root, lua, "\"chat.send\", \"player.menu\", \"server.read\"");
+    }
+
+    private ModLoader.LoadedMod writeMod(Path root, String lua, String permissions) throws IOException {
         Path dir = root.resolve("ui_mod");
         Files.createDirectories(dir);
         Files.writeString(dir.resolve("mod.json"), """
@@ -47,9 +52,9 @@ class ScreenTest {
                   "name": "UI Mod",
                   "version": "0.1.0",
                   "entrypoint": "main.lua",
-                  "permissions": ["chat.send", "player.menu"]
+                  "permissions": [%s]
                 }
-                """, StandardCharsets.UTF_8);
+                """.formatted(permissions), StandardCharsets.UTF_8);
         Files.writeString(dir.resolve("main.lua"), lua, StandardCharsets.UTF_8);
         return new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0);
     }
@@ -252,6 +257,687 @@ class ScreenTest {
     }
 
     @Test
+    void overlayIsRegisteredForAGameScreen(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.set_overlay("catalogo", {
+                        target = "inventory",
+                        elements = {
+                            { type = "panel", anchor = "gui_top_right", x = 4, y = 0,
+                              w = 80, h = 166, color = "#101010C0" },
+                            { type = "item", anchor = "gui_top_right", x = 10, y = 8,
+                              item = "minecraft:iron_ingot", tooltip = "Lingote de ferro" },
+                            { type = "button", id = "abrir", anchor = "gui_top_right",
+                              x = 10, y = 30, w = 60, h = 20, text = "Receitas" }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        String json = player.overlays.get("ui_mod:catalogo");
+        assertNotNull(json, "a sobreposicao precisa chegar prefixada pelo mod");
+        assertTrue(json.contains("\"target\":\"inventory\""), json);
+        // O tooltip ja existia no protocolo; o que faltava era o cliente desenha-lo.
+        assertTrue(json.contains("\"tooltip\":\"Lingote de ferro\""), json);
+        assertTrue(json.contains("\"anchor\":\"gui_top_right\""), json);
+    }
+
+    @Test
+    void overlayEventReachesTheScreenCallback(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Uma sobreposicao usa o mesmo callback de uma tela: para o mod, o clique chega igual,
+        // e a diferenca fica em onde o elemento aparece.
+        runtime.load(writeMod(root, """
+                mod.screen("catalogo", function(ctx)
+                    ctx.server.broadcast("clicou:" .. ctx.ui.element)
+                end)
+                """));
+
+        runtime.triggerScreenEvent("ui_mod:catalogo", "abrir", "click", "", player);
+
+        assertEquals(List.of("clicou:abrir"), bridge.calls);
+    }
+
+    @Test
+    void overlayIsRemovedById(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.set_overlay("aviso", {
+                        target = "pause",
+                        elements = { { type = "label", x = 4, y = 4, text = "Mod ativo" } }
+                    })
+                end)
+
+                mod.on("player_left", function(ctx)
+                    ctx.server.broadcast(tostring(ctx.player.clear_overlay("aviso")))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertTrue(player.overlays.containsKey("ui_mod:aviso"));
+
+        runtime.triggerAll("player_left", player);
+        assertEquals(List.of("true"), bridge.calls);
+        assertTrue(player.overlays.isEmpty(), "clear_overlay precisa remover o registro");
+    }
+
+    @Test
+    void unknownOverlayTargetIsRefused(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O alvo tambem e vocabulario fechado: um mod nao nomeia classes do cliente.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok, erro = pcall(function()
+                        ctx.player.set_overlay("x", {
+                            target = "net.minecraft.HackScreen",
+                            elements = {}
+                        })
+                    end)
+                    ctx.server.broadcast(tostring(ok) .. "|" .. tostring(erro))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(1, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).startsWith("false|"), bridge.calls.get(0));
+        assertTrue(bridge.calls.get(0).contains("target desconhecido"), bridge.calls.get(0));
+        assertTrue(player.overlays.isEmpty());
+    }
+
+    @Test
+    void registeredItemsCanBeListedAndFiltered(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local todos = ctx.server.items()
+                    local ferro = ctx.server.items({ namespace = "minecraft", contains = "iron" })
+                    ctx.server.broadcast(#todos .. "|" .. table.concat(ferro, ","))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("4|minecraft:iron_ingot,minecraft:iron_sword"), bridge.calls);
+    }
+
+    @Test
+    void itemListingRespectsItsLimit(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O teto existe para um catalogo ser paginado de proposito, e nao por acidente.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local pagina = ctx.server.items({ limit = 2 })
+                    local ok, erro = pcall(function() ctx.server.items({ limit = 0 }) end)
+                    ctx.server.broadcast(#pagina .. "|" .. tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("2|false"), bridge.calls);
+    }
+
+    @Test
+    void listingItemsNeedsServerRead(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Ler o registro do jogo e leitura de servidor, e por isso passa pela mesma permissao que
+        // ja protege a lista de jogadores e a hora do dia.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function() ctx.server.items() end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """, "\"chat.send\", \"player.menu\""));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("false"), bridge.calls);
+    }
+
+    @Test
+    void gridReplacesHandPlacedSlots(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O ponto da grade: 45 slots sao um elemento, e nao 45 com x e y calculados a mao.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local celulas = {}
+                    for i = 1, 45 do celulas[i] = "minecraft:stone" end
+                    celulas[1] = { item = "minecraft:diamond", count = 3, tooltip = "Diamante" }
+
+                    ctx.player.open_screen("grade", {
+                        title = "Grade",
+                        elements = {
+                            { type = "grid", id = "itens", x = 8, y = 8,
+                              columns = 9, cell = 18, items = celulas }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"type\":\"grid\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"columns\":9"), player.screenJson);
+        // A forma curta e a completa convivem na mesma lista.
+        assertTrue(player.screenJson.contains("\"count\":3"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"tooltip\":\"Diamante\""), player.screenJson);
+    }
+
+    @Test
+    void gridNeedsAnIdAndRefusesTooManyCells(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local grandes = {}
+                    for i = 1, 600 do grandes[i] = "minecraft:stone" end
+
+                    local _, semId = pcall(function()
+                        ctx.player.open_screen("a", { elements = {
+                            { type = "grid", x = 0, y = 0, items = {} } } })
+                    end)
+                    local _, demais = pcall(function()
+                        ctx.player.open_screen("b", { elements = {
+                            { type = "grid", id = "g", x = 0, y = 0, items = grandes } } })
+                    end)
+                    ctx.server.broadcast(tostring(semId))
+                    ctx.server.broadcast(tostring(demais))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(2, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).contains("precisa de id"), bridge.calls.get(0));
+        assertTrue(bridge.calls.get(1).contains("acima do limite"), bridge.calls.get(1));
+    }
+
+    @Test
+    void viewportDeclaresWhatScrolls(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O servidor declara a area e a altura do conteudo; a rolagem em si acontece no cliente,
+        // para nao custar uma ida a rede por entalhe da roda.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("lista", {
+                        title = "Lista",
+                        elements = {
+                            { type = "viewport", id = "area", x = 8, y = 8, w = 180, h = 90,
+                              content = 400 },
+                            { type = "grid", id = "itens", group = "area", x = 0, y = 0,
+                              columns = 9, items = { "minecraft:stone" } }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"type\":\"viewport\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"content\":400"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"group\":\"area\""), player.screenJson);
+    }
+
+    @Test
+    void cellClickCarriesTheCellIndex(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O cliente resolve qual celula foi apontada e manda o indice no valor, para o script nao
+        // receber uma posicao em pixels que teria de traduzir.
+        runtime.load(writeMod(root, """
+                mod.screen("grade", function(ctx)
+                    ctx.server.broadcast(ctx.ui.element .. "#" .. ctx.ui.value)
+                end)
+                """));
+
+        runtime.triggerScreenEvent("ui_mod:grade", "itens", "click", "12", player);
+
+        assertEquals(List.of("itens#12"), bridge.calls);
+    }
+
+    @Test
+    void recipesAnswerBothQuestionsAboutAnItem(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // As duas perguntas que um catalogo existe para responder: como se obtem, e para que serve.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local produz = ctx.server.recipes_for("minecraft:iron_sword")
+                    local usa = ctx.server.recipes_using("minecraft:stick")
+
+                    local receita = produz[1]
+                    ctx.server.broadcast(receita.id .. "|" .. receita.type
+                        .. "|" .. receita.output.item .. "x" .. receita.output.count
+                        .. "|" .. receita.width .. "x" .. receita.height
+                        .. "|" .. #receita.ingredients
+                        .. "|" .. receita.ingredients[1][1])
+                    ctx.server.broadcast("usa:" .. #usa)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of(
+                "minecraft:iron_sword|minecraft:crafting_shaped|minecraft:iron_swordx1|1x3|3"
+                        + "|minecraft:iron_ingot",
+                "usa:1"), bridge.calls);
+    }
+
+    @Test
+    void recipeLookupIsCappedAndNeedsPermission(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Consultar receitas varre o livro inteiro, porque o jogo nao indexa por item: o teto
+        // empurra o mod a perguntar so pelo que vai mostrar agora.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function()
+                        ctx.server.recipes_for("minecraft:iron_sword", 999)
+                    end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+        assertEquals(List.of("false"), bridge.calls);
+    }
+
+    @Test
+    void recipeLookupNeedsServerRead(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function() ctx.server.recipes_for("minecraft:stick") end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """, "\"chat.send\", \"player.menu\""));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("false"), bridge.calls);
+    }
+
+    /**
+     * Carrega o exemplo do catalogo do repositorio e exercita o caminho inteiro.
+     *
+     * <p>Um exemplo que nao roda e pior que nenhum: e a primeira coisa que alguem copia. Aqui ele
+     * passa pelas mesmas validacoes de um mod de verdade, e cada clique cai no callback como cairia
+     * em jogo.
+     */
+    @Test
+    void catalogExampleRunsEndToEnd(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+
+        // A sobreposicao chega com a grade rolavel dentro do viewport.
+        String overlay = player.overlays.get("catalogo:hud");
+        assertNotNull(overlay, "o exemplo precisa registrar a sobreposicao");
+        assertTrue(overlay.contains("\"target\":\"inventory\""), overlay);
+        assertTrue(overlay.contains("\"type\":\"viewport\""), overlay);
+        assertTrue(overlay.contains("\"type\":\"grid\""), overlay);
+        assertTrue(overlay.contains("minecraft:iron_ingot"), overlay);
+
+        // Clicar na segunda celula abre a tela com aquele item.
+        runtime.triggerScreenEvent("catalogo:hud", "itens", "click", "2", player);
+        assertEquals("catalogo:livro", player.screenId);
+        assertTrue(player.screenJson.contains("minecraft:iron_ingot"), player.screenJson);
+
+        // Digitar na busca filtra a lista sem reabrir a tela.
+        runtime.triggerScreenEvent("catalogo:livro", "busca", "change", "sword", player);
+        assertTrue(player.screenJson.contains("1 resultado(s)"), player.screenJson);
+        assertTrue(player.screenJson.contains("minecraft:iron_sword"), player.screenJson);
+
+        // Clicar no resultado mostra quem produz o item, com a receita desenhada.
+        runtime.triggerScreenEvent("catalogo:livro", "itens", "click", "1", player);
+        assertTrue(player.screenJson.contains("\"id\":\"entrada\""), player.screenJson);
+
+        // Alternar mostra para que o item serve, e nao como se obtem.
+        runtime.triggerScreenEvent("catalogo:livro", "alternar", "click", "", player);
+        assertTrue(player.screenJson.contains("Ver receita"), player.screenJson);
+    }
+
+    @Test
+    void scrollableContentMayBeTallerThanAnyScreen(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O conteudo rolavel mede justamente o que nao cabe na tela: uma lista com o registro
+        // inteiro do jogo passa de tres mil pixels. Validar esse campo com o teto de uma janela
+        // anulava a razao de ele existir, e so aparecia com uma lista de verdade -- nao com as
+        // quatro entradas do dublê.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("longa", {
+                        title = "Lista longa",
+                        elements = {
+                            { type = "viewport", id = "area", x = 8, y = 8, w = 144, h = 108,
+                              content = 3024 }
+                        }
+                    })
+
+                    local _, absurdo = pcall(function()
+                        ctx.player.open_screen("maior", { elements = {
+                            { type = "viewport", id = "a", x = 0, y = 0, w = 10, h = 10,
+                              content = 999999 } } })
+                    end)
+                    ctx.server.broadcast(tostring(absurdo))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"content\":3024"), player.screenJson);
+        // Continua havendo teto, so que proprio: o campo nao e ilimitado.
+        assertEquals(1, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).contains("content"), bridge.calls.get(0));
+    }
+
+    /**
+     * O mesmo exemplo, contra um registro do tamanho do real.
+     *
+     * <p>Os quatro itens do dublê escondiam duas falhas que apareceram no primeiro minuto em jogo:
+     * a altura do conteúdo rolável passava do teto, e a lista inteira estourava o limite de células
+     * por grade. Nenhuma das duas é visível com uma lista curta, e as duas são certas com uma lista
+     * de verdade — por isso este teste existe ao lado do outro, e não no lugar dele.
+     */
+    @Test
+    void catalogExampleSurvivesAFullRegistry(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "catalogo");
+        Path target = root.resolve("catalogo");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        RecordingBridge bridge = new RecordingBridge();
+        // Perto do que o vanilla 1.21.1 registra.
+        bridge.items.clear();
+        for (int index = 0; index < 1342; index++) {
+            bridge.items.add(String.format("minecraft:item_%04d", index));
+        }
+
+        TestPlayer player = new TestPlayer();
+        // Uma tela estreita, como a de escala 3: cabem seis colunas ao lado do inventario, e a
+        // paginacao acompanha isso em vez de assumir um numero fixo.
+        player.screenSize = new int[]{427, 240};
+
+        LuaRuntime runtime = runtime(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        runtime.triggerAll("player_joined", player);
+
+        String overlay = player.overlays.get("catalogo:hud");
+        assertNotNull(overlay, "com o registro cheio a sobreposicao precisa continuar sendo enviada");
+        assertTrue(overlay.contains("1342 itens"), overlay);
+        assertTrue(overlay.contains("\"columns\":6"), overlay);
+        assertTrue(overlay.contains("\"text\":\"1/7\""), overlay);
+
+        // Virar de pagina e clicar na primeira celula precisa abrir o item daquela pagina, e nao o
+        // primeiro da lista: o indice da celula e relativo a pagina.
+        runtime.triggerScreenEvent("catalogo:hud", "proxima", "click", "", player);
+        assertTrue(player.overlays.get("catalogo:hud").contains("\"text\":\"2/7\""),
+                player.overlays.get("catalogo:hud"));
+
+        // Seis colunas por 32 linhas dao 192 por pagina: a primeira celula da pagina 2 e a 193a.
+        runtime.triggerScreenEvent("catalogo:hud", "itens", "click", "1", player);
+        assertTrue(player.screenJson.contains("minecraft:item_0192"), player.screenJson);
+    }
+
+    @Test
+    void panelStyleDrawsAWindowWithoutATexture(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O visual de janela do jogo e bisel, nao imagem: descrito como regra, acompanha qualquer
+        // tamanho e dispensa o mod distribuir textura.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("janela", {
+                        title = "Janela",
+                        elements = {
+                            { type = "panel", style = "vanilla", x = 0, y = 0, w = 176, h = 166 },
+                            { type = "panel", style = "slot", x = 8, y = 8, w = 16, h = 16,
+                              border = 1 }
+                        }
+                    })
+
+                    local _, erro = pcall(function()
+                        ctx.player.open_screen("x", { elements = {
+                            { type = "panel", style = "neon", x = 0, y = 0, w = 8, h = 8 } } })
+                    end)
+                    ctx.server.broadcast(tostring(erro))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"style\":\"vanilla\""), player.screenJson);
+        assertTrue(player.screenJson.contains("\"style\":\"slot\""), player.screenJson);
+        // O vocabulario de estilo tambem e fechado.
+        assertEquals(1, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).contains("estilo de painel desconhecido"), bridge.calls.get(0));
+    }
+
+    @Test
+    void textCanBeDrawnWithoutShadow(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Texto escuro sobre painel claro fica sujo com sombra, porque a sombra tambem e escura e
+        // as duas se misturam. O jogo desenha titulo de container sem sombra pelo mesmo motivo.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("janela", {
+                        elements = {
+                            { type = "panel", style = "vanilla", x = 0, y = 0, w = 176, h = 90 },
+                            { type = "label", x = 8, y = 8, text = "Titulo",
+                              color = "#404040", shadow = false },
+                            { type = "label", x = 8, y = 20, text = "Sobre o mundo",
+                              color = "#FFFFFF" }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"shadow\":false"), player.screenJson);
+        // Sem declarar, a sombra continua ligada: e o que a maioria das telas sobre o mundo quer.
+        assertFalse(player.screenJson.contains("\"shadow\":true"), player.screenJson);
+    }
+
+    @Test
+    void modsDeclareTheirOwnProcesses(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O livro do jogo so conhece as receitas do jogo. Uma mecanica inventada por um mod -- dar
+        // trigo a uma vaca e receber leite -- nao existe la, e sem este registro seria invisivel a
+        // qualquer catalogo.
+        runtime.load(writeMod(root, """
+                mod.process("ordenha", {
+                    title = "Alimentar",
+                    inputs = { "minecraft:wheat" },
+                    output = { item = "minecraft:milk_bucket", count = 1, chance = 0.5 },
+                    by = "minecraft:cow"
+                })
+
+                mod.on("player_joined", function(ctx)
+                    local produz = ctx.server.processes({ produces = "minecraft:milk_bucket" })
+                    local usa = ctx.server.processes({ uses = "minecraft:wheat" })
+                    local vaca = ctx.server.processes({ by = "minecraft:cow" })
+
+                    local p = produz[1]
+                    ctx.server.broadcast(p.id .. "|" .. p.title .. "|" .. p.by
+                        .. "|" .. p.inputs[1] .. "|" .. p.output.item
+                        .. "x" .. p.output.count .. "@" .. p.output.chance)
+                    ctx.server.broadcast(#usa .. "," .. #vaca)
+                end)
+
+                return {}
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of(
+                "ui_mod:ordenha|Alimentar|minecraft:cow|minecraft:wheat|minecraft:milk_bucketx1@0.5",
+                "1,1"), bridge.calls);
+    }
+
+    @Test
+    void processesFromEveryModAreVisibleToACatalog(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        // O registro e global de proposito: um catalogo e um mod que lista o que os outros
+        // declararam, e nao teria como fazer isso se cada mod so enxergasse os proprios.
+        Path outro = root.resolve("outro");
+        Files.createDirectories(outro.resolve("moageiro"));
+        Files.writeString(outro.resolve("moageiro").resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "moageiro",
+                  "name": "Moageiro",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "permissions": ["chat.send"]
+                }
+                """, StandardCharsets.UTF_8);
+        Files.writeString(outro.resolve("moageiro").resolve("main.lua"), """
+                mod.process("moer", {
+                    title = "Moer",
+                    inputs = { "minecraft:iron_ore" },
+                    output = { item = "minecraft:iron_nugget", count = 6 }
+                })
+                return {}
+                """, StandardCharsets.UTF_8);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(outro).get(0));
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local todos = ctx.server.processes()
+                    ctx.server.broadcast(#todos .. ":" .. todos[1].id)
+                end)
+                return {}
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("1:moageiro:moer"), bridge.calls);
+    }
+
+    @Test
+    void invalidProcessesAreRefusedWithAClearMessage(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                local erros = {}
+
+                local function tentar(fn)
+                    local ok, erro = pcall(fn)
+                    erros[#erros + 1] = tostring(erro)
+                end
+
+                tentar(function() mod.process("sem_saida", { inputs = {} }) end)
+                tentar(function()
+                    mod.process("chance_ruim", {
+                        output = { item = "minecraft:stone", chance = 2 }
+                    })
+                end)
+
+                mod.on("player_joined", function(ctx)
+                    for _, erro in ipairs(erros) do ctx.server.broadcast(erro) end
+                end)
+
+                return {}
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(2, bridge.calls.size());
+        assertTrue(bridge.calls.get(0).contains("precisa de uma tabela em output"), bridge.calls.get(0));
+        assertTrue(bridge.calls.get(1).contains("chance"), bridge.calls.get(1));
+    }
+
+    @Test
+    void dropsAnswerWhereAnItemComesFrom(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = runtime(bridge);
+
+        // Para a maior parte do jogo, esta e a resposta verdadeira: minerio, pedra e madeira chegam
+        // ao jogador por mineracao, e nao por receita.
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local da = ctx.server.drops_of("minecraft:iron_ore")
+                    local de = ctx.server.dropped_by("minecraft:raw_iron")
+                    ctx.server.broadcast(table.concat(da, ",") .. "|" .. table.concat(de, ","))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("minecraft:raw_iron|minecraft:iron_ore"), bridge.calls);
+    }
+
+    @Test
     void protocolVocabularyIsClosed() {
         // Documenta o contrato: quem acrescentar uma acao precisa fazer aqui, e nao no cliente.
         assertEquals(java.util.Set.of("click", "change", "submit", "close"), ScreenProtocol.ACTIONS);
@@ -259,6 +945,10 @@ class ScreenTest {
                 "todo elemento interativo precisa ser um elemento valido");
         assertFalse(ScreenProtocol.ELEMENTS.contains("script"),
                 "o cliente interpreta dados, nunca codigo");
+        // O alvo de uma sobreposicao segue a mesma regra: nomes proprios, nunca classes do jogo.
+        assertTrue(ScreenProtocol.TARGETS.contains("inventory"));
+        assertTrue(ScreenProtocol.TARGETS.stream().noneMatch(target -> target.contains(".")),
+                "um alvo nomeia uma tela, e nao uma classe do cliente");
     }
 
     @Test

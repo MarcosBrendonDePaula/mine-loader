@@ -73,9 +73,120 @@ Coordenadas são relativas ao canto da tela, que é centralizada. Âncora `cente
 | `progress` | Barra proporcional a um valor de 0 a 1 | não |
 | `button` | Área clicável com texto | clique |
 | `input` | Campo de texto editável | digitação |
+| `grid` | Grade de itens, com colunas e passo | clique na célula |
+| `viewport` | Recorte com rolagem, para o que não cabe | roda do mouse |
 
 Um conjunto pequeno cobre a maior parte do que um mod precisa. Elementos compostos — listas,
 abas, grades — são montados a partir desses, e podem virar tipos próprios quando o padrão aparecer.
+
+## Fundo por regra, e nao por imagem
+
+A janela do Minecraft nao e uma textura: e um retangulo cinza com uma borda clara em cima e a
+esquerda e uma escura embaixo e a direita, o que da a impressao de luz vindo do canto superior
+esquerdo. Descrever isso como regra deixa o painel acompanhar qualquer tamanho, e dispensa o mod
+distribuir e o cliente baixar uma imagem.
+
+```lua
+{ type = "panel", style = "vanilla", x = 0, y = 0, w = 176, h = 166 }
+{ type = "panel", style = "slot", x = 8, y = 8, w = 16, h = 16, border = 1 }
+```
+
+| Estilo | Resultado |
+|---|---|
+| `flat` | Retangulo chapado. O padrao, e o que existia antes |
+| `vanilla` | Cinza e bisel da janela do jogo |
+| `slot` | Bisel invertido: o quadrado parece cavado, como um slot |
+| `inset` | Igual a `slot`, para areas maiores que um slot |
+
+`border`, `border_light` e `border_dark` ajustam espessura e cores quando o padrao nao serve. Sem
+`color`, `vanilla` e `slot` usam os cinzas do jogo.
+
+## Sombra do texto
+
+Todo texto era desenhado com sombra. Sobre o mundo isso e o certo -- a sombra e o que separa o texto
+do cenario. Sobre um painel claro e o contrario: a sombra tambem e escura, as duas se misturam e o
+texto fica sujo e mais pesado do que deveria. O jogo desenha titulo de container sem sombra pelo
+mesmo motivo.
+
+```lua
+{ type = "label", x = 8, y = 8, text = "Forja", color = "#404040", shadow = false }
+```
+
+O padrao continua `true`, que serve a HUD e a telas sobre o mundo.
+
+## Tamanho da tela do jogador
+
+O mod monta a interface no servidor e por isso nao enxerga a tela de quem joga. As ancoras sabem
+colar um elemento na borda, mas nao sabem se ele cabe: um painel de 156 px ao lado do inventario
+cabe em escala 2 e sai da tela em escala 3, porque a escala divide a resolucao.
+
+```lua
+local tela = ctx.player.screen_size()   -- { width = 427, height = 240 }, ou nil
+if tela then
+    local colunas = math.floor(((tela.width - 176) / 2 - 16) / 18)
+end
+```
+
+Devolve `nil` quando o cliente nao tem o loader ou ainda nao informou -- o mod escolhe um padrao,
+em vez de receber um numero inventado que pareceria confiavel. O cliente reinforma a cada mudanca
+de escala ou de tamanho da janela.
+
+## Grade de itens
+
+Uma grade 9x5 exigia 45 elementos com `x` e `y` calculados um a um, e cada ajuste de espaçamento
+significava recalcular todos. `grid` faz isso ser um elemento:
+
+```lua
+{ type = "grid", id = "itens", x = 8, y = 8, columns = 9, cell = 18, items = {
+    "minecraft:stone",
+    { item = "minecraft:diamond", count = 3, tooltip = "Diamante\nRaro" }
+} }
+```
+
+A forma curta -- so o identificador -- existe porque o caso comum e justamente uma lista de itens.
+A completa aceita `count` e `tooltip`.
+
+| Campo | Padrao | O que faz |
+|---|---|---|
+| `columns` | 9 | Itens por linha |
+| `cell` | 18 | Passo entre celulas, em pixels; 18 e o do inventario |
+| `items` | obrigatorio | Ate 512 celulas |
+
+O clique volta como acao `click`, com o **indice da celula** no valor, a partir de 1. O script nao
+recebe posicao em pixels: recebe qual item foi apontado.
+
+```lua
+mod.screen("catalogo", function(ctx)
+    if ctx.ui.element == "itens" then
+        local item = minha_lista[tonumber(ctx.ui.value)]
+    end
+end)
+```
+
+O texto de ajuda de uma grade e por celula, e nao da grade inteira -- e o que faz o nome do item
+aparecer ao passar por ele, como no inventario.
+
+## Rolagem
+
+Uma lista maior que a janela precisa de duas coisas: um recorte, e um deslocamento que responda a
+roda do mouse. `viewport` e o recorte; os elementos que apontam para ele com `group` rolam dentro.
+
+```lua
+{ type = "viewport", id = "area", x = 8, y = 8, w = 144, h = 108, content = 400 },
+{ type = "grid", id = "itens", group = "area", x = 0, y = 0, columns = 8, items = celulas }
+```
+
+Dentro de um grupo, `x` e `y` passam a ser relativos ao canto do viewport. Monta-se a lista uma vez
+e ela rola sem recalcular coordenada nenhuma.
+
+**O deslocamento vive no cliente.** Rolar nao envia pacote: seria uma ida e volta pela rede a cada
+entalhe da roda, e a lista andaria com atraso visivel. O servidor declara o que existe; o cliente
+decide o que esta a vista.
+
+**`content` e declarado, nao medido.** E a altura total do conteudo, e diz ate onde a rolagem pode
+ir. O cliente nao mede sozinho porque parte do conteudo pode nem estar na descricao atual. Sem
+`content`, ou com ele menor que a altura do viewport, nao ha o que rolar -- e o erro mais provavel
+ao montar a primeira lista.
 
 ## Onde cada peça vive
 
@@ -109,12 +220,18 @@ void closeScreen();
 
 /** Define os elementos fixos na tela do jogador. Lista vazia limpa. */
 void setHud(String descriptionJson);
+
+/** Desenha sobre uma tela que o proprio jogo abre. */
+boolean setOverlay(String overlayId, String descriptionJson);
+
+/** Remove uma sobreposicao registrada. */
+boolean clearOverlay(String overlayId);
 ```
 
 A descrição trafega como texto JSON porque é o formato que o manifesto já usa, o que permite a um mod
 declarar uma tela no próprio `mod.json` e o núcleo repassá-la sem conhecer nenhum tipo de pacote.
 
-Um adaptador NeoForge implementaria os mesmos quatro métodos com a rede dele, e nenhum mod
+Um adaptador NeoForge implementaria os mesmos métodos com a rede dele, e nenhum mod
 precisaria mudar.
 
 ## O padrao de comunicacao
@@ -132,7 +249,10 @@ camadas existe para impedir.
 | `lua_loader:screen_update` | servidor para cliente | descricao |
 | `lua_loader:screen_close` | servidor para cliente | vazio |
 | `lua_loader:hud_set` | servidor para cliente | descricao |
+| `lua_loader:overlay_set` | servidor para cliente | versao, id, descricao com o alvo |
+| `lua_loader:overlay_clear` | servidor para cliente | id |
 | `lua_loader:screen_event` | cliente para servidor | versao, id da tela, id do elemento, acao, valor |
+| `lua_loader:client_info` | cliente para servidor | versao, largura e altura da tela |
 
 Todo canal usa o mesmo namespace do loader, para que o conjunto seja reconhecivel e para nao colidir
 com outros mods.
@@ -197,6 +317,92 @@ registrou; um jogador sem o loader simplesmente não tem o canal. Nesse caso:
   funciona em qualquer cliente.
 
 Isso mantém a promessa atual: um mod que usa apenas a janela de itens roda em cliente vanilla.
+
+## Sobreposicao em tela do jogo
+
+Abrir uma tela e participar de uma existente sao coisas diferentes. `open_screen` substitui o que
+estava na frente; uma sobreposicao acompanha o inventario, o forno ou o menu de pausa. Sem ela nao
+ha como acrescentar um botao ao menu de pausa, um painel ao lado do bau ou um aviso na tela de
+morte, porque nenhum deles pode substituir a tela em que aparece.
+
+```lua
+ctx.player.set_overlay("catalogo", {
+    target = "inventory",
+    elements = {
+        { type = "panel", anchor = "gui_top_right", x = 4, y = 0, w = 82, h = 166,
+          color = "#101018E0" },
+        { type = "item", anchor = "gui_top_right", x = 10, y = 22,
+          item = "minecraft:iron_ingot", tooltip = "Lingote de ferro" },
+        { type = "button", id = "proxima", anchor = "gui_top_right",
+          x = 48, y = 140, w = 34, h = 18, text = ">" }
+    }
+})
+
+ctx.player.clear_overlay("catalogo")
+```
+
+O clique volta pelo mesmo `mod.screen` com o mesmo nome: para o mod, um botao dentro de uma
+sobreposicao chega igual a um botao de uma tela propria.
+
+### Alvos
+
+O mod nomeia o alvo, nunca a classe da tela: classes do cliente mudam entre versoes do jogo e nao
+existem em outra plataforma, entao cita-las quebraria a portabilidade que a separacao em camadas
+existe para manter. Um alvo que aquele cliente nao reconhece simplesmente nunca casa.
+
+| Alvo | Tela |
+|---|---|
+| `any` | qualquer tela |
+| `container` | qualquer tela com inventario |
+| `inventory` | inventario do jogador |
+| `creative` | inventario criativo |
+| `crafting` | mesa de trabalho |
+| `furnace` | forno, forno de fundicao e defumador |
+| `chest` | bau e barril |
+| `anvil` | bigorna |
+| `pause` | menu de pausa |
+| `death` | tela de morte |
+| `title` | tela inicial |
+
+### Ancoras de janela
+
+Cinco ancoras novas — `gui_top_left`, `gui_top_right`, `gui_left`, `gui_right` e `gui_center` —
+referem-se ao retangulo da tela do jogo por baixo, e nao a tela toda. E o que permite colar um
+painel a direita do inventario em qualquer resolucao, sem repetir a conta que o cliente ja faz para
+centralizar aquela janela.
+
+Fora de uma tela com inventario nao ha janela a que se prender, e elas equivalem as ancoras comuns.
+
+### O que a sobreposicao nao faz
+
+| Limite | Motivo |
+|---|---|
+| Sem `input` | Um campo dentro de uma tela do jogo disputaria o foco com a tela |
+| Botao so muda na proxima abertura | O widget e criado quando a tela abre; o desenho, esse, e por quadro |
+| Sem acesso aos slots da tela | Ler ou mexer no inventario daquela tela exigiria outro protocolo |
+| Teto de 16 por jogador | Uma sobreposicao por mod ja e bastante; o teto evita acumulo silencioso |
+
+Um reenvio com o mesmo id substitui a sobreposicao anterior. Sair do servidor limpa todas: nada
+vaza para a sessao seguinte.
+
+## Texto de ajuda
+
+O campo `tooltip` existia no protocolo desde o inicio e nunca era desenhado — o valor trafegava,
+chegava ao cliente e parava ali. Agora ele aparece quando o cursor para sobre o elemento, em uma
+tela propria e em uma sobreposicao. Linhas separam-se por `
+`.
+
+```lua
+{ type = "item", x = 8, y = 8, item = "minecraft:diamond",
+  tooltip = "Diamante
+Custa 12 esmeraldas" }
+```
+
+O HUD nao desenha texto de ajuda: sem cursor, nao ha o que apontar.
+
+A area considerada e a do elemento. `label` e `item` dimensionam-se pelo conteudo — a largura do
+texto e 16 por 16, respectivamente — e os demais usam `w` e `h`. Quando dois elementos se sobrepoem,
+vale o ultimo declarado, que e o que ficou por cima.
 
 ## HUD
 
@@ -359,9 +565,19 @@ tela sem os elementos que não entende, e não uma tela quebrada.
 | `panel`, `label`, `progress`, `item`, `image`, `button`, `input` | pronto |
 | HUD | pronto |
 | Deteccao de cliente sem loader | pronto |
+| Sobreposicao em tela do jogo | pronto |
+| Texto de ajuda | pronto |
+| Grade de itens | pronto |
+| Rolagem com viewport | pronto |
+| Painel com bisel, sem textura | pronto |
+| Texto sem sombra | pronto |
+| Tamanho da tela informado ao mod | pronto |
 
-O que continua fora: elementos compostos como lista com rolagem, abas e grade; arrastar; e qualquer
-elemento que exija estado proprio no cliente alem do texto ja digitado.
+O que continua fora: abas; arrastar; barra de rolagem visivel, com alca arrastavel -- hoje a
+rolagem so responde a roda; campo de texto dentro de uma sobreposicao; leitura ou escrita nos slots
+da tela sobreposta; nome traduzido de item -- o `tooltip` mostra o identificador, e nao "Lingote de
+Ferro"; recorte de textura em `image`, que hoje assume a folha inteira do tamanho do elemento; e
+tecla como acao, que impede um atalho ao estilo `R` e `U` do JEI.
 
 ## Ordem de construção
 
