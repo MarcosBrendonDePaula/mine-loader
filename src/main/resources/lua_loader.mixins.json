@@ -3,7 +3,10 @@
   "package": "dev.lualoader.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ResourcePackManagerMixin"
+    "ResourcePackManagerMixin",
+    "LootTableAccessor",
+    "LootPoolAccessor",
+    "ItemEntryAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

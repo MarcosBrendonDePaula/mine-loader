@@ -118,6 +118,51 @@ public interface GameBridge {
      */
     boolean damageEntity(String entityUuid, float amount);
 
+    /**
+     * Identificadores dos itens registrados no jogo, em ordem alfabética.
+     *
+     * <p>Inclui o que outros mods registraram, porque o registro é único: é o que permite a um mod
+     * montar um catálogo do jogo inteiro em vez de apenas do próprio conteúdo.
+     *
+     * @param namespace prefixo exigido, ou {@code null} para qualquer um
+     * @param contains  trecho que o caminho precisa conter, ou {@code null}
+     * @param limit     teto de resultados, para um catálogo inteiro não virar uma tabela gigante
+     */
+    java.util.List<String> registeredItems(String namespace, String contains, int limit);
+
+    /**
+     * Receitas que produzem um item.
+     *
+     * <p>Junto com {@link #recipesUsing} responde as duas perguntas que um catálogo existe para
+     * responder: como se obtém isto, e para que isto serve. Sem elas o mod lista itens sem saber
+     * ligá-los entre si.
+     *
+     * @return uma linha JSON por receita, com {@code id}, {@code type}, {@code output},
+     *         {@code width}, {@code height} e {@code ingredients} — este último uma lista de
+     *         posições, cada uma com os itens que servem ali
+     */
+    java.util.List<String> recipesFor(String itemId, int limit);
+
+    /** Receitas que consomem um item em alguma posição. */
+    java.util.List<String> recipesUsing(String itemId, int limit);
+
+    /**
+     * Itens que um bloco pode derrubar ao ser quebrado.
+     *
+     * <p>É a terceira pergunta de um catálogo, e para a maioria dos itens do jogo é a verdadeira:
+     * minério, pedra e madeira chegam ao jogador por mineração, e não por receita.
+     *
+     * @return uma linha por item, no formato {@code item}
+     */
+    java.util.List<String> dropsOf(String blockId, int limit);
+
+    /**
+     * Blocos que podem derrubar um item.
+     *
+     * @return uma linha por bloco, no formato {@code bloco}
+     */
+    java.util.List<String> droppedBy(String itemId, int limit);
+
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {
         @Override
@@ -213,6 +258,31 @@ public interface GameBridge {
 
         @Override
         public boolean damageEntity(String entityUuid, float amount) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> registeredItems(String namespace, String contains, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> recipesFor(String itemId, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> recipesUsing(String itemId, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> dropsOf(String blockId, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public java.util.List<String> droppedBy(String itemId, int limit) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
     };

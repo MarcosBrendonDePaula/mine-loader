@@ -1,5 +1,12 @@
 package dev.lualoader.minecraft;
 
+import net.minecraft.item.ItemStack;
+import net.minecraft.recipe.Ingredient;
+import net.minecraft.recipe.Recipe;
+import net.minecraft.recipe.RecipeEntry;
+import net.minecraft.recipe.ShapedRecipe;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.GameBridge;
 import net.minecraft.block.Block;
@@ -73,11 +80,11 @@ public final class FabricGameBridge implements GameBridge {
 
     @Override
     public java.util.List<String> onlinePlayers() {
-        java.util.List<String> nomes = new java.util.ArrayList<>();
+        java.util.List<String> names = new java.util.ArrayList<>();
         for (var player : requireServer().getPlayerManager().getPlayerList()) {
-            nomes.add(player.getName().getString());
+            names.add(player.getName().getString());
         }
-        return nomes;
+        return names;
     }
 
     @Override
@@ -241,16 +248,16 @@ public final class FabricGameBridge implements GameBridge {
     @Override
     public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
         var world = requireWorld();
-        var caixa = new net.minecraft.util.math.Box(
+        var box = new net.minecraft.util.math.Box(
                 x - radius, y - radius, z - radius, x + radius, y + radius, z + radius);
 
-        java.util.List<String> encontradas = new java.util.ArrayList<>();
-        for (Entity entity : world.getOtherEntities(null, caixa)) {
-            Identifier tipo = Registries.ENTITY_TYPE.getId(entity.getType());
-            encontradas.add(entity.getUuidAsString() + ";" + (tipo == null ? "?" : tipo)
+        java.util.List<String> found = new java.util.ArrayList<>();
+        for (Entity entity : world.getOtherEntities(null, box)) {
+            Identifier type = Registries.ENTITY_TYPE.getId(entity.getType());
+            found.add(entity.getUuidAsString() + ";" + (type == null ? "?" : type)
                     + ";" + entity.getBlockX() + ";" + entity.getBlockY() + ";" + entity.getBlockZ());
         }
-        return encontradas;
+        return found;
     }
 
     @Override
@@ -268,6 +275,161 @@ public final class FabricGameBridge implements GameBridge {
 
         var world = requireWorld();
         return entity.damage(requireWorld().getDamageSources().magic(), amount);
+    }
+
+    @Override
+    public java.util.List<String> registeredItems(String namespace, String contains, int limit) {
+        // O registro e consultado direto: nao depende de mundo carregado, e o mesmo conteudo vale
+        // para qualquer dimensao. Ordenar aqui e o que torna a paginacao estavel entre chamadas.
+        java.util.List<String> found = new java.util.ArrayList<>();
+
+        for (Identifier id : Registries.ITEM.getIds()) {
+            if (namespace != null && !id.getNamespace().equals(namespace)) continue;
+            if (contains != null && !contains.isBlank() && !id.getPath().contains(contains)) continue;
+            found.add(id.toString());
+        }
+
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    /** Teto de itens listados por posicao de ingrediente, para uma tag grande nao inchar a carga. */
+    private static final int MAX_ALTERNATIVES = 32;
+
+    @Override
+    public java.util.List<String> recipesFor(String itemId, int limit) {
+        Identifier wanted = parseIdentifier(itemId);
+        return collectRecipes(limit, recipe -> {
+            ItemStack result = recipe.getResult(requireServer().getRegistryManager());
+            return result != null && Registries.ITEM.getId(result.getItem()).equals(wanted);
+        });
+    }
+
+    @Override
+    public java.util.List<String> recipesUsing(String itemId, int limit) {
+        Identifier wanted = parseIdentifier(itemId);
+        return collectRecipes(limit, recipe -> {
+            for (Ingredient ingredient : recipe.getIngredients()) {
+                for (ItemStack stack : ingredient.getMatchingStacks()) {
+                    if (Registries.ITEM.getId(stack.getItem()).equals(wanted)) return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Percorre o livro de receitas do servidor uma vez, aplicando o filtro.
+     *
+     * <p>Nao ha indice por item na API do jogo: as duas perguntas custam uma varredura. Por isso o
+     * teto e obrigatorio, e por isso um mod deve guardar o que ja perguntou em vez de repetir a
+     * consulta a cada quadro.
+     */
+    private java.util.List<String> collectRecipes(int limit,
+                                                  java.util.function.Predicate<Recipe<?>> filter) {
+        java.util.List<String> found = new java.util.ArrayList<>();
+
+        for (RecipeEntry<?> entry : requireServer().getRecipeManager().values()) {
+            if (found.size() >= limit) break;
+
+            Recipe<?> recipe = entry.value();
+            try {
+                if (!filter.test(recipe)) continue;
+                found.add(describeRecipe(entry.id(), recipe));
+            } catch (RuntimeException ignored) {
+                // Uma receita de outro mod pode recusar getResult ou getIngredients fora do contexto
+                // de craft. Pular uma e melhor que derrubar a consulta inteira.
+            }
+        }
+        return found;
+    }
+
+    private String describeRecipe(Identifier id, Recipe<?> recipe) {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", id.toString());
+        json.addProperty("type", Registries.RECIPE_TYPE.getId(recipe.getType()).toString());
+
+        ItemStack result = recipe.getResult(requireServer().getRegistryManager());
+        JsonObject output = new JsonObject();
+        output.addProperty("item", Registries.ITEM.getId(result.getItem()).toString());
+        output.addProperty("count", result.getCount());
+        json.add("output", output);
+
+        // A forma so existe em receita com padrao; nas demais, zero diz ao mod que nao ha grade.
+        if (recipe instanceof ShapedRecipe shaped) {
+            json.addProperty("width", shaped.getWidth());
+            json.addProperty("height", shaped.getHeight());
+        } else {
+            json.addProperty("width", 0);
+            json.addProperty("height", 0);
+        }
+
+        JsonArray ingredients = new JsonArray();
+        for (Ingredient ingredient : recipe.getIngredients()) {
+            JsonArray alternatives = new JsonArray();
+            int total = 0;
+            for (ItemStack stack : ingredient.getMatchingStacks()) {
+                if (total++ >= MAX_ALTERNATIVES) break;
+                alternatives.add(Registries.ITEM.getId(stack.getItem()).toString());
+            }
+            ingredients.add(alternatives);
+        }
+        json.add("ingredients", ingredients);
+
+        return json.toString();
+    }
+
+    @Override
+    public java.util.List<String> dropsOf(String blockId, int limit) {
+        Block block = requireAnyBlock(blockId);
+        java.util.List<String> found = new java.util.ArrayList<>(itemsOfLootTable(block));
+
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    @Override
+    public java.util.List<String> droppedBy(String itemId, int limit) {
+        Identifier wanted = parseIdentifier(itemId);
+        java.util.List<String> found = new java.util.ArrayList<>();
+
+        // Sem indice reverso: a pergunta custa uma varredura dos blocos registrados. E o mesmo
+        // custo de consultar receitas, e pelo mesmo motivo tem teto.
+        for (Block block : Registries.BLOCK) {
+            if (found.size() >= limit) break;
+            if (itemsOfLootTable(block).contains(wanted.toString())) {
+                found.add(Registries.BLOCK.getId(block).toString());
+            }
+        }
+        java.util.Collections.sort(found);
+        return found;
+    }
+
+    /**
+     * Itens que a tabela de loot de um bloco pode dar.
+     *
+     * <p>Le a tabela em vez de sortear: sortear responderia por amostragem, e uma amostra nunca
+     * prova que um item raro nao existe. So entradas de item sao consideradas -- uma entrada que
+     * aponta para outra tabela e ignorada, e isso esta documentado como limite.
+     */
+    private java.util.Set<String> itemsOfLootTable(Block block) {
+        java.util.Set<String> items = new java.util.LinkedHashSet<>();
+
+        var key = block.getLootTableKey();
+        if (key == null) return items;
+
+        var table = requireServer().getReloadableRegistries().getLootTable(key);
+        if (!(table instanceof dev.lualoader.mixin.LootTableAccessor accessor)) return items;
+
+        for (var pool : accessor.lua_loader$pools()) {
+            if (!(pool instanceof dev.lualoader.mixin.LootPoolAccessor poolAccessor)) continue;
+
+            for (var entry : poolAccessor.lua_loader$entries()) {
+                if (!(entry instanceof dev.lualoader.mixin.ItemEntryAccessor itemAccessor)) continue;
+                items.add(Registries.ITEM.getId(itemAccessor.lua_loader$item().value()).toString());
+            }
+        }
+        return items;
     }
 
     private Entity findEntity(String entityUuid) {

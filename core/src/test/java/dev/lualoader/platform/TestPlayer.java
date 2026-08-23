@@ -63,18 +63,18 @@ public class TestPlayer implements PlayerHandle {
 
     @Override
     public int giveItem(String itemId, int count) {
-        int atual = inventory.getOrDefault(itemId, 0);
-        int cabe = Math.max(0, Math.min(count, capacity - atual));
-        if (cabe > 0) inventory.put(itemId, atual + cabe);
-        return count - cabe;
+        int current = inventory.getOrDefault(itemId, 0);
+        int fits = Math.max(0, Math.min(count, capacity - current));
+        if (fits > 0) inventory.put(itemId, current + fits);
+        return count - fits;
     }
 
     @Override
     public int takeItem(String itemId, int count) {
-        int atual = inventory.getOrDefault(itemId, 0);
-        int retirado = Math.min(atual, count);
-        if (retirado > 0) inventory.put(itemId, atual - retirado);
-        return retirado;
+        int current = inventory.getOrDefault(itemId, 0);
+        int removed = Math.min(current, count);
+        if (removed > 0) inventory.put(itemId, current - removed);
+        return removed;
     }
 
     @Override
@@ -150,5 +150,27 @@ public class TestPlayer implements PlayerHandle {
     @Override
     public void setHud(String descriptionJson) {
         hudJson = descriptionJson;
+    }
+
+    /** Sobreposicoes registradas, por identificador. */
+    public final java.util.Map<String, String> overlays = new java.util.LinkedHashMap<>();
+
+    /** Tamanho de tela que este jogador reporta; null simula cliente que nao informou. */
+    public int[] screenSize = {427, 240};
+
+    @Override
+    public int[] screenSize() {
+        return screenSize;
+    }
+
+    @Override
+    public boolean setOverlay(String overlayId, String descriptionJson) {
+        overlays.put(overlayId, descriptionJson);
+        return true;
+    }
+
+    @Override
+    public boolean clearOverlay(String overlayId) {
+        return overlays.remove(overlayId) != null;
     }
 }
