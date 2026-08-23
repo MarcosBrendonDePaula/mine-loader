@@ -254,6 +254,33 @@ local abriu = ctx.player.open_screen("forja", desenhar(ctx))
 
 O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `ctx.ui.value`.
 
+## Redesenhar com campos de texto
+
+Um campo de texto dispara `change` a cada tecla, e um script costuma redesenhar a tela em resposta
+ao proprio evento. Se cada redesenho recriasse os widgets, o jogador perderia o foco e a posicao do
+cursor a cada letra digitada.
+
+Por isso o renderizador reaproveita os campos que continuam existindo, identificados pelo `id`: o
+texto, o cursor, a selecao e o foco sobrevivem ao redesenho. Um campo com `id` novo e criado do
+zero, e um que desapareceu da descricao e descartado.
+
+A consequencia para quem escreve o mod: o `value` de um campo so e aplicado quando ele aparece pela
+primeira vez. Para forcar um valor depois, use um `id` diferente ou feche e reabra a tela — do
+contrario o loader estaria disputando o campo com quem esta digitando nele.
+
+## Escala de texto
+
+A fonte do Minecraft e bitmap. Uma escala inteira multiplica cada pixel e mantem o texto nitido;
+uma escala fracionaria como 1.5 interpola e deixa o resultado borrado.
+
+| Escala | Resultado |
+|---|---|
+| 1, 2, 3 | Nitido |
+| 1.5, 1.25, 2.5 | Borrado |
+
+O loader aceita qualquer valor entre 0.25 e 4, porque um mod pode querer o efeito, mas quem busca
+texto legivel deve usar numero inteiro.
+
 ## Limites
 
 Como qualquer superfície que aceita dados de terceiros, precisa de teto:

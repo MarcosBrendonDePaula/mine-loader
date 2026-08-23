@@ -6,6 +6,10 @@
 -- Um modulo do proprio mod, carregado uma vez e compartilhado entre os scripts.
 local ui = mod.import("lib/ui.lua")
 
+-- Em Lua um local so e visivel a partir da linha em que aparece, entao tudo que as funcoes
+-- abaixo usam precisa ser declarado aqui em cima.
+local META = 10
+
 local COR_FUNDO   = ui.CORES.fundo
 local COR_TITULO  = ui.CORES.titulo
 local COR_TEXTO   = ui.CORES.texto
@@ -51,8 +55,6 @@ end
 --- Redesenha o HUD a partir do estado.
 -- O HUD nao se atualiza sozinho: quem muda o estado precisa reenvia-lo. Sem isso ele congela
 -- no valor que tinha quando foi definido, que e o erro mais facil de cometer aqui.
-local META = 10
-
 local function atualizar_hud(ctx)
     -- O contador nao passa da meta: mostrar 11/10 confundiria mais do que informaria.
     local contador = math.min(META, ctx.state.contador or 0)

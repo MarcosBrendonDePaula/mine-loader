@@ -12,8 +12,10 @@ M.CORES = {
 }
 
 --- Um titulo em escala maior, na posicao indicada.
+-- A fonte do Minecraft e bitmap: escala inteira mantem os pixels nitidos, enquanto 1.5 ou 1.25
+-- interpolam e deixam o texto borrado.
 function M.titulo(x, y, texto)
-    return { type = "label", x = x, y = y, text = texto, color = M.CORES.titulo, scale = 1.5 }
+    return { type = "label", x = x, y = y, text = texto, color = M.CORES.titulo, scale = 2 }
 end
 
 --- Uma barra de progresso com rotulo em cima.

@@ -38,15 +38,30 @@ public class LuaScreen extends Screen {
         return screenId;
     }
 
-    /** Troca a descrição sem fechar, preservando o texto já digitado. */
+    /**
+     * Troca a descrição sem fechar a tela.
+     *
+     * <p>Campos de texto que continuam existindo são reaproveitados em vez de recriados. Recriar um
+     * campo a cada atualização faria o jogador perder o foco e a posição do cursor a cada tecla,
+     * porque um script costuma redesenhar a tela em resposta ao próprio evento de digitação.
+     */
     public void updateModel(ScreenModel novo) {
-        Map<String, String> digitado = new HashMap<>();
-        fields.forEach((id, campo) -> digitado.put(id, campo.getText()));
+        Map<String, TextFieldWidget> anteriores = new HashMap<>(fields);
+        String focado = null;
+        for (Map.Entry<String, TextFieldWidget> entrada : anteriores.entrySet()) {
+            if (entrada.getValue().isFocused()) focado = entrada.getKey();
+        }
 
         this.model = novo;
         clearChildren();
         fields.clear();
-        buildWidgets(digitado);
+        buildWidgets(anteriores);
+
+        // Devolve o foco ao campo em que o jogador estava digitando.
+        if (focado != null && fields.containsKey(focado)) {
+            setFocused(fields.get(focado));
+            fields.get(focado).setFocused(true);
+        }
     }
 
     @Override
@@ -97,7 +112,7 @@ public class LuaScreen extends Screen {
         return new int[]{baseX + element.x(), baseY + element.y()};
     }
 
-    private void buildWidgets(Map<String, String> digitado) {
+    private void buildWidgets(Map<String, TextFieldWidget> anteriores) {
         for (ScreenModel.Element element : model.elements()) {
             int[] pos = resolve(element);
 
@@ -107,11 +122,21 @@ public class LuaScreen extends Screen {
                         .dimensions(pos[0], pos[1], Math.max(20, element.w()), Math.max(12, element.h()))
                         .build());
             } else if (element.type().equals("input")) {
+                TextFieldWidget existente = anteriores.get(element.id());
+
+                if (existente != null) {
+                    // Reaproveita o campo: o texto, o cursor e a selecao continuam onde estavam.
+                    existente.setPosition(pos[0], pos[1]);
+                    fields.put(element.id(), existente);
+                    addDrawableChild(existente);
+                    continue;
+                }
+
                 TextFieldWidget campo = new TextFieldWidget(textRenderer, pos[0], pos[1],
                         Math.max(20, element.w()), Math.max(12, element.h()),
                         Text.literal(element.text()));
                 campo.setMaxLength(ScreenProtocol.MAX_TEXT_LENGTH);
-                campo.setText(digitado.getOrDefault(element.id(), element.value()));
+                campo.setText(element.value());
                 campo.setChangedListener(texto -> send(element.id(), "change", texto));
 
                 fields.put(element.id(), campo);
@@ -137,10 +162,13 @@ public class LuaScreen extends Screen {
                                 x, y, element.color());
                     } else {
                         // A escala multiplica a matriz, entao a posicao precisa ser dividida por ela.
+                        // Escala inteira mantem a fonte bitmap nitida; uma fracionaria interpola e
+                        // borra, e o arredondamento abaixo evita ainda cair em meio pixel.
+                        float escala = (float) element.scale();
                         context.getMatrices().push();
-                        context.getMatrices().scale((float) element.scale(), (float) element.scale(), 1f);
+                        context.getMatrices().scale(escala, escala, 1f);
                         context.drawTextWithShadow(textRenderer, Text.literal(element.text()),
-                                (int) (x / element.scale()), (int) (y / element.scale()), element.color());
+                                Math.round(x / escala), Math.round(y / escala), element.color());
                         context.getMatrices().pop();
                     }
                 }
