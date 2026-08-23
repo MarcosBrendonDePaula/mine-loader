@@ -76,9 +76,11 @@ end
 -- Uma grade e um elemento so, com a lista de itens dentro. Sem ela, cada celula exigiria um
 -- elemento com x e y calculados a mao, e o teto de 256 elementos por tela seria atingido rapido.
 local function grade(id, grupo, itens, colunas)
+    -- Sem tooltip declarado, o cliente responde com o nome traduzido do item e o identificador
+    -- abaixo. O servidor nao teria como traduzir: o idioma e escolha de cada cliente.
     local celulas = {}
     for indice, item in ipairs(itens) do
-        celulas[indice] = { item = item, tooltip = item }
+        celulas[indice] = { item = item }
     end
     return { type = "grid", id = id, group = grupo, x = 0, y = 0,
              columns = colunas, cell = CELULA, items = celulas }
@@ -210,8 +212,7 @@ local function desenhar_receita(receita, x, y)
                                   w = 16, h = 16 }
     elementos[#elementos + 1] = { type = "item",
                                   x = x + math.max(1, colunas) * CELULA + 22, y = y,
-                                  item = receita.output.item, count = receita.output.count,
-                                  tooltip = receita.output.item }
+                                  item = receita.output.item, count = receita.output.count }
 
     -- A altura ocupada volta junto: uma receita 3x3 tem 54 px e uma sem forma tem 18, entao um
     -- passo fixo empilharia uma sobre a outra. Quem desenha a proxima soma isto ao y.
@@ -240,8 +241,7 @@ local function desenhar_processo(processo, x, y)
     elementos[#elementos + 1] = { type = "panel", style = "slot", border = 1,
                                   x = direita + 22, y = y, w = 16, h = 16 }
     elementos[#elementos + 1] = { type = "item", x = direita + 22, y = y,
-                                  item = processo.output.item, count = processo.output.count,
-                                  tooltip = processo.output.item }
+                                  item = processo.output.item, count = processo.output.count }
 
     -- A chance so aparece quando nao e certa: escrever "100%" em tudo seria ruido.
     local rotulo = processo.title
@@ -259,10 +259,10 @@ end
 local function desenhar_drop(bloco, item, x, y)
     return {
         { type = "panel", style = "slot", border = 1, x = x, y = y, w = 16, h = 16 },
-        { type = "item", x = x, y = y, item = bloco, tooltip = bloco },
+        { type = "item", x = x, y = y, item = bloco },
         { type = "label", x = x + 22, y = y + 4, text = "->", color = "#404040", shadow = false },
         { type = "panel", style = "slot", border = 1, x = x + 38, y = y, w = 16, h = 16 },
-        { type = "item", x = x + 38, y = y, item = item, tooltip = item }
+        { type = "item", x = x + 38, y = y, item = item }
     }, CELULA + 4
 end
 

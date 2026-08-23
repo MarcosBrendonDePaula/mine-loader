@@ -279,11 +279,37 @@ public final class ScreenRenderer {
         if (element.type().equals("grid")) {
             int cell = cellAt(element, x, y, mouseX, mouseY);
             if (cell == 0) return null;
-            String tooltip = element.cells().get(cell - 1).tooltip();
-            return tooltip.isBlank() ? null : tooltip;
+
+            ScreenModel.Cell content = element.cells().get(cell - 1);
+            return content.tooltip().isBlank() ? itemName(content.item()) : content.tooltip();
         }
-        if (element.tooltip().isBlank()) return null;
-        return contains(element, x, y, mouseX, mouseY) ? element.tooltip() : null;
+        if (contains(element, x, y, mouseX, mouseY)) {
+            // Um item sem texto declarado responde pelo proprio nome, como no inventario. Sem isto
+            // o mod teria de mandar o nome de cada item, que ele nem conhece: o servidor tem o
+            // identificador, e a traducao vive no cliente.
+            if (element.tooltip().isBlank() && element.type().equals("item")) {
+                return itemName(element.item());
+            }
+            if (!element.tooltip().isBlank()) return element.tooltip();
+        }
+        return null;
+    }
+
+    /**
+     * Nome traduzido de um item, com o identificador abaixo.
+     *
+     * <p>O servidor descreve a tela em identificadores, porque e o que ele tem: a traducao depende
+     * do idioma escolhido em cada cliente. Mostrar so {@code minecraft:iron_ingot} obrigaria quem
+     * joga a decorar identificadores; mostrar so "Lingote de Ferro" tiraria de quem escreve o mod a
+     * informacao de que precisa. Os dois juntos servem aos dois, como o jogo faz com F3+H ligado.
+     */
+    private static String itemName(String itemId) {
+        Identifier id = Identifier.tryParse(itemId);
+        if (id == null || !Registries.ITEM.containsId(id)) return itemId;
+
+        // A quebra e sempre a mesma que drawTooltip divide. O separador do sistema traria um
+        // retorno de carro no Windows, que viraria um caractere solto na caixa de ajuda.
+        return new ItemStack(Registries.ITEM.get(id)).getName().getString() + "\n" + itemId;
     }
 
     /** Indica se o cursor está dentro da área do elemento. */

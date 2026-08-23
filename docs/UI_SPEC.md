@@ -400,6 +400,16 @@ Custa 12 esmeraldas" }
 
 O HUD nao desenha texto de ajuda: sem cursor, nao ha o que apontar.
 
+### Item sem texto declarado
+
+Um `item` ou uma celula de `grid` sem `tooltip` responde com o **nome traduzido** do item e o
+identificador abaixo. O servidor nao teria como traduzir: ele so tem o identificador, e o idioma e
+escolha de cada cliente. Mostrar so o identificador obrigaria quem joga a decora-los; mostrar so o
+nome tiraria de quem escreve o mod a informacao de que precisa.
+
+Declarar `tooltip` continua substituindo os dois -- e o que fazer quando a celula representa varios
+itens, como uma posicao de receita que aceita qualquer tabua.
+
 A area considerada e a do elemento. `label` e `item` dimensionam-se pelo conteudo — a largura do
 texto e 16 por 16, respectivamente — e os demais usam `w` e `h`. Quando dois elementos se sobrepoem,
 vale o ultimo declarado, que e o que ficou por cima.
@@ -575,8 +585,7 @@ tela sem os elementos que não entende, e não uma tela quebrada.
 
 O que continua fora: abas; arrastar; barra de rolagem visivel, com alca arrastavel -- hoje a
 rolagem so responde a roda; campo de texto dentro de uma sobreposicao; leitura ou escrita nos slots
-da tela sobreposta; nome traduzido de item -- o `tooltip` mostra o identificador, e nao "Lingote de
-Ferro"; recorte de textura em `image`, que hoje assume a folha inteira do tamanho do elemento; e
+da tela sobreposta; recorte de textura em `image`, que hoje assume a folha inteira do tamanho do elemento; e
 tecla como acao, que impede um atalho ao estilo `R` e `U` do JEI.
 
 ## Ordem de construção

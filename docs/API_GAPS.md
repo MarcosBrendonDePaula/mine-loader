@@ -185,8 +185,8 @@ dependem da mesma peça ausente, descrita abaixo.
 mexe nele. Sem isso não há arrastar item, preencher receita, nem saber o que o jogador está
 segurando naquela tela. É o que hoje separa o catálogo de um JEI.
 
-Também fora: aba, barra de rolagem arrastável, tecla como ação, e nome traduzido de item — o
-catálogo mostra `minecraft:iron_ingot`, e não "Lingote de Ferro".
+Também fora: aba, barra de rolagem arrastável e tecla como ação, que impede um atalho ao estilo
+`R` e `U` do JEI.
 
 A janela de itens usa a tela de container do próprio jogo, o que faz o recurso funcionar em
 qualquer cliente vanilla com o loader instalado. Cada slot é um botão: o clique volta ao script com
