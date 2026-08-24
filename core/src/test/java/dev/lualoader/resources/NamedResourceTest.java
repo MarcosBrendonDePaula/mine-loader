@@ -216,6 +216,90 @@ class NamedResourceTest {
                 catalog.resolveTexture(manifest.blocks.get(1).render.texture).path);
     }
 
+    @Test
+    void aSecaoDeRecursosPodeVirDeOutroArquivo(@TempDir Path dir) throws IOException {
+        // Import ja valia para blocos e estruturas, e vale aqui pelo mesmo motivo: um mod com
+        // muitos recursos produz um mod.json grande demais para ler. Nao precisou de codigo novo
+        // -- o resolvedor de import roda antes da leitura, entao qualquer objeto do manifesto
+        // pode vir de fora.
+        Path mod = writeMod(dir, """
+                "resources": {"$import": "recursos.json"},
+                  "blocks": [{"id": "altar", "name": "Altar",
+                    "render": {"texture": "@cristal"}}]""");
+
+        Files.writeString(mod.resolve("recursos.json"), """
+                {
+                  "cristal": {"type": "image", "from": "assets/cristal.png"},
+                  "batida": {"type": "sound", "from": "assets/batida.ogg"}
+                }
+                """, StandardCharsets.UTF_8);
+
+        ModManifest manifest = discover(dir).get(0).manifest();
+        assertEquals(2, manifest.resources.size());
+        assertEquals("assets/cristal.png", manifest.resources.get("cristal").from);
+
+        // E a referencia continua sendo conferida, mesmo vindo de outro arquivo.
+        assertEquals("assets/cristal.png", new ResourceCatalog(manifest)
+                .resolveTexture(manifest.blocks.get(0).render.texture).path);
+    }
+
+    @Test
+    void itemComTexturaPorReferenciaChegaAoPack(@TempDir Path dir, @TempDir Path out)
+            throws IOException {
+        // Resolver certo nao basta: o montador tambem precisa perguntar as coisas na ordem certa.
+        // A condicao que decidia copiar a textura olhava para o caminho, que numa referencia so
+        // existe depois de resolver -- entao o item passava direto e ficava sem textura nenhuma,
+        // sem erro no log. Os testes de resolucao passavam; o pack e que saia errado.
+        Path mod = writeMod(dir, """
+                "resources": {
+                    "rubi": {"type": "image", "from": "assets/rubi.png",
+                             "fallback": "minecraft:item/redstone"}
+                  },
+                  "items": [{"id": "rubi", "name": "Rubi", "texture": "@rubi"}]""");
+
+        Files.createDirectories(mod.resolve("assets"));
+        Files.write(mod.resolve("assets/rubi.png"), PIXEL_PNG);
+
+        List<ModLoader.LoadedMod> mods = discover(dir);
+        new ResourcePackAssembler(LoggerFactory.getLogger("test"), out.resolve("cache"))
+                .assemble(mods, out.resolve("pack"));
+
+        Path texture = out.resolve("pack/assets/res_mod/textures/item/rubi.png");
+        assertTrue(Files.isRegularFile(texture),
+                "a textura do item deveria ter sido copiada para " + texture);
+
+        // E o modelo aponta para ela, e nao para o fallback.
+        String model = Files.readString(
+                out.resolve("pack/assets/res_mod/models/item/rubi.json"), StandardCharsets.UTF_8);
+        assertTrue(model.contains("res_mod:item/rubi"),
+                "o modelo deveria apontar para a textura copiada: " + model);
+    }
+
+    @Test
+    void itemUsaOFallbackDoRecursoQuandoATexturaFalta(@TempDir Path dir, @TempDir Path out)
+            throws IOException {
+        // O fallback tambem vinha do lugar errado: numa referencia ele mora no recurso, e a leitura
+        // direta do campo caia no padrao generico em vez do declarado.
+        writeMod(dir, """
+                "resources": {
+                    "rubi": {"type": "image", "from": "assets/nao_existe.png",
+                             "fallback": "minecraft:item/redstone"}
+                  },
+                  "items": [{"id": "rubi", "name": "Rubi", "texture": "@rubi"}]""");
+
+        new ResourcePackAssembler(LoggerFactory.getLogger("test"), out.resolve("cache"))
+                .assemble(discover(dir), out.resolve("pack"));
+
+        String model = Files.readString(
+                out.resolve("pack/assets/res_mod/models/item/rubi.json"), StandardCharsets.UTF_8);
+        assertTrue(model.contains("minecraft:item/redstone"),
+                "deveria usar o fallback declarado no recurso: " + model);
+    }
+
+    /** Um PNG de um pixel, para os testes que precisam de uma imagem valida no disco. */
+    private static final byte[] PIXEL_PNG = java.util.Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
     // ------------------------------------------------------------------ recusas
 
     @Test

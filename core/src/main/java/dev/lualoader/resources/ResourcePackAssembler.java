@@ -242,18 +242,28 @@ public final class ResourcePackAssembler {
                               ModManifest.ItemEntryDefinition item,
                               Path generatedRoot) throws IOException {
         String namespace = mod.manifest().id;
-        String textureReference = item.texture != null && item.texture.fallback != null
-                && !item.texture.fallback.isBlank()
-                ? item.texture.fallback
+
+        // A referencia e resolvida antes de qualquer decisao. As perguntas abaixo sao sobre onde a
+        // textura esta e qual e o fallback, e numa referencia as duas respostas so existem depois
+        // disto -- perguntar antes fazia o item passar direto e ficar sem textura nenhuma.
+        ModManifest.TextureDefinition texture =
+                new ResourceCatalog(mod.manifest()).resolveTexture(item.texture);
+
+        String textureReference = texture != null && texture.fallback != null
+                && !texture.fallback.isBlank()
+                ? texture.fallback
                 : "minecraft:item/stick";
 
-        if (item.texture != null && item.texture.path != null && !item.texture.path.isBlank()) {
+        boolean hasSource = texture != null
+                && ((texture.path != null && !texture.path.isBlank())
+                || (texture.url != null && !texture.url.isBlank()));
+
+        if (hasSource) {
             Path target = generatedRoot.resolve("assets").resolve(namespace)
                     .resolve("textures/item").resolve(item.id + ".png");
             try {
                 RemoteResourceManager.ResolvedTexture resolved =
-                        remoteResources.resolveTexture(mod.directory(),
-                                new ResourceCatalog(mod.manifest()).resolveTexture(item.texture),
+                        remoteResources.resolveTexture(mod.directory(), texture,
                                 mod.manifest().remoteBase);
                 copyAsPng(resolved.path(), target);
                 textureReference = namespace + ":item/" + item.id;

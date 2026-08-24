@@ -1,0 +1,17 @@
+{
+  "bloco_rubi": {
+    "type": "image",
+    "from": "assets/hello_lua/textures/block/ruby_block.png",
+    "fallback": "minecraft:block/stone"
+  },
+  "bloco_rubi_polido": {
+    "type": "image",
+    "from": "assets/hello_lua/textures/block/ruby_block_alt.png",
+    "fallback": "minecraft:block/stone"
+  },
+  "rubi": {
+    "type": "image",
+    "from": "assets/hello_lua/textures/item/ruby.png",
+    "fallback": "minecraft:item/redstone"
+  }
+}

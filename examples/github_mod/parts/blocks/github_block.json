@@ -13,22 +13,10 @@
   },
   "render": {
     "model": "cube_all",
-    "texture": {
-      "source": "local",
-      "path": "assets/github_mod/textures/block/github_block.png",
-      "fallback": "minecraft:block/deepslate_tiles"
-    },
+    "texture": "@bloco",
     "variant_textures": {
-      "0": {
-        "source": "local",
-        "path": "assets/github_mod/textures/block/github_block.png",
-        "fallback": "minecraft:block/deepslate_tiles"
-      },
-      "1": {
-        "source": "local",
-        "path": "assets/github_mod/textures/block/github_block_alt.png",
-        "fallback": "minecraft:block/quartz_block"
-      }
+      "0": "@bloco",
+      "1": "@bloco_aceso"
     }
   },
   "loot": {

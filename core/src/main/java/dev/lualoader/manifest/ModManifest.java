@@ -222,6 +222,14 @@ public final class ModManifest {
         /** Conferido apos baixar. Fica junto do recurso, e nao num campo separado. */
         public String sha256;
         public long maxBytes = 1_048_576;
+        /**
+         * O que usar quando o recurso nao puder ser carregado.
+         *
+         * <p>Fica aqui porque quase sempre e o mesmo para todos os usos daquela imagem, e repeti-lo
+         * em cada referencia devolveria parte da verborragia que os recursos eliminam. Quem
+         * referencia ainda pode declarar o seu, e nesse caso o dele vale.
+         */
+        public String fallback;
     }
 
     public static final class LootDefinition {

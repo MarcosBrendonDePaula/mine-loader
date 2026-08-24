@@ -28,6 +28,9 @@
     "name": "Hello Lua",
     "icon": "hello_lua:ruby_block"
   },
+  "resources": {
+    "$import": "parts/resources.json"
+  },
   "items": [
     {
       "$import": "parts/items/ruby.json"

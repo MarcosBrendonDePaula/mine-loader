@@ -1,0 +1,17 @@
+{
+  "bloco": {
+    "type": "image",
+    "from": "assets/github_mod/textures/block/github_block.png",
+    "fallback": "minecraft:block/deepslate_tiles"
+  },
+  "bloco_aceso": {
+    "type": "image",
+    "from": "assets/github_mod/textures/block/github_block_alt.png",
+    "fallback": "minecraft:block/quartz_block"
+  },
+  "commit": {
+    "type": "image",
+    "from": "assets/github_mod/textures/item/commit.png",
+    "fallback": "minecraft:item/emerald"
+  }
+}

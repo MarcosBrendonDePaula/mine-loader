@@ -19,6 +19,9 @@ public final class ResourceCatalog {
     /** Os tipos que o loader sabe resolver. */
     public static final Set<String> TYPES = Set.of("image", "model", "sound", "script", "data");
 
+    /** O mesmo padrao que uma textura declarada no lugar usa quando nao diz outro. */
+    private static final String DEFAULT_FALLBACK = "minecraft:block/stone";
+
     private final Map<String, ModManifest.ResourceDefinition> resources;
 
     public ResourceCatalog(ModManifest manifest) {
@@ -59,9 +62,16 @@ public final class ResourceCatalog {
         }
         resolved.sha256 = resource.sha256;
         resolved.maxBytes = resource.maxBytes;
-        // O fallback continua vindo de quem referencia: e uma decisao de como aquele bloco deve
-        // aparecer quando o recurso falta, e nao uma propriedade do recurso.
-        resolved.fallback = texture.fallback;
+        // Quem referencia decide, o recurso oferece o padrao. A ordem importa: um bloco pode
+        // querer um fallback diferente do resto que usa a mesma imagem, e sem essa precedencia ele
+        // teria de abandonar a referencia e voltar a declarar tudo.
+        if (texture.fallback != null && !texture.fallback.isBlank()) {
+            resolved.fallback = texture.fallback;
+        } else if (resource.fallback != null && !resource.fallback.isBlank()) {
+            resolved.fallback = resource.fallback;
+        } else {
+            resolved.fallback = DEFAULT_FALLBACK;
+        }
         return resolved;
     }
 

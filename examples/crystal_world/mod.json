@@ -24,10 +24,7 @@
     "icon": "crystal_world:crystal_block"
   },
   "resources": {
-    "cristal": {
-      "type": "image",
-      "from": "assets/crystal_world/textures/block/crystal_block.png"
-    }
+    "$import": "parts/resources.json"
   },
   "items": [
     {

@@ -46,6 +46,9 @@ public final class TextureReferenceAdapter
 
         ModManifest.TextureDefinition definition = new ModManifest.TextureDefinition();
         definition.ref = text.substring(1);
+        // Nulo, e nao o padrao do campo: e o que permite o recurso oferecer o proprio fallback.
+        // Com o padrao aqui, toda referencia curta pareceria ter declarado um.
+        definition.fallback = null;
         return definition;
     }
 
@@ -57,7 +60,11 @@ public final class TextureReferenceAdapter
         if (object.has("url")) definition.url = string(object, "url");
         if (object.has("sha256")) definition.sha256 = string(object, "sha256");
         if (object.has("fallback")) definition.fallback = string(object, "fallback");
-        if (object.has("ref")) definition.ref = string(object, "ref");
+        if (object.has("ref")) {
+            definition.ref = string(object, "ref");
+            // Mesma razao da forma curta: sem fallback declarado, quem decide e o recurso.
+            if (!object.has("fallback")) definition.fallback = null;
+        }
         if (object.has("max_bytes")) definition.maxBytes = object.get("max_bytes").getAsLong();
 
         return definition;

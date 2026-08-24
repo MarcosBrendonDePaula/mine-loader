@@ -31,22 +31,10 @@
   },
   "render": {
     "model": "cube_all",
-    "texture": {
-      "source": "local",
-      "path": "assets/guilda/textures/block/quadro.png",
-      "fallback": "minecraft:block/oak_planks"
-    },
+    "texture": "@quadro",
     "variant_textures": {
-      "0": {
-        "source": "local",
-        "path": "assets/guilda/textures/block/quadro.png",
-        "fallback": "minecraft:block/oak_planks"
-      },
-      "1": {
-        "source": "local",
-        "path": "assets/guilda/textures/block/quadro_completo.png",
-        "fallback": "minecraft:block/emerald_block"
-      }
+      "0": "@quadro",
+      "1": "@quadro_completo"
     }
   },
   "loot": {

@@ -60,22 +60,10 @@
   },
   "render": {
     "model": "cube_all",
-    "texture": {
-      "source": "local",
-      "path": "assets/hello_lua/textures/block/ruby_block.png",
-      "fallback": "minecraft:block/stone"
-    },
+    "texture": "@bloco_rubi",
     "variant_textures": {
-      "0": {
-        "source": "local",
-        "path": "assets/hello_lua/textures/block/ruby_block.png",
-        "fallback": "minecraft:block/stone"
-      },
-      "1": {
-        "source": "local",
-        "path": "assets/hello_lua/textures/block/ruby_block_alt.png",
-        "fallback": "minecraft:block/stone"
-      }
+      "0": "@bloco_rubi",
+      "1": "@bloco_rubi_polido"
     },
     "render_layer": "solid",
     "translucent": false,

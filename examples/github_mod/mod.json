@@ -19,6 +19,9 @@
     "name": "GitHub",
     "icon": "github_mod:github_block"
   },
+  "resources": {
+    "$import": "parts/resources.json"
+  },
   "items": [
     {
       "$import": "parts/items/commit.json"

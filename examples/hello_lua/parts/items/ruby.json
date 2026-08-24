@@ -4,9 +4,5 @@
   "max_stack_size": 64,
   "rarity": "rare",
   "fire_resistant": false,
-  "texture": {
-    "source": "local",
-    "path": "assets/hello_lua/textures/item/ruby.png",
-    "fallback": "minecraft:item/redstone"
-  }
+  "texture": "@rubi"
 }

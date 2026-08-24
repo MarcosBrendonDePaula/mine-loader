@@ -1,0 +1,17 @@
+{
+  "quadro": {
+    "type": "image",
+    "from": "assets/guilda/textures/block/quadro.png",
+    "fallback": "minecraft:block/oak_planks"
+  },
+  "quadro_completo": {
+    "type": "image",
+    "from": "assets/guilda/textures/block/quadro_completo.png",
+    "fallback": "minecraft:block/emerald_block"
+  },
+  "emblema": {
+    "type": "image",
+    "from": "assets/guilda/textures/item/emblema.png",
+    "fallback": "minecraft:item/paper"
+  }
+}

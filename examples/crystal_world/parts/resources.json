@@ -1,0 +1,12 @@
+{
+  "cristal": {
+    "type": "image",
+    "from": "assets/crystal_world/textures/block/crystal_block.png",
+    "fallback": "minecraft:block/amethyst_block"
+  },
+  "fragmento": {
+    "type": "image",
+    "from": "assets/crystal_world/textures/item/crystal_shard.png",
+    "fallback": "minecraft:item/amethyst_shard"
+  }
+}

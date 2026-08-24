@@ -30,6 +30,9 @@
     "name": "Guilda",
     "icon": "guilda:emblema"
   },
+  "resources": {
+    "$import": "parts/resources.json"
+  },
   "items": [
     {
       "$import": "parts/items/emblema.json"
