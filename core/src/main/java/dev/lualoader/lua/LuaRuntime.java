@@ -1110,37 +1110,113 @@ public final class LuaRuntime {
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "server.read");
 
-                // Sem filtro, o registro inteiro do jogo passaria para o Lua de uma vez. O teto
-                // existe para que um catalogo seja paginado de proposito, e nao por acidente.
-                LuaValue filter = args.arg(1);
-                String namespace = null;
-                String contains = null;
-                int limit = 256;
-
-                if (filter.istable()) {
-                    LuaTable options = (LuaTable) filter;
-                    if (!options.get("namespace").isnil()) {
-                        namespace = options.get("namespace").tojstring();
-                    }
-                    if (!options.get("contains").isnil()) {
-                        contains = options.get("contains").tojstring();
-                    }
-                    if (!options.get("limit").isnil()) {
-                        limit = options.get("limit").checkint();
-                        if (limit < 1 || limit > 4096) {
-                            throw new LuaError("limit deve estar entre 1 e 4096");
-                        }
-                    }
-                } else if (!filter.isnil()) {
-                    throw new LuaError("items aceita uma tabela de filtros");
+                return registryQuery(args, bridge::registeredItems);
+            }
+        });
+        serverApi.set("set_time_of_day", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "world.write");
+                bridge.setTimeOfDay(value.checklong());
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("weather", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "world.read");
+                return LuaValue.valueOf(bridge.weather());
+            }
+        });
+        serverApi.set("set_weather", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                String weather = args.arg(1).tojstring();
+                if (!Set.of("clear", "rain", "thunder").contains(weather)) {
+                    throw new LuaError("clima deve ser clear, rain ou thunder; veio " + weather);
                 }
+                bridge.setWeather(weather, args.narg() < 2 ? 0 : args.arg(2).toint());
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("top_y", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 2) throw new LuaError("top_y exige x e z");
+                return LuaValue.valueOf(bridge.topY(
+                        requireCoordinate(args.arg(1)), requireCoordinate(args.arg(2))));
+            }
+        });
+        serverApi.set("break_block", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 3) throw new LuaError("break_block exige x, y e z");
+                // Solta o que o bloco dropa por padrao: e o que "quebrar" significa no jogo, e
+                // apagar em silencio seria a escolha surpreendente.
+                boolean drop = args.narg() < 4 || args.arg(4).toboolean();
+                return LuaValue.valueOf(bridge.breakBlock(
+                        requireCoordinate(args.arg(1)), requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)), drop));
+            }
+        });
+        serverApi.set("heal_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.modify");
+                if (args.narg() < 2) throw new LuaError("heal_entity exige uuid e quantidade");
+                float amount = (float) args.arg(2).checkdouble();
+                if (amount < 0) throw new LuaError("a cura nao pode ser negativa");
+                return LuaValue.valueOf(bridge.healEntity(args.arg(1).tojstring(), amount));
+            }
+        });
+        serverApi.set("apply_to_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.modify");
+                if (args.narg() < 2) throw new LuaError("apply_to_entity exige uuid e dados");
+                return LuaValue.valueOf(bridge.applyToEntity(
+                        args.arg(1).tojstring(), readEntitySpec(args.arg(2))));
+            }
+        });
+        serverApi.set("entity_info", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "entity.read");
+                String line = bridge.entityInfo(value.tojstring());
+                if (line == null) return LuaValue.NIL;
 
-                LuaTable list = new LuaTable();
-                int index = 1;
-                for (String id : bridge.registeredItems(namespace, contains, limit)) {
-                    list.set(index++, LuaValue.valueOf(id));
+                String[] parts = line.split(";", 8);
+                if (parts.length < 7) return LuaValue.NIL;
+
+                LuaTable info = new LuaTable();
+                info.set("uuid", LuaValue.valueOf(parts[0]));
+                info.set("type", LuaValue.valueOf(parts[1]));
+                info.set("x", LuaValue.valueOf(Double.parseDouble(parts[2])));
+                info.set("y", LuaValue.valueOf(Double.parseDouble(parts[3])));
+                info.set("z", LuaValue.valueOf(Double.parseDouble(parts[4])));
+                info.set("health", LuaValue.valueOf(Double.parseDouble(parts[5])));
+                info.set("max_health", LuaValue.valueOf(Double.parseDouble(parts[6])));
+                if (parts.length > 7 && !parts[7].isEmpty()) {
+                    info.set("name", LuaValue.valueOf(parts[7]));
                 }
-                return list;
+                return info;
+            }
+        });
+        serverApi.set("blocks", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                return registryQuery(args, bridge::registeredBlocks);
+            }
+        });
+        serverApi.set("entity_types", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                return registryQuery(args, bridge::registeredEntities);
             }
         });
         serverApi.set("processes", new VarArgFunction() {
@@ -1591,6 +1667,161 @@ public final class LuaRuntime {
                 String id = requireIdentifier(args.arg(1).tojstring());
                 int count = requireCount(args.arg(2));
                 return LuaValue.valueOf(player.takeItem(id, count));
+            }
+        });
+        playerApi.set("set_health", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                double health = value.checkdouble();
+                if (health < 0) throw new LuaError("a vida nao pode ser negativa");
+                player.setHealth((float) health);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("food", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                float[] food = player.food();
+                LuaTable table = new LuaTable();
+                table.set("level", LuaValue.valueOf(food[0]));
+                table.set("saturation", LuaValue.valueOf(food[1]));
+                return table;
+            }
+        });
+        playerApi.set("set_food", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.modify");
+                int level = args.arg(1).checkint();
+                if (level < 0 || level > 20) throw new LuaError("fome deve estar entre 0 e 20");
+                float saturation = args.narg() < 2 ? 5f : (float) args.arg(2).checkdouble();
+                player.setFood(level, saturation);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("experience", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                float[] experience = player.experience();
+                LuaTable table = new LuaTable();
+                table.set("level", LuaValue.valueOf((int) experience[0]));
+                table.set("progress", LuaValue.valueOf(experience[1]));
+                return table;
+            }
+        });
+        playerApi.set("give_experience", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                player.giveExperienceLevels(value.checkint());
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("game_mode", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(player.gameMode());
+            }
+        });
+        playerApi.set("set_game_mode", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                String mode = value.tojstring();
+                if (!Set.of("survival", "creative", "adventure", "spectator").contains(mode)) {
+                    throw new LuaError("modo de jogo desconhecido: " + mode);
+                }
+                player.setGameMode(mode);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("dimension", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(player.dimension());
+            }
+        });
+        playerApi.set("apply_effect", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.modify");
+                String id = requireIdentifier(args.arg(1).tojstring());
+
+                // Trinta segundos quando nao declarado, como no efeito de entidade: um efeito de
+                // zero ticks seria descartado no mesmo tique.
+                int duration = args.narg() < 2 ? 600 : args.arg(2).checkint();
+                if (duration < 0) throw new LuaError("a duracao nao pode ser negativa");
+
+                player.applyEffect(id, duration, args.narg() < 3 ? 0 : args.arg(3).checkint());
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("clear_effects", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.modify");
+                player.clearEffects();
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("show_title", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "chat.send");
+                String title = args.arg(1).isnil() ? "" : args.arg(1).tojstring();
+                String subtitle = args.arg(2).isnil() ? "" : args.arg(2).tojstring();
+
+                // Negativos deixam o jogo escolher os tempos, que e o que se quer na maioria das
+                // vezes -- declarar tres numeros para um aviso simples seria ruido.
+                player.showTitle(title, subtitle,
+                        args.narg() < 3 ? -1 : args.arg(3).checkint(),
+                        args.narg() < 4 ? -1 : args.arg(4).checkint(),
+                        args.narg() < 5 ? -1 : args.arg(5).checkint());
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("play_sound_to", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "chat.send");
+                String id = requireIdentifier(args.arg(1).tojstring());
+                float volume = args.narg() < 2 ? 1f : (float) args.arg(2).checkdouble();
+                float pitch = args.narg() < 3 ? 1f : (float) args.arg(3).checkdouble();
+                player.playSoundTo(id, volume, pitch);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("inventory", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.inventory");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String line : player.inventory()) {
+                    String[] parts = line.split(";", 3);
+                    if (parts.length < 3) continue;
+
+                    LuaTable entry = new LuaTable();
+                    entry.set("slot", LuaValue.valueOf(Integer.parseInt(parts[0])));
+                    entry.set("item", LuaValue.valueOf(parts[1]));
+                    entry.set("count", LuaValue.valueOf(Integer.parseInt(parts[2])));
+                    list.set(index++, entry);
+                }
+                return list;
+            }
+        });
+        playerApi.set("clear_inventory", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.inventory");
+                player.clearInventory();
+                return LuaValue.NIL;
             }
         });
         playerApi.set("open_menu", new VarArgFunction() {
@@ -2085,6 +2316,45 @@ public final class LuaRuntime {
         Integer ticks = optionalInteger(table, field);
         if (ticks != null && ticks < 0) throw new LuaError(field + " nao pode ser negativo");
         return ticks;
+    }
+
+    /**
+     * O que uma consulta ao registro do jogo tem em comum.
+     *
+     * <p>Sem filtro, o registro inteiro passaria para o Lua de uma vez -- sao milhares de itens. O
+     * teto existe para que um catalogo seja paginado de proposito, e nao por acidente.
+     *
+     * <p>Compartilhado entre itens, blocos e tipos de entidade: sao a mesma pergunta sobre listas
+     * diferentes, e tres copias divergiriam no primeiro ajuste.
+     */
+    private interface RegistryQuery {
+        java.util.List<String> apply(String namespace, String contains, int limit);
+    }
+
+    private static Varargs registryQuery(Varargs args, RegistryQuery query) {
+        LuaValue filter = args.arg(1);
+        String namespace = null;
+        String contains = null;
+        int limit = 256;
+
+        if (filter.istable()) {
+            LuaTable options = (LuaTable) filter;
+            if (!options.get("namespace").isnil()) namespace = options.get("namespace").tojstring();
+            if (!options.get("contains").isnil()) contains = options.get("contains").tojstring();
+            if (!options.get("limit").isnil()) {
+                limit = options.get("limit").checkint();
+                if (limit < 1 || limit > 4096) throw new LuaError("limit deve estar entre 1 e 4096");
+            }
+        } else if (!filter.isnil()) {
+            throw new LuaError("a consulta aceita uma tabela de filtros");
+        }
+
+        LuaTable list = new LuaTable();
+        int index = 1;
+        for (String id : query.apply(namespace, contains, limit)) {
+            list.set(index++, LuaValue.valueOf(id));
+        }
+        return list;
     }
 
     private static String requireIdentifier(String value) {

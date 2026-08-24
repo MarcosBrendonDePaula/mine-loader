@@ -838,4 +838,121 @@ public final class FabricGameBridge implements GameBridge {
         }
         return Identifier.of(value.substring(0, separator), value.substring(separator + 1));
     }
+
+    // ------------------------------------------------------------------ tempo e clima
+
+    @Override
+    public void setTimeOfDay(long time) {
+        // A hora e a do mundo corrente; o jogo guarda o total de tiques, entao mudar so a hora do
+        // dia exige preservar os dias ja passados -- senao um mod que anoitece rebobinaria o mundo.
+        var world = requireWorld();
+        long days = world.getTimeOfDay() / 24000L;
+        world.setTimeOfDay(days * 24000L + Math.floorMod(time, 24000L));
+    }
+
+    @Override
+    public String weather() {
+        var world = requireWorld();
+        if (world.isThundering()) return "thunder";
+        return world.isRaining() ? "rain" : "clear";
+    }
+
+    @Override
+    public void setWeather(String weather, int duration) {
+        var world = requireWorld();
+        // Vinte minutos quando nao declarado, que e a ordem de grandeza que o jogo usa.
+        int ticks = duration > 0 ? duration : 24000;
+
+        switch (weather) {
+            case "thunder" -> world.setWeather(0, ticks, true, true);
+            case "rain" -> world.setWeather(0, ticks, true, false);
+            default -> world.setWeather(ticks, 0, false, false);
+        }
+    }
+
+    // ------------------------------------------------------------------ mundo
+
+    @Override
+    public int topY(int x, int z) {
+        return requireWorld().getTopY(
+                net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
+    }
+
+    @Override
+    public boolean breakBlock(int x, int y, int z, boolean drop) {
+        var world = requireWorld();
+        BlockPos pos = new BlockPos(x, y, z);
+        if (world.getBlockState(pos).isAir()) return false;
+
+        // breakBlock, e nao escrever ar: respeita a tabela de loot e derrama o inventario do bloco,
+        // que e o que "quebrar" significa para quem joga.
+        return world.breakBlock(pos, drop);
+    }
+
+    // ------------------------------------------------------------------ entidades
+
+    @Override
+    public boolean healEntity(String uuid, float amount) {
+        Entity entity = findEntity(uuid);
+        if (!(entity instanceof net.minecraft.entity.LivingEntity living)) return false;
+
+        living.heal(amount);
+        return true;
+    }
+
+    @Override
+    public boolean applyToEntity(String uuid, dev.lualoader.platform.EntitySpec spec) {
+        Entity entity = findEntity(uuid);
+        if (entity == null) return false;
+
+        if (spec != null && !spec.isEmpty()) applySpec(entity, spec);
+        return true;
+    }
+
+    @Override
+    public String entityInfo(String uuid) {
+        Entity entity = findEntity(uuid);
+        if (entity == null) return null;
+
+        float health = 0f;
+        float maximum = 0f;
+        if (entity instanceof net.minecraft.entity.LivingEntity living) {
+            health = living.getHealth();
+            maximum = living.getMaxHealth();
+        }
+
+        Identifier type = Registries.ENTITY_TYPE.getId(entity.getType());
+        String name = entity.getCustomName() == null ? "" : entity.getCustomName().getString();
+
+        return String.join(";", uuid, type == null ? "" : type.toString(),
+                String.valueOf(entity.getX()), String.valueOf(entity.getY()),
+                String.valueOf(entity.getZ()),
+                String.valueOf(health), String.valueOf(maximum), name);
+    }
+
+    // ------------------------------------------------------------------ registro do jogo
+
+    @Override
+    public java.util.List<String> registeredBlocks(String namespace, String contains, int limit) {
+        return filterRegistry(Registries.BLOCK.getIds(), namespace, contains, limit);
+    }
+
+    @Override
+    public java.util.List<String> registeredEntities(String namespace, String contains, int limit) {
+        return filterRegistry(Registries.ENTITY_TYPE.getIds(), namespace, contains, limit);
+    }
+
+    /** O mesmo filtro dos itens, para as três consultas responderem igual. */
+    private static java.util.List<String> filterRegistry(java.util.Collection<Identifier> ids,
+                                                         String namespace, String contains,
+                                                         int limit) {
+        java.util.List<String> found = new java.util.ArrayList<>();
+        for (Identifier id : ids) {
+            if (namespace != null && !id.getNamespace().equals(namespace)) continue;
+            if (contains != null && !contains.isBlank() && !id.getPath().contains(contains)) continue;
+            found.add(id.toString());
+        }
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
 }

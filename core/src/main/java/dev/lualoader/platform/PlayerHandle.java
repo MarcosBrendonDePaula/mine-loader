@@ -155,4 +155,104 @@ public interface PlayerHandle {
 
     /** Fecha o menu aberto, se houver. */
     void closeMenu();
+
+    // ------------------------------------------------------------------ corpo, escrita
+
+    /**
+     * Define a vida do jogador.
+     *
+     * <p>{@link #health()} lia sem que houvesse como escrever, o que deixava de fora qualquer mod
+     * de cura, dano por armadilha ou penalidade.
+     */
+    default void setHealth(float health) {
+        throw new BridgeException("set_health nao existe neste adaptador");
+    }
+
+    /** Fome e saturação, nessa ordem. */
+    default float[] food() {
+        throw new BridgeException("food nao existe neste adaptador");
+    }
+
+    default void setFood(int level, float saturation) {
+        throw new BridgeException("set_food nao existe neste adaptador");
+    }
+
+    /** Nível e progresso dentro do nível, de 0 a 1. */
+    default float[] experience() {
+        throw new BridgeException("experience nao existe neste adaptador");
+    }
+
+    /** Acrescenta níveis; um valor negativo tira. */
+    default void giveExperienceLevels(int levels) {
+        throw new BridgeException("give_experience nao existe neste adaptador");
+    }
+
+    /** {@code survival}, {@code creative}, {@code adventure} ou {@code spectator}. */
+    default String gameMode() {
+        throw new BridgeException("game_mode nao existe neste adaptador");
+    }
+
+    default void setGameMode(String mode) {
+        throw new BridgeException("set_game_mode nao existe neste adaptador");
+    }
+
+    /** A dimensão em que o jogador está. */
+    default String dimension() {
+        throw new BridgeException("dimension nao existe neste adaptador");
+    }
+
+    /**
+     * Aplica um efeito de poção ao jogador.
+     *
+     * <p>Efeito já valia para entidade criada por mod, e não para o jogador — a assimetria mais
+     * estranha da API, porque o alvo mais provável de um efeito é justamente quem está jogando.
+     */
+    default void applyEffect(String effectId, int duration, int amplifier) {
+        throw new BridgeException("apply_effect nao existe neste adaptador");
+    }
+
+    default void clearEffects() {
+        throw new BridgeException("clear_effects nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ feedback
+
+    /**
+     * Mostra um título no meio da tela.
+     *
+     * <p>Havia chat e barra de ação; faltava o aviso grande, que é o que se usa para começo de
+     * evento, aviso de perigo e mudança de fase.
+     *
+     * @param fadeIn  tiques de entrada; valores negativos usam o padrão do jogo
+     */
+    default void showTitle(String title, String subtitle, int fadeIn, int stay, int fadeOut) {
+        throw new BridgeException("show_title nao existe neste adaptador");
+    }
+
+    /**
+     * Toca um som só para este jogador.
+     *
+     * <p>O som do mundo é ouvido por todos em volta. Um retorno de interface — o clique de um menu,
+     * o aviso de que a compra deu certo — pertence a quem agiu, e não à vizinhança.
+     */
+    default void playSoundTo(String soundId, float volume, float pitch) {
+        throw new BridgeException("play_sound_to nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ inventário
+
+    /**
+     * O que o jogador carrega, cada linha como {@code slot;item;quantidade}.
+     *
+     * <p>{@link #countItem} responde por um item de cada vez, o que obriga a saber de antemão o que
+     * procurar. Um mod que inspeciona, cobra por peso ou copia o inventário precisa vê-lo inteiro.
+     */
+    default java.util.List<String> inventory() {
+        throw new BridgeException("inventory nao existe neste adaptador");
+    }
+
+    /** Esvazia o inventário. */
+    default void clearInventory() {
+        throw new BridgeException("clear_inventory nao existe neste adaptador");
+    }
 }

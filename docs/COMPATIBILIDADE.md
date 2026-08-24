@@ -18,20 +18,20 @@ núcleo não conhecer Minecraft.
 
 | Área | Operações | Fabric | NeoForge |
 |---|---|---|---|
-| Servidor e mundo | broadcast, tempo, dimensão, ler e escrever bloco, preencher | sim | sim |
-| Inventário do jogador | segurar, contar, dar, tirar | sim | sim |
-| Corpo do jogador | posição, vida, teleporte | sim | sim |
-| Mensagens | chat, barra de ação | sim | sim |
+| Servidor e mundo | broadcast, ler e escrever hora e clima, altura do terreno, ler, escrever e quebrar bloco, preencher | sim | sim |
+| Inventário do jogador | segurar, contar, dar, tirar, listar, limpar | sim | sim |
+| Corpo do jogador | posição, vida, fome, experiência, modo de jogo, dimensão, efeitos, teleporte | sim | sim |
+| Mensagens | chat, barra de ação, título, som para um jogador | sim | sim |
 | Menus | abrir, atualizar, fechar, id aberto | sim | sim |
 | Telas desenhadas | abrir, atualizar, fechar, tamanho do cliente | sim | sim |
 | HUD e sobreposições | definir, limpar | sim | sim |
 | Som e partículas | tocar, emitir | sim | sim |
-| Entidades | criar, remover, ferir, listar por raio | sim | sim |
+| Entidades | criar, remover, ferir, curar, listar, ler dados, aplicar dados | sim | sim |
 | Dados declarados | entidade (nome, natureza, corpo, equipamento, efeitos, estado, rotação) e item (aparência, durabilidade, encantamento, atributos) | sim | sim |
 | **Variante visual de entidade** (`variant`) | sim | **não** | O método é privado no NeoForge; o campo é lido e ignorado |
 | Dados por bloco | ler, gravar | sim | sim |
 | Inventário de bloco | capacidades, ler, inserir, extrair | sim | sim |
-| Registro do jogo | listar itens, receitas, drops | sim | sim |
+| Registro do jogo | listar itens, blocos e entidades, receitas, drops | sim | sim |
 
 > **Nenhuma operação recusa em nenhuma das duas plataformas.** Quando uma faltar, ela recusa com o
 > próprio nome em vez de responder errado — um mod descobre na primeira chamada, e não por um

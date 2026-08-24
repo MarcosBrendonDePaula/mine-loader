@@ -59,6 +59,74 @@ arquivo `.lua`, uma URL `https` ou o nome de uma função exportada pelo `main.l
 
 O `entrypoint` é opcional: um mod pode ter apenas manifesto e scripts por peça.
 
+## Tempo, clima e mundo
+
+```lua
+ctx.server.set_time_of_day(6000)          -- meio-dia; o relogio vai a 24000
+local hora = ctx.server.time_of_day()
+
+ctx.server.set_weather("rain", 6000)      -- clear, rain ou thunder
+local clima = ctx.server.weather()
+
+local chao = ctx.server.top_y(x, z)       -- altura do primeiro bloco solido
+ctx.server.break_block(x, y, z, true)     -- quebra e solta o drop
+```
+
+`break_block` nao e o mesmo que escrever ar: respeita a tabela de loot e derrama o inventario do
+bloco, que e o que "quebrar" significa para quem joga.
+
+## Entidades ja existentes
+
+```lua
+local info = ctx.server.entity_info(uuid)   -- type, x, y, z, health, max_health, name
+ctx.server.heal_entity(uuid, 10)
+ctx.server.apply_to_entity(uuid, { name = "Renomeado", glowing = true })
+```
+
+`apply_to_entity` aceita a mesma tabela de `spawn_entity`. Sem ela, os dados declarados so valiam no
+instante do nascimento.
+
+## O jogador
+
+```lua
+-- leitura
+local vida = ctx.player.health()          -- { current, max }
+local comida = ctx.player.food()          -- { level, saturation }
+local xp = ctx.player.experience()        -- { level, progress }
+local modo = ctx.player.game_mode()
+local onde = ctx.player.dimension()
+local carga = ctx.player.inventory()      -- { { slot, item, count }, ... }
+
+-- escrita
+ctx.player.set_health(20)
+ctx.player.set_food(20, 5)
+ctx.player.give_experience(3)
+ctx.player.set_game_mode("adventure")
+ctx.player.apply_effect("minecraft:speed", 200, 1)
+ctx.player.clear_effects()
+ctx.player.clear_inventory()
+
+-- aviso
+ctx.player.show_title("Fase 2", "prepare-se", 10, 60, 10)
+ctx.player.play_sound_to("minecraft:block.note_block.bell", 1.0, 1.5)
+```
+
+`play_sound_to` toca so para aquele jogador, ao contrario de `ctx.server.play_sound`, que toca no
+mundo e e ouvido por todos em volta. Um retorno de interface pertence a quem agiu.
+
+A escrita exige a permissao `player.modify`, separada de `player.read` e de `player.inventory`:
+mudar vida ou modo de jogo altera as regras sob os pes de quem joga.
+
+## Consultar o registro
+
+```lua
+ctx.server.items({ namespace = "minecraft", contains = "ingot", limit = 64 })
+ctx.server.blocks({ contains = "stone" })
+ctx.server.entity_types({ namespace = "minecraft" })
+```
+
+As tres aceitam o mesmo filtro e o mesmo teto -- sem limite declarado, 256; o maximo e 4096.
+
 ## Entidade e item com dados
 
 `spawn_entity` e `give_item` aceitam uma tabela com o que o mod quer declarar. Sem ela, nasce a

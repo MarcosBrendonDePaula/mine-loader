@@ -375,4 +375,117 @@ public interface GameBridge {
             throw new BridgeException("nenhuma plataforma conectada");
         }
     };
+
+    /*
+     * As operacoes daqui para baixo tem implementacao padrao que recusa, e nao sao abstratas como
+     * as de cima.
+     *
+     * <p>A regra do repositorio e que esquecer uma operacao num adaptador quebre a compilacao dos
+     * testes. Ela vale para o nucleo do contrato -- ler e escrever bloco, mensagem, inventario --,
+     * que nenhuma plataforma pode deixar de responder.
+     *
+     * <p>Aqui a escolha e outra de proposito. Uma plataforma so de servidor, como Paper, nao tem
+     * como registrar bloco nem desenhar tela, e obriga-la a implementar tudo para compilar
+     * significaria encher o adaptador de metodos que so lancam. Recusar com o proprio nome da
+     * operacao diz a mesma coisa, no momento em que alguem tenta usar, e deixa o adaptador novo
+     * nascer util antes de nascer completo.
+     */
+
+    // ------------------------------------------------------------------ tempo e clima
+
+    /**
+     * Define a hora do dia, no mesmo relógio de 24000 tiques que {@link #timeOfDay()} lê.
+     *
+     * <p>Existe porque ler sem escrever é meia operação: um mod que monta um evento noturno sabia
+     * dizer que horas são e não conseguia fazer anoitecer.
+     */
+    default void setTimeOfDay(long time) {
+        throw new BridgeException("set_time_of_day nao existe neste adaptador");
+    }
+
+    /** {@code clear}, {@code rain} ou {@code thunder}. */
+    default String weather() {
+        throw new BridgeException("weather nao existe neste adaptador");
+    }
+
+    /**
+     * Muda o clima.
+     *
+     * @param duration em tiques; zero ou negativo deixa o jogo escolher
+     */
+    default void setWeather(String weather, int duration) {
+        throw new BridgeException("set_weather nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ mundo
+
+    /**
+     * A altura do primeiro bloco sólido naquela coluna.
+     *
+     * <p>É o que falta para posicionar uma estrutura sobre o terreno em vez de numa altura fixa —
+     * sem isso, um mod que constrói precisa adivinhar onde é o chão.
+     */
+    default int topY(int x, int z) {
+        throw new BridgeException("top_y nao existe neste adaptador");
+    }
+
+    /**
+     * Quebra um bloco, com ou sem soltar o que ele dropa.
+     *
+     * <p>Diferente de escrever ar na posição: quebrar respeita a tabela de loot e o derramamento do
+     * inventário, que é o que se espera de "quebrar".
+     *
+     * @return se havia um bloco ali para quebrar
+     */
+    default boolean breakBlock(int x, int y, int z, boolean drop) {
+        throw new BridgeException("break_block nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ entidades
+
+    /**
+     * Cura uma entidade.
+     *
+     * <p>O par de {@link #damageEntity}: existia como ferir e não como curar, o que deixava de fora
+     * qualquer mod de suporte, cura ou domesticação.
+     *
+     * @return se a entidade existia e foi curada
+     */
+    default boolean healEntity(String uuid, float amount) {
+        throw new BridgeException("heal_entity nao existe neste adaptador");
+    }
+
+    /**
+     * Aplica a uma entidade que já existe o que se declara ao criar uma.
+     *
+     * <p>Sem isto, os dados declarados só valiam no instante do nascimento: um mob que precisa ser
+     * equipado depois de algum evento — ou o próprio bicho do jogador — ficava de fora.
+     *
+     * @return se a entidade existia
+     */
+    default boolean applyToEntity(String uuid, EntitySpec spec) {
+        throw new BridgeException("apply_to_entity nao existe neste adaptador");
+    }
+
+    /**
+     * Os dados de uma entidade, no formato {@code uuid;tipo;x;y;z;vida;maxima;nome}.
+     *
+     * <p>{@link #entitiesNear} diz o que está por perto, mas não diz mais que o tipo e a posição.
+     * Um mod que reage ao estado de um bicho precisava dessa leitura.
+     */
+    default String entityInfo(String uuid) {
+        throw new BridgeException("entity_info nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ registro do jogo
+
+    /** Os blocos registrados, com o mesmo filtro de {@link #registeredItems}. */
+    default java.util.List<String> registeredBlocks(String namespace, String contains, int limit) {
+        throw new BridgeException("blocks nao existe neste adaptador");
+    }
+
+    /** Os tipos de entidade registrados, com o mesmo filtro. */
+    default java.util.List<String> registeredEntities(String namespace, String contains, int limit) {
+        throw new BridgeException("entities nao existe neste adaptador");
+    }
 }

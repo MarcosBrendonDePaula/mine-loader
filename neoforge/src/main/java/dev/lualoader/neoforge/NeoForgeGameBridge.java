@@ -800,4 +800,120 @@ public class NeoForgeGameBridge implements GameBridge {
             }
         }
     }
+
+    // ------------------------------------------------------------------ tempo e clima
+
+    @Override
+    public void setTimeOfDay(long time) {
+        // A hora e a do nivel corrente; o jogo guarda o total de tiques, entao mudar so a hora do
+        // dia exige preservar os dias ja passados -- senao um mod que anoitece rebobinaria o mundo.
+        ServerLevel level = requireLevel();
+        long days = level.getDayTime() / 24000L;
+        level.setDayTime(days * 24000L + Math.floorMod(time, 24000L));
+    }
+
+    @Override
+    public String weather() {
+        ServerLevel level = requireLevel();
+        if (level.isThundering()) return "thunder";
+        return level.isRaining() ? "rain" : "clear";
+    }
+
+    @Override
+    public void setWeather(String weather, int duration) {
+        ServerLevel level = requireLevel();
+        // Vinte minutos quando nao declarado, que e a ordem de grandeza que o jogo usa.
+        int ticks = duration > 0 ? duration : 24000;
+
+        switch (weather) {
+            case "thunder" -> level.setWeatherParameters(0, ticks, true, true);
+            case "rain" -> level.setWeatherParameters(0, ticks, true, false);
+            default -> level.setWeatherParameters(ticks, 0, false, false);
+        }
+    }
+
+    // ------------------------------------------------------------------ mundo
+
+    @Override
+    public int topY(int x, int z) {
+        return requireLevel().getHeight(
+                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+    }
+
+    @Override
+    public boolean breakBlock(int x, int y, int z, boolean drop) {
+        ServerLevel level = requireLevel();
+        BlockPos pos = new BlockPos(x, y, z);
+        if (level.getBlockState(pos).isAir()) return false;
+
+        // destroyBlock, e nao escrever ar: respeita a tabela de loot e derrama o inventario do
+        // bloco, que e o que "quebrar" significa para quem joga.
+        return level.destroyBlock(pos, drop);
+    }
+
+    // ------------------------------------------------------------------ entidades
+
+    @Override
+    public boolean healEntity(String uuid, float amount) {
+        var entity = findEntity(uuid);
+        if (!(entity instanceof net.minecraft.world.entity.LivingEntity living)) return false;
+
+        living.heal(amount);
+        return true;
+    }
+
+    @Override
+    public boolean applyToEntity(String uuid, dev.lualoader.platform.EntitySpec spec) {
+        var entity = findEntity(uuid);
+        if (entity == null) return false;
+
+        if (spec != null && !spec.isEmpty()) applySpec(entity, spec);
+        return true;
+    }
+
+    @Override
+    public String entityInfo(String uuid) {
+        var entity = findEntity(uuid);
+        if (entity == null) return null;
+
+        float health = 0f;
+        float maximum = 0f;
+        if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
+            health = living.getHealth();
+            maximum = living.getMaxHealth();
+        }
+
+        ResourceLocation type = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        String name = entity.getCustomName() == null ? "" : entity.getCustomName().getString();
+
+        return String.join(";", uuid, type == null ? "" : type.toString(),
+                String.valueOf(entity.getX()), String.valueOf(entity.getY()),
+                String.valueOf(entity.getZ()),
+                String.valueOf(health), String.valueOf(maximum), name);
+    }
+
+    // ------------------------------------------------------------------ registro do jogo
+
+    @Override
+    public List<String> registeredBlocks(String namespace, String contains, int limit) {
+        return filterRegistry(BuiltInRegistries.BLOCK.keySet(), namespace, contains, limit);
+    }
+
+    @Override
+    public List<String> registeredEntities(String namespace, String contains, int limit) {
+        return filterRegistry(BuiltInRegistries.ENTITY_TYPE.keySet(), namespace, contains, limit);
+    }
+
+    /** O mesmo filtro dos itens, para as três consultas responderem igual. */
+    private static List<String> filterRegistry(java.util.Collection<ResourceLocation> ids,
+                                               String namespace, String contains, int limit) {
+        List<String> found = new ArrayList<>();
+        for (ResourceLocation id : ids) {
+            if (namespace != null && !id.getNamespace().equals(namespace)) continue;
+            if (contains != null && !contains.isBlank() && !id.getPath().contains(contains)) continue;
+            found.add(id.toString());
+        }
+        java.util.Collections.sort(found);
+        return found.size() > limit ? found.subList(0, limit) : found;
+    }
 }

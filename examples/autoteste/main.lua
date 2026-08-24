@@ -210,6 +210,103 @@ TESTES.dados_declarados = function(ctx)
     end
 end
 
+-- Os pares que faltavam: ler sem escrever, ferir sem curar, item sem bloco.
+--
+-- Cada verificacao aqui existe porque a operacao tinha metade. O que se confere e o par completo,
+-- e nao a operacao nova sozinha -- ler o tempo depois de escrever prova as duas de uma vez.
+TESTES.pares_da_api = function(ctx)
+    -- Tempo: lia e nao escrevia.
+    local antes = ctx.server.time_of_day()
+    ctx.server.set_time_of_day(6000)
+    local depois = ctx.server.time_of_day()
+    exigir(depois >= 5990 and depois <= 6010,
+        "o tempo deveria ter virado 6000, veio " .. depois)
+    ctx.server.set_time_of_day(antes)
+
+    -- Clima: nao existia em nenhuma direcao.
+    ctx.server.set_weather("clear", 6000)
+    exigir(ctx.server.weather() == "clear",
+        "o clima deveria estar limpo, veio " .. ctx.server.weather())
+
+    -- Altura do terreno: sem isso, um mod que constroi precisa adivinhar onde e o chao.
+    local topo = ctx.server.top_y(0, 0)
+    exigir(type(topo) == "number", "top_y deveria devolver um numero")
+
+    -- Listar blocos e tipos de entidade: so itens eram listaveis.
+    local blocos = ctx.server.blocks({ namespace = "minecraft", contains = "stone", limit = 64 })
+    exigir(#blocos > 0, "deveria haver blocos de pedra no registro")
+
+    local tipos = ctx.server.entity_types({ namespace = "minecraft", contains = "zombie" })
+    exigir(#tipos > 0, "deveria haver tipos de zumbi no registro")
+
+    -- Curar e aplicar dados a uma entidade que ja existe.
+    local uuid = ctx.server.spawn_entity("minecraft:zombie", 0, 100, 0, { health = 20 })
+    ctx.server.damage_entity(uuid, 5)
+
+    local info = ctx.server.entity_info(uuid)
+    exigir(info ~= nil, "entity_info deveria responder pelo uuid recem-criado")
+    exigir(info.type == "minecraft:zombie", "veio " .. tostring(info.type))
+    exigir(info.health < info.max_health, "o zumbi deveria estar ferido")
+
+    ctx.server.heal_entity(uuid, 10)
+    local curado = ctx.server.entity_info(uuid)
+    exigir(curado.health > info.health,
+        "a cura deveria ter subido a vida: " .. info.health .. " -> " .. curado.health)
+
+    -- Aplicar dados depois do nascimento: antes so valia no instante em que a entidade nascia.
+    exigir(ctx.server.apply_to_entity(uuid, { name = "Renomeado", glowing = true }),
+        "apply_to_entity deveria achar a entidade")
+    exigir(ctx.server.entity_info(uuid).name == "Renomeado",
+        "o nome aplicado depois deveria valer")
+
+    ctx.server.remove_entity(uuid)
+
+    -- Quebrar bloco com drop, em vez de escrever ar por cima.
+    ctx.server.set_block("minecraft:stone", 0, 100, 0)
+    exigir(ctx.server.break_block(0, 100, 0, false), "deveria haver bloco para quebrar")
+    exigir(ctx.server.get_block(0, 100, 0) == "minecraft:air", "o bloco deveria ter sumido")
+    exigir(not ctx.server.break_block(0, 100, 0, false),
+        "quebrar o ar deveria responder que nao havia nada")
+end
+
+-- O jogador: lia vida e nao escrevia, e nao recebia efeito nenhum.
+--
+-- Roda so quando ha alguem no jogo. Pelo console nao ha jogador, e uma verificacao que finge ter um
+-- nao verifica coisa alguma.
+TESTES.jogador = function(ctx)
+    if ctx.player == nil then
+        ctx.log.info("[AUTOTESTE] jogador: pulado, nao ha jogador nesta execucao")
+        return
+    end
+
+    local vida = ctx.player.health()
+    exigir(vida.current > 0, "o jogador deveria estar vivo")
+
+    local comida = ctx.player.food()
+    exigir(comida.level >= 0 and comida.level <= 20, "fome fora da faixa: " .. comida.level)
+
+    local xp = ctx.player.experience()
+    exigir(xp.level >= 0, "nivel de experiencia negativo")
+
+    local modo = ctx.player.game_mode()
+    exigir(modo == "survival" or modo == "creative" or modo == "adventure" or modo == "spectator",
+        "modo de jogo desconhecido: " .. modo)
+
+    exigir(ctx.player.dimension() ~= nil and ctx.player.dimension() ~= "",
+        "o jogador deveria estar em alguma dimensao")
+
+    -- Efeito no jogador era a assimetria mais estranha: valia para entidade criada por mod e nao
+    -- para quem esta jogando, que e o alvo mais provavel de um efeito.
+    ctx.player.apply_effect("minecraft:speed", 40, 0)
+    ctx.player.clear_effects()
+
+    ctx.player.show_title("Autoteste", "verificando a API", 5, 20, 5)
+    ctx.player.play_sound_to("minecraft:block.note_block.bell", 0.4, 1.5)
+
+    local carregado = ctx.player.inventory()
+    exigir(type(carregado) == "table", "inventory deveria devolver uma tabela")
+end
+
 -- Ferramenta declarada precisa virar ferramenta de verdade, e nao um item com numeros.
 --
 -- O que separa as duas coisas nao aparece no manifesto: e o item ser da classe que o jogo usa para

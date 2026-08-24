@@ -340,4 +340,127 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
         }
         return Registries.ITEM.get(id);
     }
+
+    // ------------------------------------------------------------------ corpo, escrita
+
+    @Override
+    public void setHealth(float health) {
+        // Recortado ao maximo: escrever acima dele faria o jogo devolver o valor ao teto, e o mod
+        // veria a declaracao sumir sem erro.
+        player.setHealth(Math.min(health, player.getMaxHealth()));
+    }
+
+    @Override
+    public float[] food() {
+        var hunger = player.getHungerManager();
+        return new float[]{hunger.getFoodLevel(), hunger.getSaturationLevel()};
+    }
+
+    @Override
+    public void setFood(int level, float saturation) {
+        var hunger = player.getHungerManager();
+        hunger.setFoodLevel(Math.max(0, Math.min(20, level)));
+        hunger.setSaturationLevel(saturation);
+    }
+
+    @Override
+    public float[] experience() {
+        return new float[]{player.experienceLevel, player.experienceProgress};
+    }
+
+    @Override
+    public void giveExperienceLevels(int levels) {
+        player.addExperienceLevels(levels);
+    }
+
+    @Override
+    public String gameMode() {
+        return player.interactionManager.getGameMode().getName();
+    }
+
+    @Override
+    public void setGameMode(String mode) {
+        var found = net.minecraft.world.GameMode.byName(mode, null);
+        if (found == null) throw new BridgeException("modo de jogo desconhecido: " + mode);
+        player.changeGameMode(found);
+    }
+
+    @Override
+    public String dimension() {
+        return player.getWorld().getRegistryKey().getValue().toString();
+    }
+
+    @Override
+    public void applyEffect(String effectId, int duration, int amplifier) {
+        Identifier id = Identifier.tryParse(effectId);
+        if (id == null) throw new BridgeException("identificador de efeito invalido: " + effectId);
+
+        var effect = Registries.STATUS_EFFECT.getEntry(id).orElse(null);
+        if (effect == null) throw new BridgeException("efeito desconhecido: " + effectId);
+
+        player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                effect, duration, amplifier));
+    }
+
+    @Override
+    public void clearEffects() {
+        player.clearStatusEffects();
+    }
+
+    // ------------------------------------------------------------------ feedback
+
+    @Override
+    public void showTitle(String title, String subtitle, int fadeIn, int stay, int fadeOut) {
+        // Os tempos vao antes do texto: enviados depois, so valeriam no proximo titulo, e o
+        // primeiro apareceria com a duracao anterior.
+        if (fadeIn >= 0 || stay >= 0 || fadeOut >= 0) {
+            player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play
+                    .TitleFadeS2CPacket(
+                    fadeIn < 0 ? 10 : fadeIn, stay < 0 ? 70 : stay, fadeOut < 0 ? 20 : fadeOut));
+        }
+        if (subtitle != null && !subtitle.isBlank()) {
+            player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play
+                    .SubtitleS2CPacket(Text.literal(subtitle)));
+        }
+        player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play
+                .TitleS2CPacket(Text.literal(title == null ? "" : title)));
+    }
+
+    @Override
+    public void playSoundTo(String soundId, float volume, float pitch) {
+        Identifier id = Identifier.tryParse(soundId);
+        if (id == null) throw new BridgeException("identificador de som invalido: " + soundId);
+
+        var sound = Registries.SOUND_EVENT.getEntry(id).orElse(null);
+        if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
+
+        // Na posicao do jogador, e nao no mundo: o som acompanha quem o recebeu, que e o que
+        // distingue um retorno de interface de um ruido do ambiente.
+        player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play
+                .PlaySoundS2CPacket(sound, net.minecraft.sound.SoundCategory.PLAYERS,
+                player.getX(), player.getY(), player.getZ(), volume, pitch,
+                player.getWorld().getRandom().nextLong()));
+    }
+
+    // ------------------------------------------------------------------ inventário
+
+    @Override
+    public java.util.List<String> inventory() {
+        java.util.List<String> contents = new java.util.ArrayList<>();
+        var inventory = player.getInventory();
+
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            ItemStack stack = inventory.getStack(slot);
+            if (stack.isEmpty()) continue;
+
+            Identifier id = Registries.ITEM.getId(stack.getItem());
+            contents.add(slot + ";" + (id == null ? "minecraft:air" : id) + ";" + stack.getCount());
+        }
+        return contents;
+    }
+
+    @Override
+    public void clearInventory() {
+        player.getInventory().clear();
+    }
 }

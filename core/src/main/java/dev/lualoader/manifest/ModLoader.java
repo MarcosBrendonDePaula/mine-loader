@@ -123,6 +123,10 @@ public final class ModLoader {
         if (manifest.permissions != null) {
             Set<String> knownPermissions = Set.of(
                     "chat.send", "player.read", "player.inventory", "player.move", "player.menu",
+                    // player.modify e separada de read e de inventory de proposito: escrever vida,
+                    // fome, experiencia ou modo de jogo muda as regras sob os pes de quem joga, e
+                    // um mod que so quer contar itens nao deveria carregar esse poder junto.
+                    "player.modify",
                     "server.read", "server.command.register", "world.read", "world.write",
                     "entity.read", "entity.spawn", "entity.modify", "world.containers");
             for (String permission : manifest.permissions) {
