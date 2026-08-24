@@ -107,6 +107,60 @@ TESTES.container = function(ctx)
     ctx.server.set_block(antes, x, y, z)
 end
 
+-- Um bloco que o proprio manifesto declarou com inventario, e nao um bau do jogo.
+--
+-- E o caso que o TESTES.container nao alcanca: la o inventario e do Minecraft, aqui e o que o
+-- loader constroi a partir de "inventory" no manifesto. As duas plataformas chegam nele por
+-- caminhos diferentes -- SidedInventory no Fabric, capability mais Container no NeoForge -- e este
+-- teste e o que garante que os dois caminhos terminam no mesmo lugar.
+TESTES.inventario_declarado = function(ctx)
+    local x, y, z = 0, 100, 0
+    local antes = ctx.server.get_block(x, y, z)
+
+    ctx.server.set_block("crystal_world:cofre", x, y, z)
+
+    local capacidades = ctx.server.capabilities_at(x, y, z)
+    exigir(#capacidades > 0, "um bloco com inventario declarado deveria oferecer capacidade")
+
+    local sobrou = ctx.server.insert_into(x, y, z, "minecraft:emerald", 7)
+    exigir(sobrou == 0, "o cofre vazio deveria aceitar 7 esmeraldas, sobraram " .. sobrou)
+
+    local conteudo = ctx.server.container_at(x, y, z)
+    exigir(#conteudo == 1, "o cofre deveria ter um slot ocupado, tem " .. #conteudo)
+    exigir(conteudo[1].count == 7, "deveria haver 7, ha " .. conteudo[1].count)
+
+    -- O cofre do exemplo declara allow_extract falso, e ainda assim isto tira: a permissao vale
+    -- para funil e tubo, que acessam por um lado, e nao para o mod. Uma fornalha que recusa saida
+    -- automatica precisa tirar o proprio minerio para processar, e este e o unico caminho que ela
+    -- tem -- bloquear aqui transformaria a declaracao numa armadilha para quem a escreveu.
+    local pegou = ctx.server.extract_from(x, y, z, "minecraft:emerald", 3)
+    exigir(pegou == 3, "o mod deveria alcancar o proprio inventario, mas saiu " .. pegou)
+
+    -- Sobram 4 depois da retirada, e e isso que deve cair adiante.
+    local restante = ctx.server.container_at(x, y, z)
+    exigir(#restante == 1 and restante[1].count == 4,
+        "deveriam sobrar 4 esmeraldas apos a retirada")
+
+    -- Remover o bloco derrama o conteudo. Sem isto, quebrar uma maquina cheia apaga o que estava
+    -- dentro em silencio, que e o pior desfecho possivel.
+    local chao_antes = 0
+    for _, entidade in ipairs(ctx.server.entities_near(x, y, z, 6)) do
+        if entidade.type == "minecraft:item" then chao_antes = chao_antes + 1 end
+    end
+
+    ctx.server.set_block("minecraft:air", x, y, z)
+
+    local chao_depois = 0
+    for _, entidade in ipairs(ctx.server.entities_near(x, y, z, 6)) do
+        if entidade.type == "minecraft:item" then chao_depois = chao_depois + 1 end
+    end
+    exigir(chao_depois > chao_antes,
+        "o conteudo deveria cair ao remover o bloco; havia " .. chao_antes
+        .. " item(ns) no chao e ficou " .. chao_depois)
+
+    ctx.server.set_block(antes, x, y, z)
+end
+
 -- Ferramenta declarada precisa virar ferramenta de verdade, e nao um item com numeros.
 --
 -- O que separa as duas coisas nao aparece no manifesto: e o item ser da classe que o jogo usa para

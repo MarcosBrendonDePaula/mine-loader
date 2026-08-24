@@ -111,9 +111,12 @@ cmd() {
 }
 
 pronto() {
-    # Os comandos dos mods sao publicados no fim da inicializacao, depois de todo mod carregar.
-    # "Done (" aparece antes disso, e esperar por ele mandava comandos cedo demais.
-    grep -q 'Comandos de mod publicados' "$SAIDA" 2>/dev/null
+    # Os dois sinais, porque a ordem entre eles muda com a plataforma e faltar qualquer um manda
+    # comando cedo demais. No Fabric os comandos dos mods saem depois de "Done ("; no NeoForge eles
+    # sao publicados antes de o mundo existir, e um comando enviado ali falha com "serverlevel is
+    # null" -- que nao parece com "cedo demais" e ja fez uma verificacao inteira ser lida errada.
+    grep -q 'Comandos de mod publicados' "$SAIDA" 2>/dev/null \
+        && grep -q 'Done (' "$SAIDA" 2>/dev/null
 }
 
 esperar() {

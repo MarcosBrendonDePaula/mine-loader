@@ -50,15 +50,28 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
     private final SimpleContainer contents;
 
     /**
-     * A visão que a automação tem do inventário.
+     * A visão que a automação tem do inventário: com as permissões aplicadas.
      *
-     * <p>As permissões de lado entram aqui, e não no container: é este objeto que funis e tubos
-     * alcançam pela capability, então é ele quem precisa recusar. O jogador continua alcançando o
-     * container direto pela janela, e para ele as permissões não valem — quem abre a caixa mexe
-     * nela, mesmo que a máquina ao lado não possa.
+     * <p>É o que funis e tubos alcançam, e por isso é aqui que {@code allow_insert} e
+     * {@code allow_extract} recusam.
      */
     @Nullable
-    private final IItemHandler handler;
+    private final IItemHandler sided;
+
+    /**
+     * A visão sem restrição, para quem acessa o bloco sem lado.
+     *
+     * <p>A distinção não é sutil e custou um teste vermelho para aparecer. Uma fornalha declarada
+     * aceita entrada e recusa saída automática — mas ela mesma precisa tirar o minério de dentro
+     * para processá-lo, e o único caminho que o mod tem é a API do loader. Se as permissões
+     * valessem também ali, {@code allow_extract: false} viraria uma armadilha: o autor trancaria o
+     * próprio bloco e descobriria depois.
+     *
+     * <p>É também o que o adaptador Fabric faz, e não por acaso: lá o acesso sem lado ignora
+     * {@code canExtract} porque a pergunta "deste lado, pode?" não tem resposta sem um lado.
+     */
+    @Nullable
+    private final IItemHandler unsided;
 
     public NeoForgeDeclarativeBlockEntity(BlockPos pos, BlockState state) {
         super(NeoForgeBlockEntities.type(), pos, state);
@@ -66,7 +79,8 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
         this.inventory = NeoForgeContentRegistrar.inventoryOf(state.getBlock());
         if (inventory == null) {
             this.contents = null;
-            this.handler = null;
+            this.sided = null;
+            this.unsided = null;
             return;
         }
 
@@ -76,7 +90,8 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
         this.contents.addListener(container -> setChanged());
 
         final ModManifest.InventoryDefinition declared = inventory;
-        this.handler = new InvWrapper(contents) {
+        this.unsided = new InvWrapper(contents);
+        this.sided = new InvWrapper(contents) {
             @Override
             public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
                 if (!declared.allowInsert) return stack;
@@ -119,10 +134,14 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
         return contents;
     }
 
-    /** O que a capability publica. */
+    /**
+     * O que a capability publica, conforme o lado por onde vem o acesso.
+     *
+     * @param side o lado do bloco, ou {@code null} quando o acesso nao tem lado
+     */
     @Nullable
-    public IItemHandler handler() {
-        return handler;
+    public IItemHandler handler(@Nullable net.minecraft.core.Direction side) {
+        return side == null ? unsided : sided;
     }
 
     @Override

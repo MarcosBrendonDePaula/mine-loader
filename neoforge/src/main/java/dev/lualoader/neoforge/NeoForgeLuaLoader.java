@@ -54,7 +54,7 @@ public class NeoForgeLuaLoader {
             event.registerBlockEntity(
                     net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
                     NeoForgeBlockEntities.type(),
-                    (entity, side) -> entity.handler());
+                    (entity, side) -> entity.handler(side));
         });
 
         // O canal de telas precisa existir antes de qualquer jogador entrar: e por ele que o
