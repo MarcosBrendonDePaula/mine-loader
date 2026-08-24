@@ -12,7 +12,10 @@
 --   /mod gerenciador <id>     abre direto o detalhe daquele mod
 
 local LARGURA = 260
-local ALTURA = 200
+-- A altura sai da conta, e nao do chute: cabecalho ate 46, seis linhas de 24, divisor e rodape de
+-- 20 com folga. Com 200 a sexta linha caia por baixo dos botoes -- e o log dizia que estava tudo
+-- certo, porque nada no servidor sabe onde um pixel foi parar.
+local ALTURA = 232
 local POR_PAGINA = 6
 local ALTURA_LINHA = 22
 
@@ -262,9 +265,11 @@ local function desenhar_instalar(ctx)
         elementos[#elementos + 1] = { type = "button", id = "buscar", x = 14, y = 68,
                                       w = 90, h = 20, text = "Ver o que e" }
 
+        -- y vive fora do bloco da previa porque o aviso, mais abaixo, precisa saber onde o
+        -- conteudo parou -- inclusive quando nao ha previa nenhuma.
+        local y = 96
         local previa = estado.previa
         if previa then
-            local y = 96
             elementos[#elementos + 1] = { type = "label", x = 14, y = y, color = COR_TITULO,
                                           text = encurtar(previa.name .. "  v" .. previa.version, 34) }
             y = y + 12
@@ -319,8 +324,11 @@ local function desenhar_instalar(ctx)
                                           w = 90, h = 20, text = "Instalar" }
         end
 
+        -- O aviso segue o conteudo em vez de ter posicao fixa: fixo, ele caia por cima da ultima
+        -- linha de permissoes quando o mod pedia muitas. Um erro escrito por cima de outro texto e
+        -- pior que nenhum erro, porque os dois viram ilegiveis.
         if estado.aviso then
-            elementos[#elementos + 1] = { type = "label", x = 14, y = ALTURA - 46,
+            elementos[#elementos + 1] = { type = "label", x = 14, y = math.min(y, ALTURA - 46),
                                           color = COR_DESLIGADO,
                                           text = encurtar(estado.aviso, 44) }
         end
