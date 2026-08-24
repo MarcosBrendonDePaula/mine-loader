@@ -1,18 +1,29 @@
 # Mine Loader — guia para trabalhar neste repositório
 
-Modloader declarativo para Minecraft Java 1.21.1 (Fabric). Mods são pastas com `mod.json` mais
-lógica em Lua (LuaJ); o loader registra blocos e itens, monta um resource pack virtual e executa os
-scripts. Nenhum mod escreve Java.
+Modloader declarativo para Minecraft Java 1.21.1, sobre Fabric e NeoForge. Mods são pastas com
+`mod.json` mais lógica em Lua (LuaJ); o loader registra blocos e itens, monta um resource pack
+virtual e executa os scripts. Nenhum mod escreve Java, e o mesmo mod roda nas duas plataformas sem
+mudar uma linha — `docs/COMPATIBILIDADE.md` é onde essa promessa é conferida.
 
 ## Comandos
 
 ```bash
-./gradlew build          # compila os três lados e roda os testes
+./gradlew build          # compila tudo e roda os testes das duas plataformas
 ./gradlew :core:test     # só os testes do núcleo — rápidos, sem Minecraft
-./gradlew runServer      # servidor de desenvolvimento; lê mods de run/mods-lua
-./gradlew runClient      # cliente, para ver tela, HUD e sobreposição
 ./gradlew runGametest    # servidor headless com os @GameTest
 ```
+
+```bash
+# Fabric                                  # NeoForge
+./gradlew :runServer                      ./gradlew :neoforge:runServer
+./gradlew :runClient                      ./gradlew :neoforge:runClient
+```
+
+Acrescente `-Pmundo="New World"` a qualquer `runClient` para entrar direto no mundo, pulando o menu.
+
+**Os dois pontos na frente não são enfeite.** `./gradlew runServer` sem eles procura a tarefa em
+todos os subprojetos e sobe as duas plataformas ao mesmo tempo — as duas escrevendo no mesmo lugar,
+o que já produziu um log misturado que fez a leitura mentir.
 
 Java 21. No Windows use `./gradlew.bat`. O CI roda `build` mais os GameTests em todo push.
 
@@ -22,14 +33,23 @@ Java 21. No Windows use `./gradlew.bat`. O CI roda `build` mais os GameTests em 
 |---|---|---|
 | `core/` | Núcleo: manifesto, runtime Lua, protocolo de UI, contratos de plataforma | **não** |
 | `src/main/` | Adaptador Fabric: registro de conteúdo, rede, bridge | sim |
-| `src/client/` | Cliente: desenha telas, HUD e sobreposições | sim |
+| `src/client/` | Cliente Fabric: desenha telas, HUD e sobreposições | sim |
+| `neoforge/` | Adaptador NeoForge, com o próprio cliente em `.../neoforge/client/` | sim |
 | `examples/` | Mods de exemplo, em Lua | — |
+| `tools/` | Servidor dirigível e utilitários de verificação | — |
 | `docs/` | Especificações; veja o índice no README | — |
 
-**A regra que sustenta o resto:** o núcleo nunca importa classe do Minecraft nem do Fabric. Tudo
-passa por `GameBridge` e `PlayerHandle`, em `core/.../platform/`. Acrescentar uma operação ao Lua
-significa: método no contrato → implementação no adaptador → função no `LuaRuntime` → dublê em
-`TestBridge`/`TestPlayer`. Esquecer o último quebra a compilação dos testes, o que é o objetivo.
+**A regra que sustenta o resto:** o núcleo nunca importa classe do Minecraft, do Fabric nem do
+NeoForge. Tudo passa por `GameBridge` e `PlayerHandle`, em `core/.../platform/`. Acrescentar uma
+operação ao Lua significa: método no contrato → implementação em **cada** adaptador → função no
+`LuaRuntime` → dublê em `TestBridge`/`TestPlayer`. Esquecer o último quebra a compilação dos
+testes, o que é o objetivo.
+
+**Quando algo é agnóstico, ele pertence ao núcleo — mesmo que hoje só um lado use.** O
+`ScreenModel` e a geometria de ancoragem viveram no cliente Fabric por acidente histórico, e portar
+a interface para o NeoForge quase custou trezentas linhas de aritmética duplicada. Agora as duas
+plataformas concordam sobre onde cada elemento fica e discordam só sobre como pintá-lo, e um erro
+de alinhamento virou teste no núcleo em vez de dois bugs independentes.
 
 ## Convenções
 
@@ -94,3 +114,50 @@ são o que avisa quando uma mudança de API quebra os exemplos.
 **Ao editar um `.lua` de `examples/`, rode `./gradlew :core:test --rerun-tasks`.** O Gradle não
 enxerga esses arquivos como entrada da tarefa de teste, então um `./gradlew test` comum reporta
 sucesso sem ter executado nada — o pior resultado possível, porque parece verificação.
+
+### Os quatro níveis, do mais barato ao único que vê pixel
+
+| Nível | Alcança | Custo |
+|---|---|---|
+| `./gradlew :core:test` | manifesto, validação, geometria de tela, runtime Lua | segundos |
+| `./gradlew runGametest` | registro, entidade de bloco, NBT — num servidor de verdade | ~20 s |
+| `/mod autoteste` no servidor | as APIs contra o jogo real: registro com milhares de itens, loot de datapack, inventário de outro mod | minuto |
+| `runClient` | **só aqui se vê se um pixel está no lugar** | manual |
+
+A distância entre os dois primeiros e os dois últimos é onde os defeitos moram. Vários desta
+sessão só apareceram no jogo, e um deles com o log dizendo "pack montado, zero modelos faltando"
+enquanto a tela mostrava cubos roxos. **Log verde não é verificação visual.**
+
+### Verificar sem estar no jogo
+
+`tools/servidor-dirigivel.sh` sobe um servidor cuja entrada de console vem de um arquivo, então dá
+para mandar comandos e ler o resultado sem ninguém no jogo:
+
+```bash
+tools/servidor-dirigivel.sh iniciar          # sobe (PLATAFORMA=neoforge para o outro)
+tools/servidor-dirigivel.sh esperar          # bloqueia até aceitar comandos
+tools/servidor-dirigivel.sh cmd "mod autoteste"
+tools/servidor-dirigivel.sh log 40           # últimas linhas
+tools/servidor-dirigivel.sh parar
+```
+
+O log fica em `build/servidor-<plataforma>.log`. Se o `grep` reclamar de arquivo binário, passe por
+`strings` antes.
+
+**Três armadilhas que já custaram conclusões erradas aqui:**
+
+- **O servidor pode se dizer pronto antes do mundo existir.** No NeoForge os comandos dos mods são
+  publicados antes disso, e um comando enviado ali falha com `serverlevel is null` — que não se
+  parece com "cedo demais". O script já espera pelos dois sinais; se escrever verificação nova,
+  não presuma.
+- **O seletor `@e` do console não enxerga entidades em todo servidor.** Para contar o que caiu no
+  chão, use `entities_near` pela API do loader — é o caminho que um mod usaria, e responde.
+- **Um servidor órfão segura a porta e o mundo.** `parar` antes de `iniciar`, sempre. O script
+  limpa órfãos da mesma plataforma, mas não toca no cliente que você deixou aberto.
+
+### Escrever verificação nova
+
+Prefira acrescentar um caso a `examples/autoteste/main.lua` a criar um mod de teste avulso: ele já
+roda nas duas plataformas com um comando, e é o que pega divergência entre elas. Foi assim que se
+descobriu que `extract_from` respeitava `allow_extract` no NeoForge e não no Fabric — as duas
+plataformas fazendo coisas diferentes com o mesmo manifesto.
