@@ -482,6 +482,36 @@ Todo simbolo desenhado precisa existir na paleta. Um simbolo desconhecido impede
 
 O posicionamento e feito por `ctx.server.place_structure(id, x, y, z)`, que exige `world.write` e devolve quantos blocos foram colocados. Um mod so alcanca as proprias estruturas. O limite de 32.768 blocos vale aqui tambem.
 
+## Estrutura salva no jogo
+
+Uma estrutura pode vir de um arquivo `.nbt` — o que o **bloco de estrutura** do Minecraft grava.
+Isso permite construir dentro do jogo, salvar e distribuir junto do mod, em vez de transcrever a
+construção para texto:
+
+```json
+"structures": [
+  { "id": "torre", "name": "Torre de Vigia", "from": "structures/torre.nbt" }
+]
+```
+
+O arquivo é lido na carga do mod e vira a mesma declaração que um manifesto escreveria à mão — com
+paleta e camadas. Não é economia de código: é o que faz `origin`, o teto de volume e a validação de
+símbolo valerem igual para os dois caminhos.
+
+Aceita comprimido (como o jogo grava) ou cru (como algumas ferramentas gravam). O `name` e o
+`origin` do manifesto vencem os do arquivo; sem `origin` declarado, vale `corner`, que é de onde o
+bloco de estrutura grava.
+
+O que o arquivo traz e o loader ainda não aplica: **propriedades de estado** (a orientação de um
+tronco, a metade de uma laje) e **entidades**. O bloco é posicionado pelo identificador, no estado
+padrão. Guardar o que não é aplicado faria a estrutura prometer uma orientação que ela não teria.
+
+Ar capturado dentro da área fica transparente — preserva o que já existe no mundo, em vez de abrir
+buracos em volta. Posições que o arquivo não lista também.
+
+O limite é o da paleta em texto: 89 blocos diferentes por estrutura. Acima disso o mod é recusado
+com a contagem na mensagem.
+
 ## Dividir o mod em varios arquivos
 
 Um mod com muitos blocos, itens ou estruturas produz um `mod.json` grande demais para ler. Qualquer objeto do manifesto pode ser substituido por uma referencia `$import`:

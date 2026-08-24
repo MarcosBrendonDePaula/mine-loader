@@ -46,7 +46,9 @@ núcleo não conhecer Minecraft.
 | Receitas | sim | sim | Geradas como datapack pelo núcleo |
 | Tabelas de loot | sim | sim | Idem |
 | Tags | sim | sim | Idem |
-| Estruturas | sim | sim | O posicionador vive no núcleo |
+| Estruturas em texto | sim | sim | O posicionador vive no núcleo |
+| Estruturas de arquivo `.nbt` | sim | sim | Lidas na carga; estado e entidades não são aplicados |
+| Modelo declarado (Blockbench) | sim | sim | Recurso do tipo `model` |
 | Comandos de mod | sim | sim | |
 | Dados por bloco (`block_data`) | sim | sim | |
 | **Inventário de bloco** (`inventory`) | sim | sim | |

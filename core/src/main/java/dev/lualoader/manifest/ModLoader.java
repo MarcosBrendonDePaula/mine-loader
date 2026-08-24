@@ -137,6 +137,7 @@ public final class ModLoader {
 
         validateDependencies(manifest);
         validateItems(manifest);
+        loadStructureFiles(manifest, directory);
         validateStructures(manifest);
         validateRecipes(manifest);
         validateCreativeTab(manifest);
@@ -289,6 +290,47 @@ public final class ModLoader {
             require(entry.getKey() != null && MOD_ID.matcher(entry.getKey()).matches(),
                     "id de dependencia invalido: " + entry.getKey());
             require(!entry.getKey().equals(manifest.id), "um mod nao pode depender de si mesmo");
+        }
+    }
+
+    /**
+     * Carrega as estruturas que vêm de um arquivo do jogo.
+     *
+     * <p>Acontece antes da validação, e não sob demanda: depois disto a estrutura é indistinguível
+     * de uma escrita à mão, então tudo o que já vale para ela — símbolo fora da paleta, teto de
+     * volume, {@code origin} — vale igual. E um arquivo quebrado recusa o mod na carga, em vez de
+     * falhar quando alguém tentar construir.
+     */
+    private void loadStructureFiles(ModManifest manifest, Path directory) {
+        if (manifest.structures == null) return;
+
+        for (int index = 0; index < manifest.structures.size(); index++) {
+            ModManifest.StructureDefinition structure = manifest.structures.get(index);
+            if (structure == null || structure.from == null || structure.from.isBlank()) continue;
+
+            require(structure.id != null && MOD_ID.matcher(structure.id).matches(),
+                    "estrutura de arquivo precisa de id: " + structure.from);
+
+            Path root = directory.toAbsolutePath().normalize();
+            Path file = root.resolve(structure.from).normalize();
+            require(file.startsWith(root),
+                    "caminho de estrutura sai da pasta do mod: " + structure.from);
+            require(Files.isRegularFile(file),
+                    "arquivo de estrutura nao encontrado: " + structure.from);
+
+            try {
+                var loaded = dev.lualoader.structure.StructureNbt.read(
+                        Files.readAllBytes(file), structure.id);
+                // O nome declarado no manifesto vence o do arquivo: e o que aparece para quem joga.
+                if (structure.name != null && !structure.name.isBlank()) loaded.name = structure.name;
+                if (structure.origin != null && !structure.origin.isBlank()) {
+                    loaded.origin = structure.origin;
+                }
+                manifest.structures.set(index, loaded);
+            } catch (IOException error) {
+                throw new IllegalArgumentException(
+                        "estrutura " + structure.id + " ilegivel: " + error.getMessage(), error);
+            }
         }
     }
 

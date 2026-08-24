@@ -404,6 +404,14 @@ public final class ModManifest {
     public static final class StructureDefinition {
         public String id;
         public String name;
+        /**
+         * Referencia a um recurso do tipo {@code data} com um arquivo de estrutura do jogo.
+         *
+         * <p>Quando presente, a paleta e as camadas vem do arquivo em vez do manifesto: da para
+         * construir dentro do Minecraft, salvar com o bloco de estrutura e distribuir junto do mod,
+         * em vez de transcrever a construcao para texto.
+         */
+        public String from;
         /** {@code bottom_center} ancora no centro da base; {@code corner} ancora no canto minimo. */
         public String origin = "bottom_center";
         public Map<String, String> palette = new LinkedHashMap<>();
