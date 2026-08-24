@@ -273,42 +273,172 @@ public final class FabricGameBridge implements GameBridge {
      * campo simplesmente não se aplica ali, como não se aplica a um bloco.
      */
     private static void applySpec(Entity entity, dev.lualoader.platform.EntitySpec spec) {
-        if (spec.name() != null) entity.setCustomName(Text.literal(spec.name()));
-        if (spec.nameVisible() != null) entity.setCustomNameVisible(spec.nameVisible());
-        if (spec.invulnerable() != null) entity.setInvulnerable(spec.invulnerable());
-        if (spec.silent() != null) entity.setSilent(spec.silent());
-        if (spec.noGravity() != null) entity.setNoGravity(spec.noGravity());
+        if (spec.name != null) entity.setCustomName(Text.literal(spec.name));
+        if (spec.nameVisible != null) entity.setCustomNameVisible(spec.nameVisible);
+        if (spec.invulnerable != null) entity.setInvulnerable(spec.invulnerable);
+        if (spec.silent != null) entity.setSilent(spec.silent);
+        if (spec.noGravity != null) entity.setNoGravity(spec.noGravity);
+        if (spec.glowing != null) entity.setGlowing(spec.glowing);
+        if (spec.fireTicks != null) entity.setFireTicks(spec.fireTicks);
+        if (spec.frozenTicks != null) entity.setFrozenTicks(spec.frozenTicks);
+
+        if (spec.yaw != null || spec.pitch != null) {
+            float yaw = spec.yaw == null ? entity.getYaw() : spec.yaw;
+            float pitch = spec.pitch == null ? entity.getPitch() : spec.pitch;
+            entity.setYaw(yaw);
+            entity.setPitch(pitch);
+            // A cabeca acompanha o corpo: sem isto o bicho olharia para um lado e encararia outro.
+            entity.setHeadYaw(yaw);
+        }
 
         if (entity instanceof net.minecraft.entity.mob.MobEntity mob) {
-            if (spec.noAi() != null) mob.setAiDisabled(spec.noAi());
+            if (spec.noAi != null) mob.setAiDisabled(spec.noAi);
             // Persistente e o que impede o jogo de remover o bicho quando ninguem esta por perto;
             // sem isso, um guardiao invocado por um mod sumiria sozinho.
-            if (Boolean.TRUE.equals(spec.persistent())) mob.setPersistent();
+            if (Boolean.TRUE.equals(spec.persistent)) mob.setPersistent();
+            applyEquipment(mob, spec);
         }
         if (entity instanceof net.minecraft.entity.passive.PassiveEntity passive
-                && spec.baby() != null) {
-            passive.setBaby(spec.baby());
+                && spec.baby != null) {
+            passive.setBaby(spec.baby);
         }
         if (entity instanceof net.minecraft.entity.passive.TameableEntity tameable
-                && spec.tame() != null) {
-            tameable.setTamed(spec.tame(), true);
+                && spec.tame != null) {
+            tameable.setTamed(spec.tame, true);
         }
         if (entity instanceof net.minecraft.entity.passive.AbstractHorseEntity horse
-                && spec.tame() != null) {
+                && spec.tame != null) {
             // Cavalos nao sao TameableEntity: tem a propria nocao de domado, e sem este ramo
             // declarar tame num cavalo nao faria nada -- que e o caso mais obvio de todos.
-            horse.setTame(spec.tame());
+            horse.setTame(spec.tame);
+        }
+        applyVariant(entity, spec);
+
+        applyBody(entity, spec);
+        applyEffects(entity, spec);
+    }
+
+    /**
+     * A variante visual, quando a espécie tem uma.
+     *
+     * <p>Cobertura estreita de propósito, e dita em voz alta: cada espécie nomeia a própria
+     * variante de um jeito, e não há um contrato do jogo que sirva a todas. Cobrir o cavalo, onde a
+     * cor é o caso que alguém quer declarar, é melhor que um mapeamento inventado que acertaria uma
+     * espécie e mentiria nas outras.
+     *
+     * <p>Um nome que a espécie não conhece é ignorado, como qualquer campo que não se aplica.
+     */
+    private static void applyVariant(Entity entity, dev.lualoader.platform.EntitySpec spec) {
+        if (spec.variant == null || spec.variant.isBlank()) return;
+
+        if (entity instanceof net.minecraft.entity.passive.HorseEntity horse) {
+            var color = horseColor(spec.variant);
+            if (color != null) horse.setVariant(color);
+        }
+    }
+
+    private static net.minecraft.entity.passive.HorseColor horseColor(String name) {
+        return switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "white" -> net.minecraft.entity.passive.HorseColor.WHITE;
+            case "creamy" -> net.minecraft.entity.passive.HorseColor.CREAMY;
+            case "chestnut" -> net.minecraft.entity.passive.HorseColor.CHESTNUT;
+            case "brown" -> net.minecraft.entity.passive.HorseColor.BROWN;
+            case "black" -> net.minecraft.entity.passive.HorseColor.BLACK;
+            case "gray" -> net.minecraft.entity.passive.HorseColor.GRAY;
+            case "dark_brown" -> net.minecraft.entity.passive.HorseColor.DARK_BROWN;
+            default -> null;
+        };
+    }
+
+    /** Vida, atributos e o cuidado de aplicar o máximo antes do valor atual. */
+    private static void applyBody(Entity entity, dev.lualoader.platform.EntitySpec spec) {
+        if (!(entity instanceof net.minecraft.entity.LivingEntity living)) return;
+
+        for (var declared : spec.attributesOrEmpty().entrySet()) {
+            Identifier id = Identifier.tryParse(declared.getKey());
+            if (id == null) continue;
+
+            var attribute = Registries.ATTRIBUTE.getEntry(id).orElse(null);
+            if (attribute == null) continue;
+
+            var instance = living.getAttributeInstance(attribute);
+            if (instance != null) instance.setBaseValue(declared.getValue());
         }
 
-        if (spec.health() != null && entity instanceof net.minecraft.entity.LivingEntity living) {
-            float health = (float) Math.max(1.0, spec.health());
-            var attribute = living.getAttributeInstance(
-                    net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH);
-            // O maximo primeiro: definir a vida acima do maximo sem mexer no atributo faria o jogo
-            // recortar o valor de volta, e o mod veria a declaracao sumir.
-            if (attribute != null) attribute.setBaseValue(health);
-            living.setHealth(health);
+        if (spec.health == null) return;
+        float health = (float) Math.max(1.0, spec.health);
+
+        var maximum = living.getAttributeInstance(
+                net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH);
+        // O maximo primeiro: definir a vida acima do maximo sem mexer no atributo faria o jogo
+        // recortar o valor de volta, e o mod veria a declaracao sumir.
+        if (maximum != null && maximum.getBaseValue() < health) maximum.setBaseValue(health);
+        living.setHealth(health);
+    }
+
+    /** Efeitos de poção declarados. */
+    private static void applyEffects(Entity entity, dev.lualoader.platform.EntitySpec spec) {
+        if (!(entity instanceof net.minecraft.entity.LivingEntity living)) return;
+
+        for (var effect : spec.effectsOrEmpty()) {
+            Identifier id = Identifier.tryParse(effect.id);
+            if (id == null) continue;
+
+            var type = Registries.STATUS_EFFECT.getEntry(id).orElse(null);
+            if (type == null) continue;
+
+            // Trinta segundos quando nao declarado: um efeito sem duracao seria descartado no mesmo
+            // tique, e o script veria a declaracao nao fazer nada.
+            int duration = effect.duration == null ? 600 : effect.duration;
+            int amplifier = effect.amplifier == null ? 0 : effect.amplifier;
+
+            living.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                    type, duration, amplifier,
+                    Boolean.TRUE.equals(effect.ambient),
+                    !Boolean.FALSE.equals(effect.showParticles)));
         }
+    }
+
+    /**
+     * Equipamento por espaço do corpo.
+     *
+     * <p>Só um {@code MobEntity} veste: um item solto ou uma bola de fogo não têm onde pôr, e
+     * tentar aplicar ali seria escrever num lugar que não existe.
+     */
+    private static void applyEquipment(net.minecraft.entity.mob.MobEntity mob,
+                                       dev.lualoader.platform.EntitySpec spec) {
+        for (var entry : spec.equipmentOrEmpty().entrySet()) {
+            var slot = equipmentSlot(entry.getKey());
+            if (slot == null) continue;
+
+            var piece = entry.getValue();
+            Identifier id = Identifier.tryParse(piece.item);
+            if (id == null || !Registries.ITEM.containsId(id)) continue;
+
+            ItemStack stack = new ItemStack(Registries.ITEM.get(id));
+            if (piece.data != null && !piece.data.isEmpty()) {
+                FabricPlayerHandle.applySpec(stack, piece.data, mob.getWorld());
+            }
+            mob.equipStack(slot, stack);
+
+            // Sem isto, o jogo escolhe a chance de queda sozinho -- costuma ser quase zero, e o
+            // mod que vestiu um chefe esperaria ver o equipamento cair.
+            if (piece.dropChance != null) mob.setEquipmentDropChance(slot, piece.dropChance);
+        }
+    }
+
+    /** Traduz o nome do espaço declarado para o do jogo. */
+    private static net.minecraft.entity.EquipmentSlot equipmentSlot(String name) {
+        if (name == null) return null;
+        return switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "main_hand", "mainhand", "hand" -> net.minecraft.entity.EquipmentSlot.MAINHAND;
+            case "off_hand", "offhand" -> net.minecraft.entity.EquipmentSlot.OFFHAND;
+            case "head", "helmet" -> net.minecraft.entity.EquipmentSlot.HEAD;
+            case "chest", "chestplate" -> net.minecraft.entity.EquipmentSlot.CHEST;
+            case "legs", "leggings" -> net.minecraft.entity.EquipmentSlot.LEGS;
+            case "feet", "boots" -> net.minecraft.entity.EquipmentSlot.FEET;
+            default -> null;
+        };
     }
 
     @Override

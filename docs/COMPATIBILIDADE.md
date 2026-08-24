@@ -27,7 +27,8 @@ núcleo não conhecer Minecraft.
 | HUD e sobreposições | definir, limpar | sim | sim |
 | Som e partículas | tocar, emitir | sim | sim |
 | Entidades | criar, remover, ferir, listar por raio | sim | sim |
-| Dados declarados | entidade (nome, domado, vida…) e item (nome, lore, encantamento) | sim | sim |
+| Dados declarados | entidade (nome, natureza, corpo, equipamento, efeitos, estado, rotação) e item (aparência, durabilidade, encantamento, atributos) | sim | sim |
+| **Variante visual de entidade** (`variant`) | sim | **não** | O método é privado no NeoForge; o campo é lido e ignorado |
 | Dados por bloco | ler, gravar | sim | sim |
 | Inventário de bloco | capacidades, ler, inserir, extrair | sim | sim |
 | Registro do jogo | listar itens, receitas, drops | sim | sim |

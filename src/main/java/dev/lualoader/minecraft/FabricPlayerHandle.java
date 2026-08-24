@@ -103,34 +103,34 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
      * escrevesse NBT cru teria escrito a forma anterior e pararia de funcionar na 1.20.5 sem ter
      * mudado uma linha — é o motivo de o vocabulário ser declarado.
      */
-    private static void applySpec(ItemStack stack, dev.lualoader.platform.ItemSpec spec,
+    static void applySpec(ItemStack stack, dev.lualoader.platform.ItemSpec spec,
                                   net.minecraft.world.World world) {
-        if (spec.name() != null) {
+        if (spec.name != null) {
             stack.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME,
-                    Text.literal(spec.name()));
+                    Text.literal(spec.name));
         }
-        if (spec.lore() != null && !spec.lore().isEmpty()) {
+        if (spec.lore != null && !spec.lore.isEmpty()) {
             java.util.List<Text> lines = new java.util.ArrayList<>();
-            for (String line : spec.lore()) lines.add(Text.literal(line));
+            for (String line : spec.lore) lines.add(Text.literal(line));
             stack.set(net.minecraft.component.DataComponentTypes.LORE,
                     new net.minecraft.component.type.LoreComponent(lines));
         }
-        if (spec.damage() != null) {
+        if (spec.damage != null) {
             // Recortado ao maximo do item: um dano acima dele quebraria a peca na hora de aparecer,
             // e o mod veria o item sumir sem explicacao.
-            stack.setDamage(Math.min(spec.damage(), Math.max(0, stack.getMaxDamage())));
+            stack.setDamage(Math.min(spec.damage, Math.max(0, stack.getMaxDamage())));
         }
-        if (Boolean.TRUE.equals(spec.unbreakable())) {
+        if (Boolean.TRUE.equals(spec.unbreakable)) {
             stack.set(net.minecraft.component.DataComponentTypes.UNBREAKABLE,
                     new net.minecraft.component.type.UnbreakableComponent(true));
         }
-        if (spec.customModelData() != null) {
+        if (spec.customModelData != null) {
             stack.set(net.minecraft.component.DataComponentTypes.CUSTOM_MODEL_DATA,
                     new net.minecraft.component.type.CustomModelDataComponent(
-                            spec.customModelData()));
+                            spec.customModelData));
         }
 
-        if (spec.enchantments() == null || spec.enchantments().isEmpty()) return;
+        if (spec.enchantments == null || spec.enchantments.isEmpty()) return;
 
         // Encantamento deixou de ser um registro fixo e passou a vir do datapack, entao so existe
         // com um mundo carregado -- e por isso a consulta sai do registro do mundo, e nao de
@@ -144,7 +144,7 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
                 net.minecraft.component.type.ItemEnchantmentsComponent.DEFAULT);
         boolean applied = false;
 
-        for (var entry : spec.enchantments().entrySet()) {
+        for (var entry : spec.enchantments.entrySet()) {
             Identifier id = Identifier.tryParse(entry.getKey());
             if (id == null) continue;
 

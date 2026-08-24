@@ -18,6 +18,7 @@ import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.List;
 import java.util.Set;
 
@@ -380,7 +381,8 @@ public class NeoForgeGameBridge implements GameBridge {
      * Aplica o que o mod declarou sobre a entidade.
      *
      * <p>É o par do mesmo método no adaptador Fabric, e a comparação entre os dois é a razão de o
-     * vocabulário existir: nenhum nome de método aqui coincide com o de lá, e o script não muda.
+     * vocabulário existir: quase nenhum nome de método aqui coincide com o de lá, e o script não
+     * muda.
      *
      * <p>O que a entidade não suporta é ignorado, e não recusado. Declarar {@code tame} para um
      * conjunto de bichos não deveria falhar no que não é domesticável — o campo simplesmente não se
@@ -388,42 +390,159 @@ public class NeoForgeGameBridge implements GameBridge {
      */
     private static void applySpec(net.minecraft.world.entity.Entity entity,
                                   dev.lualoader.platform.EntitySpec spec) {
-        if (spec.name() != null) entity.setCustomName(Component.literal(spec.name()));
-        if (spec.nameVisible() != null) entity.setCustomNameVisible(spec.nameVisible());
-        if (spec.invulnerable() != null) entity.setInvulnerable(spec.invulnerable());
-        if (spec.silent() != null) entity.setSilent(spec.silent());
-        if (spec.noGravity() != null) entity.setNoGravity(spec.noGravity());
+        if (spec.name != null) entity.setCustomName(Component.literal(spec.name));
+        if (spec.nameVisible != null) entity.setCustomNameVisible(spec.nameVisible);
+        if (spec.invulnerable != null) entity.setInvulnerable(spec.invulnerable);
+        if (spec.silent != null) entity.setSilent(spec.silent);
+        if (spec.noGravity != null) entity.setNoGravity(spec.noGravity);
+        if (spec.glowing != null) entity.setGlowingTag(spec.glowing);
+        if (spec.fireTicks != null) entity.setRemainingFireTicks(spec.fireTicks);
+        if (spec.frozenTicks != null) entity.setTicksFrozen(spec.frozenTicks);
+
+        if (spec.yaw != null || spec.pitch != null) {
+            float yaw = spec.yaw == null ? entity.getYRot() : spec.yaw;
+            float pitch = spec.pitch == null ? entity.getXRot() : spec.pitch;
+            entity.setYRot(yaw);
+            entity.setXRot(pitch);
+            // A cabeca acompanha o corpo: sem isto o bicho olharia para um lado e encararia outro.
+            entity.setYHeadRot(yaw);
+        }
 
         if (entity instanceof net.minecraft.world.entity.Mob mob) {
-            if (spec.noAi() != null) mob.setNoAi(spec.noAi());
+            if (spec.noAi != null) mob.setNoAi(spec.noAi);
             // Persistente e o que impede o jogo de remover o bicho quando ninguem esta por perto;
             // sem isso, um guardiao invocado por um mod sumiria sozinho.
-            if (Boolean.TRUE.equals(spec.persistent())) mob.setPersistenceRequired();
+            if (Boolean.TRUE.equals(spec.persistent)) mob.setPersistenceRequired();
+            applyEquipment(mob, spec);
         }
-        if (entity instanceof net.minecraft.world.entity.AgeableMob ageable && spec.baby() != null) {
-            ageable.setBaby(spec.baby());
+        if (entity instanceof net.minecraft.world.entity.AgeableMob ageable && spec.baby != null) {
+            ageable.setBaby(spec.baby);
         }
         if (entity instanceof net.minecraft.world.entity.TamableAnimal tamable
-                && spec.tame() != null) {
-            tamable.setTame(spec.tame(), true);
+                && spec.tame != null) {
+            tamable.setTame(spec.tame, true);
         }
         if (entity instanceof net.minecraft.world.entity.animal.horse.AbstractHorse horse
-                && spec.tame() != null) {
+                && spec.tame != null) {
             // Cavalos nao sao TamableAnimal: tem a propria nocao de domado, e sem este ramo
             // declarar tame num cavalo nao faria nada -- que e o caso mais obvio de todos.
-            horse.setTamed(spec.tame());
+            horse.setTamed(spec.tame);
+        }
+        applyVariant(entity, spec);
+
+        applyBody(entity, spec);
+        applyEffects(entity, spec);
+    }
+
+    /**
+     * A variante visual ainda nao e aplicada neste adaptador.
+     *
+     * <p>O metodo que define a cor do cavalo e privado aqui, e nao ha caminho publico equivalente ao
+     * do adaptador Fabric. O campo continua sendo lido e validado -- um mod que o declare nao falha
+     * --, mas nao tem efeito, e isso esta registrado em docs/COMPATIBILIDADE.md em vez de descoberto
+     * por quem escreve o mod.
+     */
+    private static void applyVariant(net.minecraft.world.entity.Entity entity,
+                                     dev.lualoader.platform.EntitySpec spec) {
+        // Sem implementacao por ora. Ver o comentario acima.
+    }
+
+    /** Vida, atributos e o cuidado de aplicar o máximo antes do valor atual. */
+    private static void applyBody(net.minecraft.world.entity.Entity entity,
+                                  dev.lualoader.platform.EntitySpec spec) {
+        if (!(entity instanceof net.minecraft.world.entity.LivingEntity living)) return;
+
+        for (var declared : spec.attributesOrEmpty().entrySet()) {
+            ResourceLocation id = ResourceLocation.tryParse(declared.getKey());
+            if (id == null) continue;
+
+            var attribute = BuiltInRegistries.ATTRIBUTE.getHolder(
+                    net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.ATTRIBUTE, id)).orElse(null);
+            if (attribute == null) continue;
+
+            var instance = living.getAttribute(attribute);
+            if (instance != null) instance.setBaseValue(declared.getValue());
         }
 
-        if (spec.health() != null
-                && entity instanceof net.minecraft.world.entity.LivingEntity living) {
-            float health = (float) Math.max(1.0, spec.health());
-            var attribute = living.getAttribute(net.minecraft.world.entity.ai.attributes
-                    .Attributes.MAX_HEALTH);
-            // O maximo primeiro: definir a vida acima do maximo sem mexer no atributo faria o jogo
-            // recortar o valor de volta, e o mod veria a declaracao sumir.
-            if (attribute != null) attribute.setBaseValue(health);
-            living.setHealth(health);
+        if (spec.health == null) return;
+        float health = (float) Math.max(1.0, spec.health);
+
+        var maximum = living.getAttribute(
+                net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
+        // O maximo primeiro: definir a vida acima do maximo sem mexer no atributo faria o jogo
+        // recortar o valor de volta, e o mod veria a declaracao sumir.
+        if (maximum != null && maximum.getBaseValue() < health) maximum.setBaseValue(health);
+        living.setHealth(health);
+    }
+
+    /** Efeitos de poção declarados. */
+    private static void applyEffects(net.minecraft.world.entity.Entity entity,
+                                     dev.lualoader.platform.EntitySpec spec) {
+        if (!(entity instanceof net.minecraft.world.entity.LivingEntity living)) return;
+
+        for (var effect : spec.effectsOrEmpty()) {
+            ResourceLocation id = ResourceLocation.tryParse(effect.id);
+            if (id == null) continue;
+
+            var type = BuiltInRegistries.MOB_EFFECT.getHolder(
+                    net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.MOB_EFFECT, id)).orElse(null);
+            if (type == null) continue;
+
+            // Trinta segundos quando nao declarado: um efeito sem duracao seria descartado no mesmo
+            // tique, e o script veria a declaracao nao fazer nada.
+            int duration = effect.duration == null ? 600 : effect.duration;
+            int amplifier = effect.amplifier == null ? 0 : effect.amplifier;
+
+            living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    type, duration, amplifier,
+                    Boolean.TRUE.equals(effect.ambient),
+                    !Boolean.FALSE.equals(effect.showParticles)));
         }
+    }
+
+    /**
+     * Equipamento por espaço do corpo.
+     *
+     * <p>Só um {@code Mob} veste: um item solto ou uma bola de fogo não têm onde pôr, e tentar
+     * aplicar ali seria escrever num lugar que não existe.
+     */
+    private static void applyEquipment(net.minecraft.world.entity.Mob mob,
+                                       dev.lualoader.platform.EntitySpec spec) {
+        for (var entry : spec.equipmentOrEmpty().entrySet()) {
+            var slot = equipmentSlot(entry.getKey());
+            if (slot == null) continue;
+
+            var piece = entry.getValue();
+            ResourceLocation id = ResourceLocation.tryParse(piece.item);
+            if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) continue;
+
+            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(id));
+            if (piece.data != null && !piece.data.isEmpty()) {
+                NeoForgePlayerHandle.applySpec(stack, piece.data, mob.level());
+            }
+            mob.setItemSlot(slot, stack);
+
+            // Sem isto, o jogo escolhe a chance de queda sozinho -- costuma ser quase zero, e o
+            // mod que vestiu um chefe esperaria ver o equipamento cair.
+            if (piece.dropChance != null) mob.setDropChance(slot, piece.dropChance);
+        }
+    }
+
+    /** Traduz o nome do espaço declarado para o do jogo. */
+    private static net.minecraft.world.entity.EquipmentSlot equipmentSlot(String name) {
+        if (name == null) return null;
+        return switch (name.trim().toLowerCase(Locale.ROOT)) {
+            case "main_hand", "mainhand", "hand" ->
+                    net.minecraft.world.entity.EquipmentSlot.MAINHAND;
+            case "off_hand", "offhand" -> net.minecraft.world.entity.EquipmentSlot.OFFHAND;
+            case "head", "helmet" -> net.minecraft.world.entity.EquipmentSlot.HEAD;
+            case "chest", "chestplate" -> net.minecraft.world.entity.EquipmentSlot.CHEST;
+            case "legs", "leggings" -> net.minecraft.world.entity.EquipmentSlot.LEGS;
+            case "feet", "boots" -> net.minecraft.world.entity.EquipmentSlot.FEET;
+            default -> null;
+        };
     }
 
     @Override

@@ -111,7 +111,7 @@ public class NeoForgePlayerHandle implements PlayerHandle {
         if (spec == null || spec.isEmpty()) return giveItem(itemId, count);
 
         ItemStack stack = new ItemStack(requireItem(itemId), count);
-        applySpec(stack, spec, player);
+        applySpec(stack, spec, player.level());
 
         boolean coube = player.getInventory().add(stack);
         if (!coube && !stack.isEmpty()) {
@@ -128,38 +128,38 @@ public class NeoForgePlayerHandle implements PlayerHandle {
      * escrevesse NBT cru teria escrito a forma anterior e pararia de funcionar na 1.20.5 sem ter
      * mudado uma linha — é o motivo de o vocabulário ser declarado.
      */
-    private static void applySpec(ItemStack stack, dev.lualoader.platform.ItemSpec spec,
-                                  ServerPlayer player) {
-        if (spec.name() != null) {
+    static void applySpec(ItemStack stack, dev.lualoader.platform.ItemSpec spec,
+                          net.minecraft.world.level.Level level) {
+        if (spec.name != null) {
             stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
-                    Component.literal(spec.name()));
+                    Component.literal(spec.name));
         }
-        if (spec.lore() != null && !spec.lore().isEmpty()) {
+        if (spec.lore != null && !spec.lore.isEmpty()) {
             List<Component> lines = new java.util.ArrayList<>();
-            for (String line : spec.lore()) lines.add(Component.literal(line));
+            for (String line : spec.lore) lines.add(Component.literal(line));
             stack.set(net.minecraft.core.component.DataComponents.LORE,
                     new net.minecraft.world.item.component.ItemLore(lines));
         }
-        if (spec.damage() != null) {
+        if (spec.damage != null) {
             // Recortado ao maximo do item: um dano acima dele quebraria a peca na hora de aparecer,
             // e o mod veria o item sumir sem explicacao.
-            stack.setDamageValue(Math.min(spec.damage(), Math.max(0, stack.getMaxDamage())));
+            stack.setDamageValue(Math.min(spec.damage, Math.max(0, stack.getMaxDamage())));
         }
-        if (Boolean.TRUE.equals(spec.unbreakable())) {
+        if (Boolean.TRUE.equals(spec.unbreakable)) {
             stack.set(net.minecraft.core.component.DataComponents.UNBREAKABLE,
                     new net.minecraft.world.item.component.Unbreakable(true));
         }
-        if (spec.customModelData() != null) {
+        if (spec.customModelData != null) {
             stack.set(net.minecraft.core.component.DataComponents.CUSTOM_MODEL_DATA,
-                    new net.minecraft.world.item.component.CustomModelData(spec.customModelData()));
+                    new net.minecraft.world.item.component.CustomModelData(spec.customModelData));
         }
 
-        if (spec.enchantments() == null || spec.enchantments().isEmpty()) return;
+        if (spec.enchantments == null || spec.enchantments.isEmpty()) return;
 
         // Encantamento deixou de ser um registro fixo e passou a vir do datapack, entao so existe
         // com um mundo carregado -- e por isso a consulta sai do registro do nivel, e nao de
         // BuiltInRegistries como os itens e blocos.
-        var registry = player.level().registryAccess()
+        var registry = level.registryAccess()
                 .registry(net.minecraft.core.registries.Registries.ENCHANTMENT)
                 .orElse(null);
         if (registry == null) return;
@@ -168,7 +168,7 @@ public class NeoForgePlayerHandle implements PlayerHandle {
                 net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY);
         boolean applied = false;
 
-        for (var entry : spec.enchantments().entrySet()) {
+        for (var entry : spec.enchantments.entrySet()) {
             ResourceLocation id = ResourceLocation.tryParse(entry.getKey());
             if (id == null) continue;
 

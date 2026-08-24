@@ -1908,23 +1908,125 @@ public final class LuaRuntime {
         if (value == null || !value.istable()) return EntitySpec.EMPTY;
         LuaTable table = value.checktable();
 
-        return new EntitySpec(
-                optionalText(table, "name"),
-                optionalBoolean(table, "name_visible"),
-                optionalBoolean(table, "tame"),
-                optionalBoolean(table, "baby"),
-                optionalBoolean(table, "invulnerable"),
-                optionalBoolean(table, "persistent"),
-                optionalBoolean(table, "silent"),
-                optionalBoolean(table, "no_gravity"),
-                optionalBoolean(table, "no_ai"),
-                optionalNumber(table, "health"));
+        EntitySpec spec = new EntitySpec();
+        spec.name = optionalText(table, "name");
+        spec.nameVisible = optionalBoolean(table, "name_visible");
+
+        spec.tame = optionalBoolean(table, "tame");
+        spec.baby = optionalBoolean(table, "baby");
+        spec.persistent = optionalBoolean(table, "persistent");
+        spec.noAi = optionalBoolean(table, "no_ai");
+        spec.variant = optionalText(table, "variant");
+
+        spec.health = optionalNumber(table, "health");
+        spec.attributes = readAttributes(table.get("attributes"));
+        spec.effects = readEffects(table.get("effects"));
+        spec.equipment = readEquipment(table.get("equipment"));
+
+        spec.invulnerable = optionalBoolean(table, "invulnerable");
+        spec.silent = optionalBoolean(table, "silent");
+        spec.noGravity = optionalBoolean(table, "no_gravity");
+        spec.glowing = optionalBoolean(table, "glowing");
+        spec.fireTicks = optionalTicks(table, "fire_ticks");
+        spec.frozenTicks = optionalTicks(table, "frozen_ticks");
+
+        Double yaw = optionalNumber(table, "yaw");
+        Double pitch = optionalNumber(table, "pitch");
+        spec.yaw = yaw == null ? null : yaw.floatValue();
+        // O jogo recorta a inclinacao a noventa graus para cada lado; um valor fora disso viraria
+        // uma cabeca torcida ao contrario, e o script veria a declaracao virar outra coisa.
+        spec.pitch = pitch == null ? null : (float) Math.max(-90.0, Math.min(90.0, pitch));
+
+        return spec;
+    }
+
+    /** Atributos por identificador. Um mapa, porque o jogo tem dezenas e ganha novos. */
+    private static Map<String, Double> readAttributes(LuaValue value) {
+        if (!value.istable()) return null;
+
+        Map<String, Double> attributes = new LinkedHashMap<>();
+        LuaTable table = value.checktable();
+        for (LuaValue key : table.keys()) {
+            attributes.put(requireIdentifier(key.tojstring()), table.get(key).todouble());
+        }
+        return attributes.isEmpty() ? null : Map.copyOf(attributes);
+    }
+
+    /** Efeitos de pocao, cada um com duracao e nivel. */
+    private static List<EntitySpec.EffectSpec> readEffects(LuaValue value) {
+        if (!value.istable()) return null;
+
+        List<EntitySpec.EffectSpec> effects = new ArrayList<>();
+        LuaTable list = value.checktable();
+
+        for (int index = 1; index <= list.length(); index++) {
+            LuaValue entry = list.get(index);
+            if (!entry.istable()) continue;
+            LuaTable effect = entry.checktable();
+
+            String id = optionalText(effect, "id");
+            if (id == null) throw new LuaError("efeito sem id");
+
+            effects.add(new EntitySpec.EffectSpec(
+                    requireIdentifier(id),
+                    optionalTicks(effect, "duration"),
+                    optionalInteger(effect, "amplifier"),
+                    optionalBoolean(effect, "ambient"),
+                    optionalBoolean(effect, "show_particles")));
+        }
+        return effects.isEmpty() ? null : List.copyOf(effects);
+    }
+
+    /**
+     * Equipamento por espaco do corpo.
+     *
+     * <p>Aceita o item sozinho ou o item com dados, porque a maioria das pecas nao precisa de mais
+     * que o identificador -- obrigar uma tabela em toda peca cansaria o caso comum para servir ao
+     * raro.
+     */
+    private static Map<String, EntitySpec.EquipmentSpec> readEquipment(LuaValue value) {
+        if (!value.istable()) return null;
+
+        Map<String, EntitySpec.EquipmentSpec> equipment = new LinkedHashMap<>();
+        LuaTable table = value.checktable();
+
+        for (LuaValue key : table.keys()) {
+            String slot = key.tojstring();
+            LuaValue entry = table.get(key);
+
+            if (entry.isstring()) {
+                equipment.put(slot, new EntitySpec.EquipmentSpec(
+                        requireIdentifier(entry.tojstring()), ItemSpec.EMPTY, null));
+                continue;
+            }
+            if (!entry.istable()) continue;
+
+            LuaTable piece = entry.checktable();
+            String item = optionalText(piece, "item");
+            if (item == null) throw new LuaError("equipamento em " + slot + " sem item");
+
+            Double chance = optionalNumber(piece, "drop_chance");
+            equipment.put(slot, new EntitySpec.EquipmentSpec(
+                    requireIdentifier(item),
+                    readItemSpec(entry),
+                    chance == null ? null : (float) Math.max(0.0, Math.min(1.0, chance))));
+        }
+        return equipment.isEmpty() ? null : Map.copyOf(equipment);
     }
 
     /** Lê o que o script declarou sobre um item. */
     private static ItemSpec readItemSpec(LuaValue value) {
         if (value == null || !value.istable()) return ItemSpec.EMPTY;
         LuaTable table = value.checktable();
+
+        ItemSpec spec = new ItemSpec();
+        spec.name = optionalText(table, "name");
+        spec.color = optionalInteger(table, "color");
+        spec.customModelData = optionalInteger(table, "custom_model_data");
+        spec.unbreakable = optionalBoolean(table, "unbreakable");
+        spec.keepOnDeath = optionalBoolean(table, "keep_on_death");
+        spec.noDrop = optionalBoolean(table, "no_drop");
+        spec.attributes = readAttributes(table.get("attributes"));
 
         List<String> lore = new ArrayList<>();
         LuaValue lines = table.get("lore");
@@ -1934,6 +2036,7 @@ public final class LuaRuntime {
                 if (!line.isnil()) lore.add(line.tojstring());
             }
         }
+        spec.lore = lore.isEmpty() ? null : List.copyOf(lore);
 
         Map<String, Integer> enchantments = new LinkedHashMap<>();
         LuaValue declared = table.get("enchantments");
@@ -1944,20 +2047,17 @@ public final class LuaRuntime {
                 // errado deve virar erro para quem escreveu o script, com o nome na mensagem.
                 String id = requireIdentifier(key.tojstring());
                 int level = levels.get(key).toint();
+                // Nivel zero nao e um encantamento fraco: e a ausencia dele.
                 if (level > 0) enchantments.put(id, level);
             }
         }
+        spec.enchantments = enchantments.isEmpty() ? null : Map.copyOf(enchantments);
 
         Integer damage = optionalInteger(table, "damage");
         if (damage != null && damage < 0) throw new LuaError("damage nao pode ser negativo");
+        spec.damage = damage;
 
-        return new ItemSpec(
-                optionalText(table, "name"),
-                lore.isEmpty() ? null : List.copyOf(lore),
-                damage,
-                optionalBoolean(table, "unbreakable"),
-                enchantments.isEmpty() ? null : Map.copyOf(enchantments),
-                optionalInteger(table, "custom_model_data"));
+        return spec;
     }
 
     private static String optionalText(LuaTable table, String field) {
@@ -1978,6 +2078,13 @@ public final class LuaRuntime {
     private static Integer optionalInteger(LuaTable table, String field) {
         LuaValue value = table.get(field);
         return value.isnil() ? null : value.toint();
+    }
+
+    /** Duracao em ticks, recusando valor negativo em vez de deixar virar zero no adaptador. */
+    private static Integer optionalTicks(LuaTable table, String field) {
+        Integer ticks = optionalInteger(table, field);
+        if (ticks != null && ticks < 0) throw new LuaError(field + " nao pode ser negativo");
+        return ticks;
     }
 
     private static String requireIdentifier(String value) {

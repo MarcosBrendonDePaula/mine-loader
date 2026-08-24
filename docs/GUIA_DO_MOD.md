@@ -64,41 +64,101 @@ O `entrypoint` é opcional: um mod pode ter apenas manifesto e scripts por peça
 `spawn_entity` e `give_item` aceitam uma tabela com o que o mod quer declarar. Sem ela, nasce a
 entidade comum e o item comum.
 
+### Entidade
+
 ```lua
-local uuid = ctx.server.spawn_entity("minecraft:horse", x, y, z, {
-    name = "Corcel",
+ctx.server.spawn_entity("minecraft:zombie", x, y, z, {
+    -- identidade
+    name = "Chefe da Masmorra",
     name_visible = true,
-    tame = true,
+
+    -- natureza
+    tame = true,          -- lobo, gato, papagaio, cavalo
     baby = false,
-    persistent = true,   -- impede o jogo de remover o bicho quando ninguem esta por perto
+    persistent = true,    -- impede o jogo de remover o bicho quando ninguem esta por perto
+    no_ai = false,
+    variant = "white",    -- cor do cavalo; so no adaptador Fabric por ora
+
+    -- corpo
+    health = 40,
+    attributes = {
+        ["minecraft:generic.movement_speed"] = 0.35,
+        ["minecraft:generic.attack_damage"] = 12
+    },
+    effects = {
+        { id = "minecraft:strength", duration = 1200, amplifier = 1 },
+        { id = "minecraft:speed" }   -- sem duracao, trinta segundos
+    },
+    equipment = {
+        main_hand = { item = "minecraft:diamond_sword",
+                      name = "Lamina do Chefe",
+                      enchantments = { ["minecraft:sharpness"] = 3 },
+                      drop_chance = 1.0 },
+        head = "minecraft:diamond_helmet"   -- forma curta, so o identificador
+    },
+
+    -- estado
     invulnerable = false,
     silent = false,
     no_gravity = false,
-    no_ai = false,
-    health = 30
-})
+    glowing = true,       -- contorno visivel atraves de blocos
+    fire_ticks = 0,
+    frozen_ticks = 0,
 
+    -- orientacao
+    yaw = 90,
+    pitch = 0
+})
+```
+
+Espaços de equipamento: `main_hand`, `off_hand`, `head`, `chest`, `legs`, `feet`.
+
+### Item
+
+```lua
 ctx.player.give_item("minecraft:diamond_sword", 1, {
     name = "Espada do Chefe",
     lore = {"Forjada em cristal"},
-    unbreakable = true,
-    damage = 0,
+    color = 0xFF0000,           -- so armadura de couro
     custom_model_data = 3,
-    enchantments = { ["minecraft:sharpness"] = 5, ["minecraft:unbreaking"] = 3 }
+
+    damage = 0,
+    unbreakable = true,
+
+    enchantments = { ["minecraft:sharpness"] = 5, ["minecraft:unbreaking"] = 3 },
+    attributes = { ["minecraft:generic.attack_damage"] = 15 },
+
+    keep_on_death = true,
+    no_drop = true
 })
 ```
+
+### O que vale saber
 
 **Campo ausente não é o mesmo que campo declarado com o valor padrão.** Ausente deixa o jogo
 decidir, como faria sem o mod; `baby = false` declarado impede o jogo de escolher outra coisa.
 
-O que a entidade não suporta é ignorado, não recusado: declarar `tame` para uma lista de bichos não
-falha nos que não são domesticáveis. Encantamento com nível zero é descartado — é a ausência dele,
-e guardá-lo mostraria uma linha sem efeito no item.
+**O que a entidade não suporta é ignorado, não recusado.** Declarar `tame` para uma lista de bichos
+não falha nos que não são domesticáveis. Um identificador de atributo ou efeito que não exista é
+ignorado pela mesma razão. O que é recusado com erro: identificador malformado e duração negativa.
+
+**Encantamento com nível zero é descartado** — é a ausência dele, e guardá-lo mostraria uma linha
+sem efeito no item.
+
+**A inclinação é recortada** a noventa graus para cada lado, que é o que o jogo aceita. Deixar
+passar produziria uma cabeça torcida ao contrário.
+
+**`variant` só funciona no Fabric por ora.** O método que define a cor do cavalo é privado no
+NeoForge, e não há caminho público equivalente. O campo é lido e validado nos dois — um mod que o
+declare não falha —, mas só tem efeito num deles. Está na lista de `docs/COMPATIBILIDADE.md`.
 
 **Por que não é NBT.** O formato interno de item virou componentes na 1.20.5, e um mod que tivesse
 escrito a forma anterior pararia de funcionar sem ter mudado uma linha. O vocabulário aqui é uma
 pergunta que qualquer versão responde; traduzir para o que aquela versão chama daquilo é trabalho
-do adaptador.
+do adaptador. É por isso que os campos são um conjunto fechado, e não um mapa livre.
+
+**Atributos e efeitos são mapas**, e não campos fixos: o jogo tem dezenas deles e ganha novos a
+cada versão, e uma lista fechada aqui envelheceria a cada uma.
 
 ## Permissões
 

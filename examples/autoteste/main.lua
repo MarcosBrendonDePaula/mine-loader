@@ -169,20 +169,31 @@ end
 TESTES.dados_declarados = function(ctx)
     local x, y, z = 0, 100, 0
 
-    local uuid = ctx.server.spawn_entity("minecraft:horse", x, y + 1, z, {
-        name = "Corcel de Teste",
-        tame = true,
+    local uuid = ctx.server.spawn_entity("minecraft:zombie", x, y + 1, z, {
+        name = "Chefe de Teste",
+        name_visible = true,
         persistent = true,
-        health = 30
+        glowing = true,
+        health = 40,
+        yaw = 90,
+        attributes = { ["minecraft:generic.movement_speed"] = 0.35 },
+        effects = {{ id = "minecraft:strength", duration = 200, amplifier = 1 }},
+        equipment = {
+            main_hand = { item = "minecraft:diamond_sword",
+                          name = "Lamina de Teste",
+                          enchantments = { ["minecraft:sharpness"] = 2 },
+                          drop_chance = 1.0 },
+            head = "minecraft:diamond_helmet"
+        }
     })
     exigir(uuid ~= nil and uuid ~= "", "spawn_entity deveria devolver o uuid")
 
     -- entities_near le o mundo de verdade: se o bicho nao nasceu, nao esta aqui.
     local achou = false
     for _, entidade in ipairs(ctx.server.entities_near(x, y + 1, z, 6)) do
-        if entidade.type == "minecraft:horse" then achou = true end
+        if entidade.type == "minecraft:zombie" then achou = true end
     end
-    exigir(achou, "o cavalo declarado deveria estar no mundo")
+    exigir(achou, "o mob declarado deveria estar no mundo")
 
     ctx.server.remove_entity(uuid)
 
