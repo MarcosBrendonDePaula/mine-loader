@@ -45,6 +45,12 @@ narra a linha seguinte não combina com o resto.
 com uma permissão já existente, ou explique por que precisa de uma nova. As permissões estão
 listadas em `docs/API_GAPS.md`.
 
+**Recurso que entra em uma plataforma entra em `docs/COMPATIBILIDADE.md` na mesma mudança**, mesmo
+que só funcione em uma — principalmente nesse caso. A lista é o que transforma "o Fabric faz e o
+NeoForge não" de surpresa para quem escreve o mod em tarefa conhecida, e é de onde sai o roteiro de
+trabalho quando uma plataforma nova entra. Uma matriz que envelhece em silêncio é pior que nenhuma,
+porque alguém confia nela.
+
 ## Regras que não são óbvias
 
 **O cliente interpreta dados, nunca código.** O servidor envia uma descrição JSON de tela; o cliente
