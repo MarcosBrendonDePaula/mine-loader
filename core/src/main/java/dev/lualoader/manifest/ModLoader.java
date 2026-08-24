@@ -375,6 +375,21 @@ public final class ModLoader {
                 if (block == null || block.render == null) continue;
                 requireResolvable(catalog, block.render.texture, block.id);
 
+                // O modelo tambem e referencia, e o tipo errado aqui produziria um JSON invalido
+                // no pack -- erro que so aparece quando o cliente tenta desenhar o bloco.
+                String model = block.render.model;
+                if (model != null && model.startsWith("@")) {
+                    try {
+                        catalog.require(model.substring(1), "model");
+                    } catch (IllegalArgumentException error) {
+                        throw new IllegalArgumentException(
+                                "em " + block.id + ": " + error.getMessage(), error);
+                    }
+                }
+                for (ModManifest.TextureDefinition slot : block.render.textures.values()) {
+                    requireResolvable(catalog, slot, block.id);
+                }
+
                 if (block.render.variantTextures != null) {
                     for (ModManifest.TextureDefinition variant
                             : block.render.variantTextures.values()) {

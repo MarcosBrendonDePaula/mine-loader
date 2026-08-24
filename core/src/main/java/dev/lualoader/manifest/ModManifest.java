@@ -170,8 +170,24 @@ public final class ModManifest {
     }
 
     public static final class RenderDefinition {
+        /**
+         * O modelo desenhado.
+         *
+         * <p>Um nome como {@code cube_all} descreve a intencao e deixa o loader gerar; uma
+         * referencia como {@code "@altar"} aponta para um arquivo de modelo declarado em
+         * {@code resources}, e e por onde entra um desenho feito no Blockbench.
+         */
         public String model = "cube_all";
         public TextureDefinition texture = new TextureDefinition();
+        /**
+         * As texturas que o modelo referencia por nome interno.
+         *
+         * <p>Um modelo do Blockbench nomeia as proprias texturas -- {@code tampo}, {@code pe} -- e
+         * este mapa liga cada nome a um recurso. E o que permite dois blocos compartilharem o mesmo
+         * desenho com imagens diferentes, e o que torna o mapeamento uma declaracao em vez de uma
+         * conversao escondida no montador.
+         */
+        public Map<String, TextureDefinition> textures = new LinkedHashMap<>();
         public Map<String, TextureDefinition> variantTextures = new LinkedHashMap<>();
         public String renderLayer = "solid";
         public boolean translucent = false;

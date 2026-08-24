@@ -422,6 +422,15 @@ public final class ResourcePackAssembler {
             variants.put("0", block.render == null ? null : block.render.texture);
         }
 
+        // Um modelo declarado vence a geracao por forma: quem desenhou o bloco foi especifico, e
+        // gerar por cima seria ignorar o desenho. Todas as variantes apontam para ele, porque a
+        // variante troca textura e o modelo declarado ja traz as suas.
+        String declaredModel = assembleDeclaredModel(mod, block, generatedRoot);
+        if (declaredModel != null) {
+            writeBlockstate(generatedRoot, namespace, blockId, block, Map.of(0, declaredModel));
+            return;
+        }
+
         Map<Integer, String> models = new LinkedHashMap<>();
         for (Map.Entry<String, ModManifest.TextureDefinition> entry : variants.entrySet()) {
             int variant = parseVariant(entry.getKey());
@@ -464,7 +473,31 @@ public final class ResourcePackAssembler {
         if (models.isEmpty()) {
             models.put(0, "minecraft:block/stone");
         }
+        writeBlockstate(generatedRoot, namespace, blockId, block, models);
+    }
+
+    private static int parseVariant(String value) {
+        try {
+            int parsed = Integer.parseInt(value);
+            return parsed >= 0 && parsed <= 15 ? parsed : -1;
+        } catch (NumberFormatException error) {
+            return -1;
+        }
+    }
+
+
+    /**
+     * Escreve o blockstate e o modelo de item de um bloco.
+     *
+     * <p>Um metodo so porque os dois caminhos -- modelo gerado pela forma e modelo declarado pelo
+     * mod -- terminam aqui. Enquanto cada um escrevia o seu, a chance de divergirem num ajuste
+     * futuro era so questao de tempo.
+     */
+    private void writeBlockstate(Path generatedRoot, String namespace, String blockId,
+                                 ModManifest.BlockDefinition block,
+                                 Map<Integer, String> models) throws IOException {
         String fallbackModel = models.getOrDefault(0, models.values().iterator().next());
+
         StringBuilder blockstate = new StringBuilder("{\n  \"variants\": {\n");
         for (int variant = 0; variant <= 15; variant++) {
             if (variant > 0) blockstate.append(",\n");
@@ -482,13 +515,88 @@ public final class ResourcePackAssembler {
         }
     }
 
-    private static int parseVariant(String value) {
-        try {
-            int parsed = Integer.parseInt(value);
-            return parsed >= 0 && parsed <= 15 ? parsed : -1;
-        } catch (NumberFormatException error) {
-            return -1;
+    /**
+     * Copia um modelo declarado como recurso e liga as texturas que ele nomeia.
+     *
+     * <p>Um modelo do Blockbench nomeia as próprias texturas — {@code tampo}, {@code pe} — e o
+     * manifesto diz qual recurso corresponde a cada nome. Este método faz as duas metades: copia
+     * cada imagem para o pack e reescreve o nome no modelo para apontar para ela.
+     *
+     * <p>É por isso que o mapeamento é declarado e não deduzido. Adivinhar pela ordem, ou exigir
+     * que o Blockbench já use o identificador final, obrigaria o desenho a conhecer o mod — e o
+     * mesmo desenho não serviria a dois blocos com imagens diferentes.
+     *
+     * @return o identificador do modelo escrito, ou {@code null} quando não há modelo declarado
+     */
+    private String assembleDeclaredModel(ModLoader.LoadedMod mod,
+                                         ModManifest.BlockDefinition block,
+                                         Path generatedRoot) throws IOException {
+        if (block.render == null || block.render.model == null) return null;
+
+        String declared = block.render.model.trim();
+        if (declared.isEmpty() || declared.charAt(0) != '@') return null;
+
+        String namespace = mod.manifest().id;
+        ResourceCatalog catalog = new ResourceCatalog(mod.manifest());
+        ModManifest.ResourceDefinition resource =
+                catalog.require(declared.substring(1), "model");
+
+        byte[] bytes = remoteResources.resolveBytes(
+                mod.directory(), resource, mod.manifest().remoteBase);
+        String json = new String(bytes, StandardCharsets.UTF_8);
+
+        var root = com.google.gson.JsonParser.parseString(json);
+        if (!root.isJsonObject()) {
+            throw new IOException("modelo @" + declared.substring(1) + " nao e um objeto JSON");
         }
+        var model = root.getAsJsonObject();
+
+        // As texturas do modelo passam a apontar para as do pack. O objeto e recriado, e nao
+        // editado: um modelo do Blockbench costuma trazer nomes que o mod nao mapeou, e mante-los
+        // apontando para o lugar antigo daria a textura ausente sem dizer por que.
+        var textures = new com.google.gson.JsonObject();
+        String particle = null;
+
+        for (Map.Entry<String, ModManifest.TextureDefinition> entry
+                : block.render.textures.entrySet()) {
+            String slot = entry.getKey();
+            String target = namespace + ":block/" + block.id + "_" + slot;
+
+            Path file = generatedRoot.resolve("assets").resolve(namespace)
+                    .resolve("textures/block").resolve(block.id + "_" + slot + ".png");
+            Files.createDirectories(file.getParent());
+
+            try {
+                var resolved = remoteResources.resolveTexture(mod.directory(),
+                        catalog.resolveTexture(entry.getValue()), mod.manifest().remoteBase);
+                copyAsPng(resolved.path(), file);
+                textures.addProperty(slot, target);
+                if (particle == null) particle = target;
+            } catch (IOException error) {
+                ModManifest.TextureDefinition fallback = catalog.resolveTexture(entry.getValue());
+                String reference = fallback != null && fallback.fallback != null
+                        ? fallback.fallback
+                        : "minecraft:block/stone";
+                logger.warn("Textura {} do modelo de {} indisponivel; usando {}: {}",
+                        slot, namespace + ":" + block.id, reference, error.getMessage());
+                textures.addProperty(slot, reference);
+                if (particle == null) particle = reference;
+            }
+        }
+
+        // Sem particle a poeira ao quebrar sai roxa, e o modelo do Blockbench raramente o traz.
+        if (particle != null && !textures.has("particle")) {
+            textures.addProperty("particle", particle);
+        }
+        if (textures.size() > 0) model.add("textures", textures);
+
+        String modelId = namespace + ":block/" + block.id;
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("models/block").resolve(block.id + ".json"), model + NEWLINE);
+
+        logger.info("Modelo declarado aplicado a {} ({} textura(s))",
+                namespace + ":" + block.id, textures.size());
+        return modelId;
     }
 
     /**

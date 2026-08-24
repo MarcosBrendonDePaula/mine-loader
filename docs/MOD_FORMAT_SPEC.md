@@ -127,9 +127,64 @@ A declaração de bloco é composta por identidade, material, configurações, e
 
 O loader deve retornar uma mensagem de diagnóstico quando um campo solicitado não for suportado dinamicamente. Não deve aceitar silenciosamente uma alteração que o jogo não consiga aplicar.
 
-## 5. Texturas
+## 5. Recursos e texturas
 
-Uma textura possui `source` igual a `local` ou `remote`. Para fonte local, `path` é relativo à raiz do mod. Para fonte remota, `url` precisa ser HTTPS. `sha256` é recomendado para conteúdo remoto e poderá ser obrigatório em servidores.
+### Recursos nomeados
+
+Um recurso é declarado uma vez em `resources` e referenciado onde for preciso por `"@nome"`:
+
+```json
+{
+  "resources": {
+    "cristal": {
+      "type": "image",
+      "from": "assets/crystal_world/textures/block/crystal_block.png",
+      "fallback": "minecraft:block/amethyst_block"
+    },
+    "mesa": { "type": "model", "from": "models/mesa.json" },
+    "remota": {
+      "type": "image",
+      "from": "https://cdn.example.org/blocks/crystal-blue.png",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "max_bytes": 1048576
+    }
+  },
+
+  "blocks": [
+    { "id": "altar", "render": { "texture": "@cristal" } },
+    { "id": "cofre", "render": { "texture": "@cristal" } }
+  ]
+}
+```
+
+`type` é `image`, `model`, `sound`, `script` ou `data`. `from` é um caminho dentro do mod ou um
+endereço HTTPS — um campo só, porque o prefixo já diz qual dos dois é. `sha256` é conferido depois
+de baixar, e fica junto do recurso que protege.
+
+O `fallback` do recurso vale para todos os usos; quem referencia pode declarar o seu, e nesse caso o
+dele vence:
+
+```json
+"variant_textures": {
+  "0": "@quadro",
+  "1": { "ref": "quadro", "fallback": "minecraft:block/emerald_block" }
+}
+```
+
+A seção inteira pode vir de outro arquivo, como qualquer parte do manifesto:
+
+```json
+"resources": { "$import": "parts/resources.json" }
+```
+
+**Uma referência a um recurso que não existe, ou de tipo errado, recusa o mod na carga** — com o
+nome na mensagem e a lista do que existe. Descoberto em jogo, o sintoma seria um cubo roxo, que não
+diz nome de recurso nenhum.
+
+### Declaração no lugar
+
+A forma inline continua válida, e é o que faz um manifesto antigo seguir funcionando. Uma textura
+possui `source` igual a `local` ou `remote`. Para fonte local, `path` é relativo à raiz do mod. Para fonte remota, `url` precisa ser HTTPS. `sha256` é recomendado para conteúdo remoto e poderá ser obrigatório em servidores.
 
 ```json
 {
@@ -294,11 +349,97 @@ O campo `state.properties` cria propriedades reais de blockstate. Os tipos aceit
 
 Alem dessas, o loader sempre adiciona `lua_variant` e `lua_luminance`, usadas pela API Lua.
 
+## Inventário do bloco
+
+Um bloco pode guardar itens na própria posição. É o que separa um bloco decorativo de uma máquina,
+e o que torna possível baú customizado, mochila e tanque.
+
+```json
+"inventory": {
+  "size": 27,
+  "title": "Cofre de Cristal",
+  "open_on_use": true,
+  "allow_insert": true,
+  "allow_extract": false,
+  "drop_on_break": true
+}
+```
+
+`size` vai de 1 a 54 e precisa ser múltiplo de 9 — a janela desenha fileiras de nove, e um slot
+sobrando ficaria fora dela. `open_on_use` desligado deixa o clique para o script, que é o caso de
+um bloco que cobra algo antes de abrir.
+
+**`allow_insert` e `allow_extract` valem para quem acessa por um lado** — funil, tubo, a máquina
+vizinha. Não valem para o mod pela API do loader. Com inserção permitida e extração negada o bloco
+vira um cofre; uma fornalha que recusa saída automática ainda precisa tirar o próprio minério para
+processá-lo, e esse é o único caminho que ela tem.
+
+Um bloco com inventário guarda dados por posição automaticamente, como se tivesse `block_data`.
+
+## Forma e modelo do bloco
+
+A forma declarada vale para as três coisas ao mesmo tempo: colisão, contorno e desenho. Antes ela
+só mudava a colisão, e o resultado era um bloco incoerente — uma laje com colisão de laje e
+aparência de cubo inteiro, em que o jogador via um bloco cheio e atravessava a metade de cima.
+
+```json
+"shape": { "collision": "table", "outline": "table" }
+```
+
+Nomes aceitos: `full_cube`, `slab`, `slab_bottom`, `slab_top`, `carpet`, `layer`, `pane`, `panel`,
+`post`, `pillar`, `plate`, `cross`, `plant`, `small`, `table`.
+
+`visual` herda o contorno quando não é declarado: um bloco que diz ser uma mesa para se andar em
+cima precisa parecer uma mesa, e repetir o nome só multiplicaria a chance de os dois divergirem.
+Declare `visual` apenas quando ver e colidir devam diferir.
+
+Para o que os nomes não cobrem, declare as caixas — cada uma `[x1, y1, z1, x2, y2, z2]` em unidades
+de 0 a 16, e quantas forem precisas. Quando presentes, vencem o nome:
+
+```json
+"shape": { "boxes": [[4, 0, 4, 12, 10, 12], [2, 10, 2, 14, 14, 14]] }
+```
+
+### Modelo desenhado fora do loader
+
+Um arquivo de modelo — como o que o **Blockbench** exporta — entra como recurso do tipo `model`. O
+modelo nomeia as próprias texturas, e o bloco liga cada nome a um recurso:
+
+```json
+"resources": {
+  "mesa":    { "type": "model", "from": "models/mesa.json" },
+  "madeira": { "type": "image", "from": "assets/madeira.png" },
+  "ferro":   { "type": "image", "from": "assets/ferro.png" }
+},
+
+"render": {
+  "model": "@mesa",
+  "textures": { "tampo": "@madeira", "pe": "@ferro" }
+}
+```
+
+O loader copia o modelo, copia cada textura e reescreve os nomes para apontar para elas. O desenho
+passa intacto — `uv`, rotação de elemento e tudo mais que o loader não interpreta —, que é o motivo
+de desenhar numa ferramenta em vez de declarar caixas.
+
+O mapeamento é declarado, e não deduzido pela ordem: é o que permite dois blocos compartilharem o
+mesmo desenho com imagens diferentes, e dispensa o desenho conhecer o mod.
+
+Um modelo declarado vence a geração por forma. As variantes visuais continuam existindo para o
+caminho gerado; com modelo declarado, todas apontam para ele, porque o modelo já traz as suas
+texturas.
+
 ## Campos aceitos mas ainda nao aplicados
 
 O manifesto aceita campos que o loader ainda nao implementa. Eles nao impedem a carga do mod, mas sao listados no log durante a inicializacao, um a um, para que nenhuma declaracao passe despercebida.
 
-Nesta versao, os campos avisados sao `type` diferente de `generic`, `base`, todo o bloco `behavior`, todo o bloco `placement`, `shape` diferente de `full_cube` e, em `render`, `model` diferente de `cube_all`, `render_layer`, `translucent`, `cutout`, `emissive` e `tint`.
+Nesta versao, os campos avisados sao `type` diferente de `generic`, `base`, os nomes antigos em
+`behavior`, todo o bloco `placement`, uma forma cujo nome o loader nao conhece e, em `render`,
+`model` que nao seja um nome conhecido nem uma referencia, `render_layer`, `translucent`, `cutout`,
+`emissive` e `tint`.
+
+O adaptador NeoForge ainda nao aplica `state.properties`, `placement` nem `item.tool`/`item.armor`;
+`docs/COMPATIBILIDADE.md` mantem a lista por plataforma.
 
 ## Estruturas declaradas
 

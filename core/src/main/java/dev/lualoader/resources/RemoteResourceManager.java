@@ -168,6 +168,93 @@ public final class RemoteResourceManager {
         }
     }
 
+    /**
+     * Resolve um recurso qualquer, sem supor que ele seja uma imagem.
+     *
+     * <p>Existe porque a resolução — local ou remoto, tamanho máximo, cache, integridade — é a
+     * mesma para todo tipo de recurso, e só a validação difere. Um modelo é JSON, um som é áudio, e
+     * nenhum dos dois passa por {@code ImageIO}; era isso que impedia o resolvedor de textura de
+     * servir aos dois.
+     *
+     * @return os bytes do recurso, já conferidos contra o sha256 quando declarado
+     */
+    public byte[] resolveBytes(Path modDirectory, ModManifest.ResourceDefinition resource,
+                               String remoteBase) throws IOException {
+        if (resource == null || resource.from == null || resource.from.isBlank()) {
+            throw new IOException("recurso sem origem");
+        }
+
+        byte[] bytes = ResourceCatalog.isRemote(resource.from)
+                ? downloadBytes(resource.from, limit(resource.maxBytes))
+                : localBytes(modDirectory, resource, remoteBase);
+
+        if (resource.sha256 != null && !resource.sha256.isBlank()) {
+            String digest = sha256(bytes);
+            if (!digest.equalsIgnoreCase(resource.sha256)) {
+                throw new IOException("hash SHA-256 do recurso nao confere");
+            }
+        }
+        return bytes;
+    }
+
+    /** Le do disco do mod, caindo para a base remota quando o arquivo nao existe. */
+    private byte[] localBytes(Path modDirectory, ModManifest.ResourceDefinition resource,
+                              String remoteBase) throws IOException {
+        Path root = modDirectory.toAbsolutePath().normalize();
+        Path file = root.resolve(resource.from).normalize();
+
+        if (!file.startsWith(root)) {
+            throw new IOException("caminho do recurso sai da pasta do mod: " + resource.from);
+        }
+        if (!Files.isRegularFile(file)) {
+            // Mesma regra da textura: um mod publicado na web referencia os proprios arquivos por
+            // caminho relativo, e a base e onde eles moram de verdade.
+            if (remoteBase != null && !remoteBase.isBlank()) {
+                String base = remoteBase.endsWith("/") ? remoteBase : remoteBase + "/";
+                return downloadBytes(base + resource.from.replace('\\', '/'),
+                        limit(resource.maxBytes));
+            }
+            throw new IOException("recurso local nao encontrado: " + resource.from);
+        }
+
+        long maxBytes = limit(resource.maxBytes);
+        if (Files.size(file) > maxBytes) {
+            throw new IOException("recurso local excede o limite de " + maxBytes + " bytes");
+        }
+        return Files.readAllBytes(file);
+    }
+
+    private byte[] downloadBytes(String url, long maxBytes) throws IOException {
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException error) {
+            throw new IOException("URL de recurso invalida: " + url, error);
+        }
+        requireHttps(uri);
+
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .timeout(Duration.ofSeconds(15))
+                .GET()
+                .build();
+
+        HttpResponse<InputStream> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IOException("download de recurso interrompido", error);
+        }
+
+        try (InputStream body = response.body()) {
+            requireHttps(response.uri());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IOException("servidor retornou HTTP " + response.statusCode());
+            }
+            return readLimited(body, maxBytes);
+        }
+    }
+
     private static byte[] readLimited(InputStream stream, long maxBytes) throws IOException {
         byte[] buffer = new byte[8192];
         int read;

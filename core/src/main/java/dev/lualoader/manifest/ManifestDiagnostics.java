@@ -69,12 +69,19 @@ public final class ManifestDiagnostics {
                 // collision e outline sao aplicados quando descrevem uma forma conhecida.
                 addIfUnknownShape(ignored, prefix + "shape.collision", block.shape.collision);
                 addIfUnknownShape(ignored, prefix + "shape.outline", block.shape.outline);
-                addIfCustom(ignored, prefix + "shape.visual", block.shape.visual);
+                // visual deixou de ser avisado: agora gera o modelo desenhado, como o contorno.
+                addIfUnknownShape(ignored, prefix + "shape.visual", block.shape.visual);
             }
             if (block.render != null) {
                 ModManifest.RenderDefinition render = block.render;
-                if (render.model != null && !render.model.isBlank() && !"cube_all".equals(render.model)) {
-                    ignored.add(prefix + "render.model: apenas 'cube_all' e implementado");
+                // Uma referencia aponta para um arquivo de modelo, que o montador copia; um nome
+                // descreve a intencao, e so cube_all e gerado. Avisar a referencia diria ao criador
+                // que o desenho dele foi ignorado, que e o oposto do que acontece.
+                boolean modelIsReference = render.model != null && render.model.startsWith("@");
+                if (render.model != null && !render.model.isBlank()
+                        && !modelIsReference && !"cube_all".equals(render.model)) {
+                    ignored.add(prefix + "render.model: use um nome conhecido ou uma referencia"
+                            + " a um recurso do tipo model");
                 }
                 if (render.renderLayer != null && !render.renderLayer.isBlank()
                         && !"solid".equals(render.renderLayer)) {
@@ -93,19 +100,19 @@ public final class ManifestDiagnostics {
         if (value != null && !value.isBlank()) ignored.add(field);
     }
 
-    /** Formas conhecidas sao aplicadas; o aviso fica para nomes que o loader nao entende. */
+    /**
+     * Formas conhecidas sao aplicadas; o aviso fica para nomes que o loader nao entende.
+     *
+     * <p>A lista vem do nucleo, e nao de uma copia aqui. Uma copia acompanharia mal a outra: uma
+     * forma nova passaria a funcionar e continuaria sendo avisada como ignorada, que e o pior tipo
+     * de aviso -- o que diz ao criador para nao usar algo que funciona.
+     */
     private static void addIfUnknownShape(List<String> ignored, String field, String value) {
         if (value == null || value.isBlank()) return;
-        if (!KNOWN_SHAPES.contains(value.trim().toLowerCase(java.util.Locale.ROOT))) {
-            ignored.add(field + ": forma desconhecida " + value);
+        if (!dev.lualoader.content.BlockShapes.isKnown(value)) {
+            ignored.add(field + ": forma desconhecida " + value
+                    + "; conhecidas: " + dev.lualoader.content.BlockShapes.names());
         }
     }
 
-    private static final java.util.Set<String> KNOWN_SHAPES = java.util.Set.of(
-            "full_cube", "slab", "slab_bottom", "slab_top", "carpet", "layer",
-            "pane", "panel", "post", "pillar", "plate", "cross", "plant", "small", "table");
-
-    private static void addIfCustom(List<String> ignored, String field, String value) {
-        if (value != null && !value.isBlank() && !"full_cube".equals(value)) ignored.add(field);
-    }
 }
