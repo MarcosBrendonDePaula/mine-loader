@@ -26,7 +26,10 @@
     "player_joined": "on_player_joined",
     "tick": "on_tick",
     "client_screen_opened": "on_client_screen_opened",
-    "client_screen_closed": "on_client_screen_closed"
+    "client_screen_closed": "on_client_screen_closed",
+    "entity_spawned": "on_entity_spawned",
+    "entity_damaged": "on_entity_damaged",
+    "entity_died": "on_entity_died"
   },
   "structures": [
     {

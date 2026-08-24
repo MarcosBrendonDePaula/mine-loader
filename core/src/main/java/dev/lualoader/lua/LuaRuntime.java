@@ -5,6 +5,7 @@ import dev.lualoader.manifest.ManifestImports;
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.platform.BlockEventData;
+import dev.lualoader.platform.EntityEventData;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.ItemEventData;
 import dev.lualoader.platform.EntitySpec;
@@ -561,6 +562,79 @@ public final class LuaRuntime {
 
     public void triggerAll(String event, PlayerHandle player) {
         trigger(event, player, null);
+    }
+
+    /**
+     * Dispara um evento originado por uma criatura do mundo.
+     *
+     * <p>Chega a todo mod que o declarou, e nao so ao dono de um conteudo: a criatura pode ser do
+     * jogo, e amarrar o evento a um mod deixaria de fora justamente o mod de combate, que e quem
+     * mais precisa dele.
+     *
+     * @return {@code true} se algum script pediu para cancelar a acao padrao
+     */
+    public boolean triggerEntity(String event, PlayerHandle player, EntityEventData entity) {
+        if (!EVENTS.contains(event)) return false;
+        boolean cancelled = false;
+
+        for (LoadedScript script : scripts.values()) {
+            LuaFunction callback = script.callbacks().get(event);
+            if (callback == null) continue;
+            try {
+                script.budget().start();
+                LuaValue result = callback.call(contextWithEntity(script.mod(), player, entity));
+                if (result.isboolean() && !result.toboolean()) {
+                    cancelled = true;
+                }
+            } catch (LuaError error) {
+                logger.error("Erro Lua no mod {} durante {}: {}",
+                        script.mod().manifest().id, event, error.getMessage());
+            } catch (BridgeException error) {
+                logger.error("Erro de plataforma no mod {} durante {}: {}",
+                        script.mod().manifest().id, event, error.getMessage());
+            } catch (RuntimeException error) {
+                logger.error("Erro Java na ponte Lua do mod {} durante {}",
+                        script.mod().manifest().id, event, error);
+            } finally {
+                script.budget().stop();
+            }
+        }
+        return cancelled;
+    }
+
+    /**
+     * O contexto de sempre, mais {@code ctx.entity}.
+     *
+     * <p>Os campos sao valores, e nao funcoes: o adaptador ja resolveu tudo antes de disparar,
+     * porque no instante da morte perguntar a vida ao jogo responderia zero.
+     */
+    private LuaTable contextWithEntity(ModLoader.LoadedMod mod, PlayerHandle player,
+                                       EntityEventData entity) {
+        LuaTable context = context(mod, player, null);
+        if (entity == null) return context;
+
+        LuaTable api = new LuaTable();
+        api.set("uuid", LuaValue.valueOf(entity.uuid()));
+        api.set("id", LuaValue.valueOf(entity.entityId()));
+        api.set("x", LuaValue.valueOf(entity.x()));
+        api.set("y", LuaValue.valueOf(entity.y()));
+        api.set("z", LuaValue.valueOf(entity.z()));
+        api.set("health", LuaValue.valueOf(entity.health()));
+        api.set("max_health", LuaValue.valueOf(entity.maxHealth()));
+        if (entity.name() != null) api.set("name", LuaValue.valueOf(entity.name()));
+        api.set("amount", LuaValue.valueOf(entity.amount()));
+
+        // A origem so aparece quando houve uma. Um bicho que morreu de queda nao tem quem o matou,
+        // e um campo vazio ali faria o script tratar "ninguem" como um nome.
+        if (entity.sourceId() != null) api.set("source", LuaValue.valueOf(entity.sourceId()));
+        if (entity.sourceUuid() != null) {
+            api.set("source_uuid", LuaValue.valueOf(entity.sourceUuid()));
+        }
+        if (entity.sourceName() != null) {
+            api.set("source_name", LuaValue.valueOf(entity.sourceName()));
+        }
+        context.set("entity", api);
+        return context;
     }
 
     /**
@@ -1126,7 +1200,14 @@ public final class LuaRuntime {
         }
     }
 
-    private Globals restrictedGlobals(ExecutionBudget budget) {
+    /**
+     * O sandbox do loader: tudo que nega {@code io}, {@code os} e afins.
+     *
+     * <p>Visivel ao pacote porque a fase de registro roda script com as mesmas restricoes. Uma
+     * segunda copia da lista de negados envelheceria separada, e a fase que ficasse para tras seria
+     * justamente a que executa antes de qualquer coisa existir.
+     */
+    static Globals restrictedGlobals(ExecutionBudget budget) {
         Globals globals = JsePlatform.standardGlobals();
 
         // A biblioteca de depuracao e carregada apenas para instalar o gancho de instrucoes; a
@@ -1302,6 +1383,72 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(bridge.healEntity(args.arg(1).tojstring(), amount));
             }
         });
+        // O bioma numa posicao.
+        //
+        // Sem isto, um mod que gera algo condicionalmente nao tinha como perguntar onde esta: um
+        // altar que so faz sentido no deserto precisava adivinhar pela altura ou pelo bloco de
+        // baixo, e as duas coisas mentem -- areia tambem existe em praia, e altura nao diz bioma.
+        serverApi.set("biome_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("biome_at exige x, y e z");
+                return LuaValue.valueOf(bridge.biomeAt(
+                        args.arg(1).checkint(), args.arg(2).checkint(), args.arg(3).checkint()));
+            }
+        });
+        // A luz numa posicao, separada por origem.
+        //
+        // Devolve as duas, e nao so o total, porque a distincao e a que decide se um monstro nasce
+        // ali: o jogo olha a luz de bloco. Um lugar iluminado so pelo sol tem quinze de total ao
+        // meio-dia e continua sendo escuro a noite, e um mod que olhasse o total erraria todo dia.
+        serverApi.set("light_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("light_at exige x, y e z");
+
+                int x = args.arg(1).checkint();
+                int y = args.arg(2).checkint();
+                int z = args.arg(3).checkint();
+
+                int block = bridge.lightAt(x, y, z, false);
+                int sky = bridge.lightAt(x, y, z, true);
+
+                LuaTable light = new LuaTable();
+                light.set("block", LuaValue.valueOf(block));
+                light.set("sky", LuaValue.valueOf(sky));
+                light.set("total", LuaValue.valueOf(Math.max(block, sky)));
+                // A pergunta que quase todo mod faz depois de ler a luz, respondida uma vez so em
+                // vez de reimplementada com o limiar errado em cada mod.
+                light.set("dark_enough_for_monster", LuaValue.valueOf(block == 0));
+                return light;
+            }
+        });
+        serverApi.set("teleport_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.modify");
+                if (args.narg() < 4) {
+                    throw new LuaError("teleport_entity exige uuid, x, y e z");
+                }
+                return LuaValue.valueOf(bridge.teleportEntity(args.arg(1).tojstring(),
+                        args.arg(2).checkdouble(), args.arg(3).checkdouble(),
+                        args.arg(4).checkdouble()));
+            }
+        });
+        serverApi.set("push_entity", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.modify");
+                if (args.narg() < 4) {
+                    throw new LuaError("push_entity exige uuid e o empurrao em x, y e z");
+                }
+                return LuaValue.valueOf(bridge.pushEntity(args.arg(1).tojstring(),
+                        args.arg(2).checkdouble(), args.arg(3).checkdouble(),
+                        args.arg(4).checkdouble()));
+            }
+        });
         serverApi.set("apply_to_entity", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -1347,6 +1494,95 @@ public final class LuaRuntime {
             public Varargs invoke(Varargs args) {
                 requirePermission(mod.manifest(), "server.read");
                 return registryQuery(args, bridge::registeredEntities);
+            }
+        });
+        // As especies que os mods declararam, e nao as milhares do jogo.
+        //
+        // E a metade de leitura do bestiario compartilhado: um mod consegue descobrir o que outro
+        // declarou, e a partir dai estender aquilo no proprio manifesto. Sem ela, "registrar bicho
+        // de fora" so serviria a quem ja sabia de cor o id do bicho do vizinho.
+        //
+        // <b>Nao existe o par que escreve.</b> Registrar especie em tempo de execucao funcionaria
+        // no Fabric, onde o Lua carrega antes de o jogo congelar os registros, e falharia sempre no
+        // NeoForge, onde ele carrega depois. Uma funcao que so vale numa plataforma e pior que
+        // funcao nenhuma: o mod passa nos testes de quem escreveu e some para metade de quem usa.
+        // O caminho que vale nas duas e declarar em "entities", com "base" apontando para a
+        // especie do outro mod.
+        serverApi.set("declared_entities", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.read");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (String id : bridge.declaredEntities()) {
+                    list.set(index++, LuaValue.valueOf(id));
+                }
+                return list;
+            }
+        });
+        // O que foi declarado para uma especie deste loader.
+        //
+        // Devolve nil para o que nao e daqui -- inclusive para uma especie do jogo. A diferenca
+        // importa: "nao existe" e "existe e nao e declarada" levam a decisoes diferentes em quem
+        // esta montando um bestiario em cima do de outro mod.
+        serverApi.set("entity_definition", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.read");
+
+                String id = args.arg(1).tojstring();
+                dev.lualoader.platform.EntityDefinition definition = bridge.declaredEntity(id);
+                if (definition == null) return LuaValue.NIL;
+
+                LuaTable table = new LuaTable();
+                table.set("id", LuaValue.valueOf(id));
+                if (definition.name != null) {
+                    table.set("name", LuaValue.valueOf(definition.name));
+                }
+                if (definition.base != null) {
+                    table.set("base", LuaValue.valueOf(definition.base));
+                }
+                if (definition.category != null) {
+                    table.set("category", LuaValue.valueOf(definition.category));
+                }
+                table.set("width", LuaValue.valueOf(definition.width));
+                table.set("height", LuaValue.valueOf(definition.height));
+                table.set("fire_immune", LuaValue.valueOf(definition.fireImmune));
+                if (definition.defaults != null && definition.defaults.health != null) {
+                    table.set("health", LuaValue.valueOf(definition.defaults.health));
+                }
+                if (definition.texture != null) {
+                    table.set("texture", LuaValue.valueOf(definition.texture));
+                }
+                if (definition.model != null) {
+                    table.set("model", LuaValue.valueOf(definition.model));
+                }
+
+                // A regra de nascimento e devolvida inteira, e nao so um "nasce sozinho": um mod
+                // que monta um guia do bestiario precisa dizer onde procurar, e nao so que da.
+                if (definition.spawn != null) {
+                    LuaTable spawn = new LuaTable();
+                    LuaTable biomes = new LuaTable();
+                    int biomeIndex = 1;
+                    for (String biome : definition.spawn.biomes) {
+                        biomes.set(biomeIndex++, LuaValue.valueOf(biome));
+                    }
+                    spawn.set("biomes", biomes);
+                    spawn.set("weight", LuaValue.valueOf(definition.spawn.weight));
+                    spawn.set("min_group", LuaValue.valueOf(definition.spawn.minGroup));
+                    spawn.set("max_group", LuaValue.valueOf(definition.spawn.maxGroup));
+                    spawn.set("min_light", LuaValue.valueOf(definition.spawn.minLight));
+                    spawn.set("max_light", LuaValue.valueOf(definition.spawn.maxLight));
+                    if (definition.spawn.minY != null) {
+                        spawn.set("min_y", LuaValue.valueOf(definition.spawn.minY));
+                    }
+                    if (definition.spawn.maxY != null) {
+                        spawn.set("max_y", LuaValue.valueOf(definition.spawn.maxY));
+                    }
+                    table.set("spawn", spawn);
+                }
+                return table;
             }
         });
         // A lista dos mods do loader.
@@ -2563,7 +2799,7 @@ public final class LuaRuntime {
      * {@code false} declarado impede o jogo de escolher outra coisa; ausente deixa o jogo decidir,
      * como faria sem o mod.
      */
-    private static EntitySpec readEntitySpec(LuaValue value) {
+    static EntitySpec readEntitySpec(LuaValue value) {
         if (value == null || !value.istable()) return EntitySpec.EMPTY;
         LuaTable table = value.checktable();
 

@@ -282,6 +282,22 @@ public final class NeoForgeContentRegistrar {
             }
         }
 
+        if (manifest.entities != null) {
+            for (dev.lualoader.platform.EntityDefinition entity : manifest.entities) {
+                if (entity == null || entity.id == null) continue;
+                if (entity.spawnEgg == null || !entity.spawnEgg.register) continue;
+
+                // A mesma condicao do registrador: uma especie com base desconhecida nao ganha ovo,
+                // e po-lo na aba deixaria um buraco onde o jogo desenharia ar.
+                if (NeoForgeEntityBases.get(entity.base) == null) continue;
+
+                String eggPath = entity.spawnEgg.id == null || entity.spawnEgg.id.isBlank()
+                        ? entity.id + "_spawn_egg"
+                        : entity.spawnEgg.id;
+                contents.add(ResourceLocation.fromNamespaceAndPath(manifest.id, eggPath));
+            }
+        }
+
         if (contents.isEmpty()) {
             logger.warn("Mod {} declara creative_tab sem blocos nem itens; aba nao registrada",
                     manifest.id);

@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.JsonParseException;
+import dev.lualoader.platform.EntityDefinition;
+import dev.lualoader.platform.EntitySpec;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -23,6 +26,17 @@ public final class ModLoader {
     private static final Pattern MOD_ID = Pattern.compile("^[a-z0-9][a-z0-9_-]{1,63}$");
     private static final Pattern LUA_FILE = Pattern.compile("^[^/\\\\][^:]*\\.lua$");
     private static final Set<String> RARITIES = Set.of("common", "uncommon", "rare", "epic");
+
+    /**
+     * Categorias de criatura que o jogo conhece.
+     *
+     * <p>Conjunto fechado, e não uma string livre: a categoria decide limite populacional e
+     * condição de nascimento, e um valor escrito errado viraria uma espécie que simplesmente
+     * nunca aparece — o tipo de defeito que não deixa rastro no log.
+     */
+    private static final Set<String> ENTITY_CATEGORIES = Set.of(
+            "monster", "creature", "ambient", "axolotls", "underground_water_creature",
+            "water_creature", "water_ambient", "misc");
     private static final Set<String> EVENTS = LoaderEvents.ALL;
 
     private final Gson gson = new GsonBuilder()
@@ -145,6 +159,10 @@ public final class ModLoader {
                     "player.modify",
                     "server.read", "server.command.register", "world.read", "world.write",
                     "entity.read", "entity.spawn", "entity.modify", "world.containers",
+                    // Criar especie e mais forte que criar, ler ou modificar uma: acrescenta um
+                    // tipo ao registro do jogo, que vale para o mundo inteiro e nao pode ser
+                    // desfeito sem reiniciar. So vale na fase de registro.
+                    "entity.register",
                     // Instalar outro mod. A mais forte da lista, porque acrescenta codigo ao
                     // servidor -- e por isso a unica que, alem de declarada, exige que o servidor
                     // a libere e que quem age seja operador.
@@ -160,7 +178,9 @@ public final class ModLoader {
         }
 
         validateDependencies(manifest);
+        validateRegistration(manifest, directory);
         validateItems(manifest);
+        validateEntities(manifest);
         loadStructureFiles(manifest, directory);
         validateStructures(manifest);
         validateRecipes(manifest);
@@ -595,6 +615,204 @@ public final class ModLoader {
                 require(property.values != null && !property.values.isEmpty(), "estado sem valores: " + property.name);
             }
         }
+    }
+
+    /**
+     * Confere as espécies declaradas pelo mod.
+     *
+     * <p>Tudo aqui é recusa na carga, e não conserto silencioso. Uma espécie mal declarada que
+     * chega ao registro vira um bicho invisível, sem colisão ou que nunca nasce, e nenhum desses
+     * três se parece com erro de manifesto para quem escreveu o mod.
+     */
+    private void validateEntities(ModManifest manifest) {
+        if (manifest.entities == null) return;
+        Set<String> entityIds = new HashSet<>();
+
+        for (EntityDefinition entity : manifest.entities) {
+            require(entity != null && entity.id != null && MOD_ID.matcher(entity.id).matches(),
+                    "id de entidade inválido");
+            require(entity.name != null && !entity.name.isBlank(),
+                    "name de entidade é obrigatório: " + entity.id);
+            require(entityIds.add(entity.id), "entidade duplicada no mod: " + entity.id);
+
+            // A base carrega modelo, animação e comportamento. Sem ela não há o que registrar.
+            require(entity.base != null && entity.base.indexOf(':') > 0,
+                    "entidade " + entity.id + " precisa de uma base do jogo, como minecraft:zombie");
+
+            require(entity.category == null
+                            || ENTITY_CATEGORIES.contains(entity.category.toLowerCase(Locale.ROOT)),
+                    "category de entidade desconhecida em " + entity.id + ": " + entity.category
+                            + " (use uma de " + ENTITY_CATEGORIES + ")");
+
+            // O jogo não representa entidade maior que um pedaço de mundo.
+            require(entity.width >= 0 && entity.width <= 16,
+                    "width de " + entity.id + " deve estar entre 0 e 16");
+            require(entity.height >= 0 && entity.height <= 16,
+                    "height de " + entity.id + " deve estar entre 0 e 16");
+            require(entity.trackingRange >= 0 && entity.trackingRange <= 32,
+                    "tracking_range de " + entity.id + " deve estar entre 0 e 32");
+            require(entity.updateInterval >= 0,
+                    "update_interval de " + entity.id + " não pode ser negativo");
+
+            validateEntityDefaults(entity);
+            validateEntityLoot(entity);
+            validateSpawnEgg(entity);
+            validateNaturalSpawn(entity);
+        }
+    }
+
+    /** Os valores de nascimento da espécie, no mesmo vocabulário de {@code spawn_entity}. */
+    private void validateEntityDefaults(EntityDefinition entity) {
+        EntitySpec defaults = entity.defaults;
+        if (defaults == null) return;
+
+        require(defaults.health == null || defaults.health > 0,
+                "health de " + entity.id + " precisa ser maior que zero");
+
+        for (var attribute : defaults.attributesOrEmpty().entrySet()) {
+            require(attribute.getKey() != null && attribute.getKey().indexOf(':') > 0,
+                    "atributo de " + entity.id + " precisa de um id do jogo: " + attribute.getKey());
+        }
+        for (EntitySpec.EffectSpec effect : defaults.effectsOrEmpty()) {
+            require(effect != null && effect.id != null && effect.id.indexOf(':') > 0,
+                    "efeito de " + entity.id + " precisa de um id do jogo");
+            require(effect.duration == null || effect.duration > 0,
+                    "duration de efeito em " + entity.id + " precisa ser maior que zero");
+            require(effect.amplifier == null || effect.amplifier >= 0,
+                    "amplifier de efeito em " + entity.id + " não pode ser negativo");
+        }
+        for (var slot : defaults.equipmentOrEmpty().entrySet()) {
+            var piece = slot.getValue();
+            require(piece != null && piece.item != null && piece.item.indexOf(':') > 0,
+                    "equipamento de " + entity.id + " precisa de um id de item do jogo em "
+                            + slot.getKey());
+            require(piece.dropChance == null || (piece.dropChance >= 0 && piece.dropChance <= 1),
+                    "drop_chance de " + entity.id + " deve estar entre 0 e 1");
+        }
+    }
+
+    private void validateEntityLoot(EntityDefinition entity) {
+        var loot = entity.loot;
+        if (loot == null) return;
+
+        require(loot.table == null || loot.table.indexOf(':') > 0,
+                "table de saque de " + entity.id + " precisa de namespace: " + loot.table);
+
+        for (EntityDefinition.EntityDropDefinition drop : loot.drops) {
+            require(drop != null && drop.item != null && drop.item.indexOf(':') > 0,
+                    "drop de " + entity.id + " precisa de um id de item com namespace");
+            require(drop.min >= 0, "min de drop em " + entity.id + " não pode ser negativo");
+            require(drop.max >= drop.min,
+                    "max de drop em " + entity.id + " não pode ser menor que min");
+            require(drop.chance > 0 && drop.chance <= 1,
+                    "chance de drop em " + entity.id + " deve estar entre 0 (exclusivo) e 1");
+        }
+    }
+
+    private void validateSpawnEgg(EntityDefinition entity) {
+        var egg = entity.spawnEgg;
+        if (egg == null || !egg.register) return;
+
+        require(egg.id == null || MOD_ID.matcher(egg.id).matches(),
+                "id de ovo de criação inválido em " + entity.id + ": " + egg.id);
+        require(isColor(egg.primaryColor),
+                "primary_color de " + entity.id + " deve estar entre 0x000000 e 0xffffff");
+        require(isColor(egg.secondaryColor),
+                "secondary_color de " + entity.id + " deve estar entre 0x000000 e 0xffffff");
+    }
+
+    private static boolean isColor(int value) {
+        return value >= 0 && value <= 0xffffff;
+    }
+
+    /**
+     * Confere os scripts da fase de registro.
+     *
+     * <p>O arquivo tem que existir agora, e nao na hora de executar: esta fase roda antes de o jogo
+     * congelar os registros, e um erro ali chega no meio da carga do Minecraft, onde ninguem esta
+     * olhando. Recusar na descoberta poe a mensagem onde ela e lida.
+     */
+    private void validateRegistration(ModManifest manifest, Path directory) {
+        if (manifest.registration == null || manifest.registration.isEmpty()) return;
+
+        for (Map.Entry<String, String> entry : manifest.registration.entrySet()) {
+            String event = entry.getKey();
+            require(LoaderEvents.REGISTRATION.contains(event),
+                    "evento de registro desconhecido: " + event
+                            + " (use um de " + LoaderEvents.REGISTRATION + ")");
+
+            String script = entry.getValue();
+            require(script != null && !script.isBlank(),
+                    "script de registro vazio em " + event);
+
+            // URL segue a mesma regra do behavior de bloco: e execucao de codigo baixado, e quem
+            // controla o endereco decide o que roda. O aviso e a trava por hash vivem no runtime.
+            String lower = script.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("http://") || lower.startsWith("https://")) continue;
+
+            require(LUA_FILE.matcher(script).matches(),
+                    "script de registro invalido em " + event + ": " + script);
+
+            Path file = directory.resolve(script).toAbsolutePath().normalize();
+            // Dentro da pasta do mod: um caminho com ".." leria arquivo de fora, e esta fase roda
+            // com o jogo carregando, sem ninguem para notar.
+            require(file.startsWith(directory.toAbsolutePath().normalize()),
+                    "script de registro fora da pasta do mod: " + script);
+
+            // Ausente e so erro quando nao ha de onde buscar: um mod publicado na web declara
+            // caminhos relativos que so existem la, e a base do manifesto e o que os resolve.
+            require(java.nio.file.Files.isRegularFile(file)
+                            || (manifest.remoteBase != null && !manifest.remoteBase.isBlank()),
+                    "script de registro nao encontrado: " + script);
+        }
+
+        // Registrar conteudo e mais forte que usar o que ja existe, e por isso e permissao propria.
+        require(manifest.permissions != null
+                        && manifest.permissions.contains("entity.register"),
+                "a fase de registro exige a permissao entity.register");
+    }
+
+    /**
+     * Confere a regra de nascimento natural.
+     *
+     * <p>Tudo aqui recusa uma regra que **nunca dispara**, e esse é o ponto: uma faixa de luz
+     * invertida ou um grupo de tamanho zero não dão erro no jogo — a criatura simplesmente não
+     * nasce, e quem escreveu o mod conclui que o loader não implementa spawn natural.
+     */
+    private void validateNaturalSpawn(EntityDefinition entity) {
+        var spawn = entity.spawn;
+        if (spawn == null) return;
+
+        require(spawn.biomes != null && !spawn.biomes.isEmpty(),
+                "spawn de " + entity.id + " precisa de ao menos um bioma;"
+                        + " sem isso a especie nao nasceria em lugar nenhum");
+
+        for (String biome : spawn.biomes) {
+            require(biome != null && !biome.isBlank(), "bioma vazio em " + entity.id);
+            // Uma tag comeca por "#"; o namespace vale para os dois casos.
+            String bare = biome.startsWith("#") ? biome.substring(1) : biome;
+            require(bare.indexOf(':') > 0,
+                    "bioma de " + entity.id + " precisa de namespace: " + biome);
+        }
+
+        require(spawn.weight > 0,
+                "weight de " + entity.id + " precisa ser maior que zero;"
+                        + " peso zero nunca e sorteado");
+        require(spawn.minGroup >= 1,
+                "min_group de " + entity.id + " precisa ser ao menos 1");
+        require(spawn.maxGroup >= spawn.minGroup,
+                "max_group de " + entity.id + " nao pode ser menor que min_group");
+
+        require(spawn.minLight >= 0 && spawn.minLight <= 15,
+                "min_light de " + entity.id + " deve estar entre 0 e 15");
+        require(spawn.maxLight >= 0 && spawn.maxLight <= 15,
+                "max_light de " + entity.id + " deve estar entre 0 e 15");
+        require(spawn.maxLight >= spawn.minLight,
+                "max_light de " + entity.id + " nao pode ser menor que min_light;"
+                        + " a faixa ficaria vazia e a especie nunca nasceria");
+
+        require(spawn.minY == null || spawn.maxY == null || spawn.maxY >= spawn.minY,
+                "max_y de " + entity.id + " nao pode ser menor que min_y");
     }
 
     private static void require(boolean condition, String message) {

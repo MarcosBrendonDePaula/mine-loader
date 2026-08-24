@@ -43,6 +43,10 @@ public class LuaLoaderClient implements ClientModInitializer {
                 (payload, context) -> context.client().execute(
                         () -> GameScreenOverlay.clear(payload.overlayId())));
 
+        // Antes do HUD: uma especie sem desenhista e invisivel, e o aviso precisa sair cedo o
+        // bastante para nao se perder no meio do log de carga.
+        EntityRenderers.register();
+
         HudOverlay.register();
         GameScreenOverlay.register();
         reportScreenSize();

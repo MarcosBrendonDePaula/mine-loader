@@ -1,0 +1,18 @@
+[
+  {
+    "$import": "parts/entities/crystal_guardian.json"
+  },
+  {
+    "id": "crystal_sentinel",
+    "name": "Sentinela de Cristal",
+    "base": "crystal_world:crystal_guardian",
+    "defaults": {
+      "health": 120.0
+    },
+    "spawn_egg": {
+      "name": "Ovo de Sentinela de Cristal",
+      "primary_color": 5636095,
+      "secondary_color": 1122867
+    }
+  }
+]

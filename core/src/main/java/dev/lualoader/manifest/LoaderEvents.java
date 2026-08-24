@@ -62,14 +62,51 @@ public final class LoaderEvents {
             "menu_closed"
     );
 
+    /**
+     * Eventos originados por uma criatura do mundo.
+     *
+     * <p>Eram dezessete eventos e nenhum de entidade, e {@code API_GAPS.md} chamava isso de a
+     * lacuna que mais bloqueia mod de combate: um mod não tinha onde se prender para saber que algo
+     * morreu, apanhou ou nasceu.
+     *
+     * <p><b>Valem para qualquer criatura, e não só para as declaradas pelo loader.</b> É o que os
+     * torna úteis — um mod de combate reage ao zumbi do jogo. Filtrar pelo tipo é decisão de quem
+     * escreve o mod, e não uma regra imposta aqui.
+     *
+     * <p>{@code entity_damage} é cancelável, como os de bloco: devolver {@code false} impede o
+     * dano. Os outros são avisos do que já aconteceu, e o retorno deles não muda nada.
+     */
+    public static final Set<String> ENTITY = Set.of(
+            "entity_spawned",
+            "entity_damaged",
+            "entity_died",
+            "entity_tamed"
+    );
+
     /** Eventos originados por um item declarado. */
     public static final Set<String> ITEM = Set.of(
             "item_used",
             "item_used_on_block"
     );
 
+    /**
+     * Eventos da fase de registro, antes de o jogo congelar os registros.
+     *
+     * <p>Separados de {@link #GLOBAL} porque acontecem num mundo que ainda não existe: aqui não há
+     * servidor, jogador nem bloco para tocar, e só se pode acrescentar conteúdo. Misturá-los com os
+     * outros faria um mod declarar {@code player_joined} para esta fase e nunca ser chamado.
+     *
+     * <p>Mapeiam para um <b>arquivo</b>, como o {@code behavior} de um bloco, e não para uma função
+     * do {@code main.lua}. É o que impede o topo do entrypoint de rodar duas vezes: nesta fase ele
+     * teria que ser carregado sozinho, e toda linha fora de função executaria de novo mais tarde —
+     * um defeito que não dá erro, só estado errado.
+     */
+    public static final Set<String> REGISTRATION = Set.of(
+            "on_register"
+    );
+
     /** Todos os eventos aceitos, usados tanto na validação quanto no disparo. */
-    public static final Set<String> ALL = union(GLOBAL, CLIENT, BLOCK, ITEM, MENU);
+    public static final Set<String> ALL = union(GLOBAL, CLIENT, BLOCK, ENTITY, ITEM, MENU);
 
     private static Set<String> union(Set<String>... groups) {
         var all = new java.util.LinkedHashSet<String>();

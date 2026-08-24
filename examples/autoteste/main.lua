@@ -210,6 +210,200 @@ TESTES.dados_declarados = function(ctx)
     end
 end
 
+-- A especie declarada por um mod, contra o jogo de verdade.
+--
+-- Os GameTests ja perguntam se o tipo entrou no registro. O que so aqui aparece e o bicho nascendo
+-- num mundo carregado: se o modelo, os atributos ou a heranca estiverem tortos, o tipo continua
+-- registrado e a criatura e que nao funciona.
+TESTES.especie_declarada = function(ctx)
+    local x, y, z = 0, 100, 0
+
+    -- O bestiario do loader, e nao o registro do jogo: a diferenca e o que permite um mod saber o
+    -- que outro declarou sem varrer milhares de tipos.
+    local declaradas = ctx.server.declared_entities()
+    exigir(#declaradas >= 2, "deveria haver ao menos duas especies declaradas, ha " .. #declaradas)
+
+    local tem_guardiao, tem_elite = false, false
+    for _, id in ipairs(declaradas) do
+        if id == "crystal_world:crystal_guardian" then tem_guardiao = true end
+        if id == "bestiario:elite_guardian" then tem_elite = true end
+    end
+    exigir(tem_guardiao, "crystal_world:crystal_guardian deveria estar no bestiario")
+    exigir(tem_elite, "bestiario:elite_guardian deveria estar no bestiario")
+
+    -- Uma especie do jogo nao e declarada por mod nenhum. "Nao existe" e "existe e nao e daqui"
+    -- levam a decisoes diferentes em quem monta um bestiario sobre o de outro.
+    exigir(ctx.server.entity_definition("minecraft:zombie") == nil,
+           "uma especie do jogo nao deveria aparecer como declarada")
+
+    local guardiao = ctx.server.entity_definition("crystal_world:crystal_guardian")
+    exigir(guardiao ~= nil, "a definicao do guardiao deveria ser legivel")
+    exigir(guardiao.base == "minecraft:iron_golem",
+           "a base do guardiao deveria ser o golem, veio " .. tostring(guardiao.base))
+    exigir(guardiao.health == 60, "o guardiao deveria declarar 60 de vida, veio "
+           .. tostring(guardiao.health))
+
+    -- A heranca entre mods: o elite nao conhece o golem, so o guardiao, e mesmo assim registra com
+    -- a base do ancestral -- que e de onde vem modelo e comportamento.
+    local elite = ctx.server.entity_definition("bestiario:elite_guardian")
+    exigir(elite ~= nil, "a definicao do elite deveria ser legivel")
+    exigir(elite.base == "minecraft:iron_golem",
+           "a base efetiva do elite deveria ser a do ancestral, veio " .. tostring(elite.base))
+    exigir(elite.health == 120, "o elite deveria declarar 120 de vida, veio "
+           .. tostring(elite.health))
+    exigir(guardiao.fire_immune == true, "o guardiao declara imunidade a fogo")
+
+    -- E agora o que nenhum dublê alcanca: fazer nascer.
+    local uuid = ctx.server.spawn_entity("crystal_world:crystal_guardian", x, y + 1, z)
+    exigir(uuid ~= nil and uuid ~= "", "a especie declarada deveria nascer")
+
+    local info = ctx.server.entity_info(uuid)
+    exigir(info ~= nil, "entity_info deveria responder sobre a especie declarada")
+    exigir(info.type == "crystal_world:crystal_guardian",
+           "a criatura deveria se declarar como a especie do mod, veio " .. tostring(info.type))
+    -- O numero sai da declaracao, e nao da base: o golem tem cem.
+    exigir(info.max_health == 60,
+           "deveria nascer com 60 de vida maxima, veio " .. tostring(info.max_health))
+
+    local uuid_elite = ctx.server.spawn_entity("bestiario:elite_guardian", x + 2, y + 1, z)
+    local info_elite = ctx.server.entity_info(uuid_elite)
+    exigir(info_elite.max_health == 120,
+           "o elite deveria nascer com 120 de vida, veio " .. tostring(info_elite.max_health))
+
+    -- entities_near le o mundo de verdade: se o bicho nao nasceu, nao esta aqui.
+    local achou = false
+    for _, entidade in ipairs(ctx.server.entities_near(x, y + 1, z, 8)) do
+        if entidade.type == "crystal_world:crystal_guardian" then achou = true end
+    end
+    exigir(achou, "a especie declarada deveria estar no mundo")
+
+    ctx.server.remove_entity(uuid)
+    ctx.server.remove_entity(uuid_elite)
+
+    -- O ovo de criacao e um item como outro qualquer, e precisa existir no registro.
+    --
+    -- Confere o ovo do guardiao pelo nome, e nao a contagem: contar quantos ovos o mod tem faz o
+    -- caso quebrar toda vez que alguem acrescenta uma especie ao exemplo -- que foi exatamente o
+    -- que aconteceu, e a falha apontava para o loader em vez de para o teste.
+    local ovos = ctx.server.items({ namespace = "crystal_world", contains = "spawn_egg" })
+    local tem_do_guardiao = false
+    for _, id in ipairs(ovos) do
+        if id == "crystal_world:crystal_guardian_spawn_egg" then tem_do_guardiao = true end
+    end
+    exigir(tem_do_guardiao,
+           "o ovo do guardiao deveria existir; achei " .. table.concat(ovos, ", "))
+end
+
+-- Bioma e luz: as duas leituras que o nascimento natural precisa.
+--
+-- Elas existiam como lacuna ha tempo: um mod que gera algo condicionalmente tinha que adivinhar
+-- onde estava pela altura ou pelo bloco de baixo, e as duas coisas mentem -- areia tambem existe
+-- em praia, e altura nao diz bioma.
+TESTES.bioma_e_luz = function(ctx)
+    local x, y, z = 0, 100, 0
+
+    local bioma = ctx.server.biome_at(x, y, z)
+    exigir(type(bioma) == "string" and bioma:find(":"),
+           "biome_at deveria devolver um id com namespace, veio " .. tostring(bioma))
+
+    local luz = ctx.server.light_at(x, y, z)
+    exigir(type(luz) == "table", "light_at deveria devolver uma tabela")
+    exigir(luz.block >= 0 and luz.block <= 15, "luz de bloco fora da faixa: " .. tostring(luz.block))
+    exigir(luz.sky >= 0 and luz.sky <= 15, "luz do ceu fora da faixa: " .. tostring(luz.sky))
+    exigir(luz.total == math.max(luz.block, luz.sky), "total deveria ser o maior dos dois")
+
+    -- A distincao entre as duas e o que decide se um monstro nasce ali: o jogo olha a luz de
+    -- bloco. Um lugar iluminado so pelo sol tem quinze de total ao meio-dia e continua escuro a
+    -- noite -- um mod que olhasse o total erraria todo dia.
+    exigir(type(luz.dark_enough_for_monster) == "boolean",
+           "a resposta pronta sobre escuridao deveria ser booleana")
+    exigir(luz.dark_enough_for_monster == (luz.block == 0),
+           "escuro para monstro deveria seguir a luz de bloco, e nao o total")
+
+    -- Uma posicao no fundo do mundo nao recebe luz do ceu.
+    local fundo = ctx.server.light_at(x, -60, z)
+    exigir(fundo.sky == 0, "no fundo do mundo nao deveria haver luz do ceu, veio " .. fundo.sky)
+end
+
+-- A regra de nascimento natural, lida de volta pela API.
+TESTES.regra_de_nascimento = function(ctx)
+    local colossal = ctx.server.entity_definition("bestiario:guardiao_colossal")
+    exigir(colossal ~= nil, "o guardiao colossal deveria estar declarado")
+    exigir(colossal.spawn ~= nil, "ele deveria declarar nascimento natural")
+
+    -- A regra volta inteira, e nao so um "nasce sozinho": um mod que monta um guia do bestiario
+    -- precisa dizer onde procurar.
+    exigir(#colossal.spawn.biomes > 0, "deveria declarar ao menos um bioma")
+    exigir(colossal.spawn.weight == 8, "o peso deveria ser 8, veio " .. colossal.spawn.weight)
+    exigir(colossal.spawn.max_light == 7,
+           "a faixa de luz deveria vir junto, veio " .. tostring(colossal.spawn.max_light))
+    exigir(colossal.spawn.min_y == 60, "a altura minima deveria vir junto")
+
+    -- Uma especie sem regra nao inventa uma: sem isso um mod nao teria como distinguir "nasce em
+    -- todo lugar" de "nao nasce sozinho".
+    local guardiao = ctx.server.entity_definition("crystal_world:crystal_guardian")
+    exigir(guardiao.spawn == nil, "o guardiao de cristal nao declara nascimento natural")
+end
+
+-- Eventos de criatura e movimentacao.
+--
+-- Eram dezessete eventos e nenhum de entidade: um mod de combate nao tinha onde se prender, e a
+-- unica saida era varrer o mundo a cada tique perguntando a vida de todo mundo -- caro, e ainda
+-- assim cego para o que acontece entre dois tiques.
+--
+-- O caso e o mesmo nas duas plataformas de proposito. Cada uma nomeia os eventos do seu jeito, e o
+-- que nao pode divergir e quando eles disparam e com que dados.
+TESTES.eventos_de_entidade = function(ctx)
+    local x, y, z = 0, 100, 0
+    ctx.state.vistos = { nasceu = 0, apanhou = 0, morreu = 0 }
+
+    local uuid = ctx.server.spawn_entity("minecraft:zombie", x, y + 1, z, { health = 20 })
+    exigir(uuid ~= nil and uuid ~= "", "o zumbi deveria nascer")
+
+    -- Nascer dispara ao entrar no mundo, e o contador so sobe se o evento chegou de verdade.
+    exigir(ctx.state.vistos.nasceu > 0,
+           "entity_spawned deveria ter disparado, veio " .. ctx.state.vistos.nasceu)
+
+    ctx.server.damage_entity(uuid, 3.0)
+    exigir(ctx.state.vistos.apanhou > 0,
+           "entity_damaged deveria ter disparado, veio " .. ctx.state.vistos.apanhou)
+
+    -- A foto e do instante do evento: no momento da morte a vida ja e zero, e um script que
+    -- perguntasse ao mundo depois chegaria tarde demais.
+    exigir(ctx.state.ultimo_dano ~= nil, "o evento deveria ter trazido os dados do bicho")
+    exigir(ctx.state.ultimo_dano.id == "minecraft:zombie",
+           "o tipo deveria vir no evento, veio " .. tostring(ctx.state.ultimo_dano.id))
+    exigir(ctx.state.ultimo_dano.amount > 0,
+           "o dano deveria vir no evento, veio " .. tostring(ctx.state.ultimo_dano.amount))
+
+    ctx.server.damage_entity(uuid, 100.0)
+    exigir(ctx.state.vistos.morreu > 0,
+           "entity_died deveria ter disparado, veio " .. ctx.state.vistos.morreu)
+end
+
+TESTES.mover_entidade = function(ctx)
+    local x, y, z = 0, 100, 0
+
+    local uuid = ctx.server.spawn_entity("minecraft:pig", x, y + 1, z, { no_ai = true })
+    exigir(uuid ~= nil and uuid ~= "", "o porco deveria nascer")
+
+    -- Teleportar: a posicao muda de imediato, e da para conferir lendo de volta.
+    exigir(ctx.server.teleport_entity(uuid, x + 8, y + 1, z + 8), "teleport_entity deveria achar")
+    local info = ctx.server.entity_info(uuid)
+    exigir(math.abs(info.x - (x + 8)) < 0.5,
+           "o bicho deveria ter ido para x+8, esta em " .. tostring(info.x))
+
+    -- Empurrar nao teleporta: o jogo continua resolvendo colisao e queda, entao o que se confere e
+    -- que a chamada encontrou a entidade, e nao uma posicao exata.
+    exigir(ctx.server.push_entity(uuid, 0.4, 0.2, 0), "push_entity deveria achar a entidade")
+
+    -- E um uuid que nao existe responde falso, em vez de estourar.
+    exigir(ctx.server.teleport_entity("00000000-0000-0000-0000-000000000000", 0, 100, 0) == false,
+           "teleportar o que nao existe deveria devolver falso")
+
+    ctx.server.remove_entity(uuid)
+end
+
 -- Os pares que faltavam: ler sem escrever, ferir sem curar, item sem bloco.
 --
 -- Cada verificacao aqui existe porque a operacao tinha metade. O que se confere e o par completo,
@@ -1060,10 +1254,28 @@ mod.command("autoteste", function(ctx)
     agendar_pedaco(ctx, nomes, 1)
 end)
 
+--- Os eventos de criatura, contados para o caso poder conferir que dispararam.
+local function on_entity_spawned(ctx)
+    if ctx.state.vistos then ctx.state.vistos.nasceu = ctx.state.vistos.nasceu + 1 end
+end
+
+local function on_entity_damaged(ctx)
+    if ctx.state.vistos then ctx.state.vistos.apanhou = ctx.state.vistos.apanhou + 1 end
+    ctx.state.ultimo_dano = { id = ctx.entity.id, amount = ctx.entity.amount,
+                              health = ctx.entity.health }
+end
+
+local function on_entity_died(ctx)
+    if ctx.state.vistos then ctx.state.vistos.morreu = ctx.state.vistos.morreu + 1 end
+end
+
 return {
     on_loader_ready = on_loader_ready,
     on_player_joined = on_player_joined,
     on_tick = on_tick,
     on_client_screen_opened = on_client_screen_opened,
     on_client_screen_closed = on_client_screen_closed,
+    on_entity_spawned = on_entity_spawned,
+    on_entity_damaged = on_entity_damaged,
+    on_entity_died = on_entity_died,
 }

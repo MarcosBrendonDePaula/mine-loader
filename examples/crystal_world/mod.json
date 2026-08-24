@@ -31,6 +31,9 @@
       "$import": "parts/items/crystal_shard.json"
     }
   ],
+  "entities": {
+    "$import": "parts/entities.json"
+  },
   "blocks": [
     {
       "$import": "parts/blocks/crystal_block.json"

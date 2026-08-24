@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "id": "bestiario",
+  "name": "Bestiario",
+  "version": "0.1.0",
+  "description": "Estende o bestiario de outro mod: o guardiao de elite herda do guardiao do crystal_world e so muda o que interessa.",
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "entity.read",
+    "entity.register"
+  ],
+  "registration": {
+    "on_register": "scripts/registrar.lua"
+  },
+  "dependencies": {
+    "crystal_world": "0.1.0"
+  },
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "Bestiario"
+  },
+  "entities": [
+    {
+      "id": "elite_guardian",
+      "name": "Guardiao de Elite",
+      "base": "crystal_world:crystal_guardian",
+      "defaults": {
+        "health": 120.0,
+        "attributes": {
+          "minecraft:generic.movement_speed": 0.4
+        }
+      },
+      "loot": {
+        "drops": [
+          {
+            "item": "minecraft:diamond",
+            "min": 1,
+            "max": 2,
+            "requires_player_kill": true
+          }
+        ]
+      },
+      "spawn_egg": {
+        "name": "Ovo de Guardiao de Elite",
+        "primary_color": 16766720,
+        "secondary_color": 3381759
+      }
+    }
+  ],
+  "events": {
+    "loader_ready": "on_loader_ready"
+  }
+}

@@ -3,6 +3,8 @@ package dev.lualoader.resources;
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.content.BlockShapes;
 import dev.lualoader.manifest.ModManifest;
+import dev.lualoader.content.EntityModelSpec;
+import dev.lualoader.platform.EntityDefinition;
 import org.slf4j.Logger;
 
 import javax.imageio.ImageIO;
@@ -89,6 +91,20 @@ public final class ResourcePackAssembler {
             }
         }
 
+        Map<String, Set<String>> entityTagEntries = new LinkedHashMap<>();
+        for (ModLoader.LoadedMod mod : mods) {
+            if (mod.manifest().entities == null) continue;
+            for (EntityDefinition entity : mod.manifest().entities) {
+                if (entity == null || entity.id == null) continue;
+                assembleEntityLoot(mod, entity, generatedRoot);
+                assembleEntityTexture(mod, entity, generatedRoot);
+                assembleEntityModel(mod, entity, generatedRoot);
+                assembleBiomeModifier(mod, entity, generatedRoot);
+                assembleSpawnEggModel(mod, entity, generatedRoot);
+                collectTags(mod.manifest().id + ":" + entity.id, entity.tags, entityTagEntries);
+            }
+        }
+
         for (ModLoader.LoadedMod mod : mods) {
             assembleLanguage(mod, generatedRoot);
             assembleRecipes(mod, generatedRoot);
@@ -96,6 +112,10 @@ public final class ResourcePackAssembler {
 
         writeTags(tagEntries, generatedRoot, "block");
         writeTags(itemTagEntries, generatedRoot, "item");
+
+        // A pasta do jogo e "entity_type", e nao "entity": escrever no plural errado produz um
+        // arquivo que o jogo simplesmente nao le, e a tag some sem erro nenhum.
+        writeTags(entityTagEntries, generatedRoot, "entity_type");
     }
 
     /**
@@ -219,6 +239,315 @@ public final class ResourcePackAssembler {
      * nome escrito pelo criador. O arquivo e gravado em {@code en_us}, que o Minecraft usa como
      * idioma de fallback para qualquer idioma selecionado.
      */
+    /**
+     * Gera a tabela de saque de uma especie declarada.
+     *
+     * <p><b>Sem este arquivo a especie cai sem nada.</b> Um tipo de entidade procura a tabela com o
+     * proprio id, e nao a da base: um zumbi declarado por um mod nasceria com o modelo, a IA e a
+     * vida do zumbi, e nao deixaria a carne podre que qualquer jogador espera. O silencio ali e
+     * pior que um erro, porque parece decisao de quem fez o mod.
+     *
+     * <p>A tabela da base entra como uma entrada do tipo {@code loot_table}, e nao copiada: copiar
+     * congelaria os drops na versao do jogo em que o mod foi escrito, e uma mudanca no zumbi
+     * deixaria de valer para tudo que descende dele.
+     */
+    private void assembleEntityLoot(ModLoader.LoadedMod mod, EntityDefinition entity,
+                                    Path generatedRoot) throws IOException {
+        if (entity == null || entity.id == null) return;
+        String namespace = mod.manifest().id;
+
+        List<String> pools = new ArrayList<>();
+
+        // Uma tabela declarada substitui a da base; nenhuma declarada herda a da base.
+        String inherited = entity.loot != null && entity.loot.table != null
+                && !entity.loot.table.isBlank()
+                ? entity.loot.table
+                : lootTableOf(entity.base);
+        if (inherited != null) {
+            pools.add("""
+                        {
+                          "rolls": 1,
+                          "entries": [
+                            {
+                              "type": "minecraft:loot_table",
+                              "value": %s
+                            }
+                          ]
+                        }""".formatted(quote(inherited)));
+        }
+
+        if (entity.loot != null) {
+            for (EntityDefinition.EntityDropDefinition drop : entity.loot.drops) {
+                if (drop == null || drop.item == null) continue;
+                pools.add(dropPool(drop));
+            }
+        }
+
+        Path table = generatedRoot.resolve("data").resolve(namespace)
+                .resolve("loot_table/entities").resolve(entity.id + ".json");
+
+        write(table, """
+                {
+                  "type": "minecraft:entity",
+                  "pools": [
+                %s
+                  ]
+                }
+                """.formatted(String.join("," + NEWLINE, pools)));
+    }
+
+    /**
+     * Gera os modificadores de bioma que fazem a especie nascer sozinha.
+     *
+     * <p>Escrito no data pack porque e assim que o NeoForge acrescenta spawn a um bioma: por dado,
+     * e nao por chamada. O Fabric faz o mesmo por API, e por isso este arquivo e inofensivo la --
+     * um data pack que o adaptador nao le nao atrapalha ninguem, e manter os dois caminhos no mesmo
+     * montador evita que a regra declarada valha em um lado so.
+     *
+     * <p><b>Um arquivo por bioma, e nao uma lista.</b> O formato aceita uma string solta -- que
+     * pode ser um id ou uma tag -- ou uma lista, mas <b>tag dentro de lista nao e valida</b>. Um
+     * unico {@code "#minecraft:is_mountain"} numa lista derruba a carga de registros inteira do
+     * jogo, com uma mensagem que fala de "falha ao interpretar" e nao diz qual campo. Um arquivo
+     * por bioma custa alguns bytes e vale nos dois casos.
+     *
+     * <p>As condicoes finas -- faixa de luz e de altura -- <b>nao cabem aqui</b>: o formato do
+     * modificador so diz bioma, peso e tamanho de grupo. Elas sao conferidas pelo adaptador no
+     * momento em que o jogo pergunta se aquela posicao serve.
+     */
+    private void assembleBiomeModifier(ModLoader.LoadedMod mod, EntityDefinition entity,
+                                       Path generatedRoot) throws IOException {
+        var spawn = entity.spawn;
+        if (spawn == null || spawn.biomes == null || spawn.biomes.isEmpty()) return;
+
+        String namespace = mod.manifest().id;
+        int index = 0;
+
+        for (String biome : spawn.biomes) {
+            String name = spawn.biomes.size() == 1
+                    ? entity.id
+                    : entity.id + "_" + index;
+            index++;
+
+            write(generatedRoot.resolve("data").resolve(namespace)
+                            .resolve("neoforge/biome_modifier").resolve(name + ".json"),
+                    """
+                    {
+                      "type": "neoforge:add_spawns",
+                      "biomes": %s,
+                      "spawners": {
+                        "type": %s,
+                        "weight": %d,
+                        "minCount": %d,
+                        "maxCount": %d
+                      }
+                    }
+                    """.formatted(quote(biome), quote(namespace + ":" + entity.id),
+                            spawn.weight, spawn.minGroup, spawn.maxGroup));
+        }
+    }
+
+    /**
+     * Copia a pele declarada da especie para o pacote.
+     *
+     * <p>Sem textura declarada, nada e escrito e a criatura usa a da base -- e o que faz um
+     * guardiao declarado sair identico a um golem de ferro. E o padrao certo, e quase nunca o que
+     * se quer no fim: o cliente so tem como desenhar outra coisa se este arquivo existir.
+     *
+     * <p>Uma textura que falha e avisada e a especie continua: perder o mod inteiro por causa de um
+     * PNG seria pior que a criatura sair com a pele da base.
+     */
+    private void assembleEntityTexture(ModLoader.LoadedMod mod, EntityDefinition entity,
+                                       Path generatedRoot) {
+        if (entity.texture == null || entity.texture.isBlank()) return;
+        String namespace = mod.manifest().id;
+
+        // A referencia e resolvida antes de qualquer decisao: num "@nome" o caminho e a origem so
+        // existem depois disto.
+        ModManifest.TextureDefinition declared = new ModManifest.TextureDefinition();
+        String reference = entity.texture.trim();
+        if (reference.startsWith("@")) {
+            declared.ref = reference.substring(1);
+        } else if (reference.toLowerCase(java.util.Locale.ROOT).startsWith("http://")
+                || reference.toLowerCase(java.util.Locale.ROOT).startsWith("https://")) {
+            declared.source = "remote";
+            declared.url = reference;
+        } else {
+            declared.path = reference;
+        }
+
+        ModManifest.TextureDefinition texture =
+                new ResourceCatalog(mod.manifest()).resolveTexture(declared);
+
+        Path target = generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("textures/entity").resolve(entity.id + ".png");
+        try {
+            RemoteResourceManager.ResolvedTexture resolved = remoteResources.resolveTexture(
+                    mod.directory(), texture, mod.manifest().remoteBase);
+            copyAsPng(resolved.path(), target);
+            logger.info("Textura {} preparada para entidade {}",
+                    resolved.remote() ? "remota" : "local", namespace + ":" + entity.id);
+        } catch (IOException error) {
+            logger.warn("Textura da entidade {} indisponivel; a especie usara a pele da base: {}",
+                    namespace + ":" + entity.id, error.getMessage());
+        }
+    }
+
+    /**
+     * Copia a geometria declarada da especie para o pacote, depois de conferi-la.
+     *
+     * <p>O modelo e lido aqui, e nao so copiado, para o erro chegar a quem escreveu o mod. Um osso
+     * com nome que a base nao anima nao produz erro nenhum no jogo: a peca simplesmente nao
+     * aparece, e o bicho sai sem um braco. Avisar na carga e a diferenca entre "sumiu um braco" e
+     * "voce escreveu arm onde a base espera right_arm".
+     *
+     * <p>Um modelo invalido e recusado e a especie fica com a forma da base -- que e feio, mas
+     * visivel e explicado. Escrever o arquivo torto daria uma criatura deformada sem uma linha de
+     * log.
+     */
+    private void assembleEntityModel(ModLoader.LoadedMod mod, EntityDefinition entity,
+                                     Path generatedRoot) {
+        if (entity.model == null || entity.model.isBlank()) return;
+        String namespace = mod.manifest().id;
+        String id = namespace + ":" + entity.id;
+
+        try {
+            String json = readModelSource(mod, entity.model.trim());
+            EntityModelSpec spec = EntityModelSpec.parse(json);
+
+            List<String> unknown = spec.unknownBones(entity.base);
+            if (!unknown.isEmpty()) {
+                logger.warn("Modelo de {} declara osso(s) que {} nao anima: {}."
+                                + " Essas pecas nao vao aparecer. A base espera: {}",
+                        id, entity.base, unknown,
+                        EntityModelSpec.BONES_BY_BASE.getOrDefault(entity.base, List.of()));
+            }
+
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                    .resolve("models/entity").resolve(entity.id + ".json"), json);
+            logger.info("Modelo preparado para entidade {}: {} osso(s)", id, spec.bones.size());
+        } catch (IOException | RuntimeException error) {
+            logger.warn("Modelo da entidade {} recusado; a especie usara a forma da base: {}",
+                    id, error.getMessage());
+        }
+    }
+
+    /** As mesmas tres origens de sempre: recurso declarado, arquivo do mod ou URL. */
+    private String readModelSource(ModLoader.LoadedMod mod, String reference) throws IOException {
+        ResourceCatalog catalog = new ResourceCatalog(mod.manifest());
+
+        if (reference.startsWith("@")) {
+            ModManifest.ResourceDefinition resource =
+                    catalog.require(reference.substring(1), "model");
+            return new String(remoteResources.resolveBytes(mod.directory(), resource,
+                    mod.manifest().remoteBase), StandardCharsets.UTF_8);
+        }
+
+        byte[] bytes = new dev.lualoader.manifest.ManifestImports(mod.directory(), null)
+                .withRemoteBase(mod.manifest().remoteBase)
+                .readRelative(reference);
+        if (bytes == null) throw new IOException("modelo nao encontrado: " + reference);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Gera o modelo do ovo de criacao.
+     *
+     * <p><b>Sem este arquivo o ovo e o cubo roxo e preto.</b> Um item registrado sem modelo nao da
+     * erro no servidor: ele existe, entra na aba do criativo e funciona ao ser usado -- e so quem
+     * esta olhando a tela descobre que ele nao tem aparencia. Foi assim que este defeito apareceu,
+     * com toda a bateria de testes verde.
+     *
+     * <p>O pai e o molde do jogo, e nao um desenho proprio: e ele que pinta as duas cores
+     * declaradas sobre a casca e as manchas. Desenhar um ovo aqui daria um item que ignora
+     * {@code primary_color} e {@code secondary_color} e sai igual para toda especie.
+     */
+    private void assembleSpawnEggModel(ModLoader.LoadedMod mod, EntityDefinition entity,
+                                       Path generatedRoot) throws IOException {
+        EntityDefinition.SpawnEggDefinition egg = entity.spawnEgg;
+        if (egg == null || !egg.register) return;
+
+        String eggId = egg.id == null || egg.id.isBlank()
+                ? entity.id + "_spawn_egg"
+                : egg.id;
+
+        write(generatedRoot.resolve("assets").resolve(mod.manifest().id)
+                        .resolve("models/item").resolve(eggId + ".json"),
+                """
+                {
+                  "parent": "minecraft:item/template_spawn_egg"
+                }
+                """);
+    }
+
+    /**
+     * A tabela do jogo para uma especie, deduzida do id.
+     *
+     * <p>O jogo nomeia a tabela de um bicho pelo proprio id, entao {@code minecraft:zombie} guarda
+     * os drops em {@code minecraft:entities/zombie}. Deduzir e melhor que uma lista aqui: uma
+     * lista precisaria de uma linha por especie do jogo e envelheceria a cada versao nova.
+     */
+    private static String lootTableOf(String baseId) {
+        if (baseId == null) return null;
+        int separator = baseId.indexOf(':');
+        if (separator <= 0) return null;
+        return baseId.substring(0, separator) + ":entities/" + baseId.substring(separator + 1);
+    }
+
+    /** Um item declarado que cai alem do que a base ja derruba. */
+    private String dropPool(EntityDefinition.EntityDropDefinition drop) {
+        List<String> conditions = new ArrayList<>();
+        if (drop.chance < 1.0f) {
+            conditions.add("""
+                                {"condition": "minecraft:random_chance", "chance": %s}"""
+                    .formatted(number(drop.chance)));
+        }
+        if (drop.requiresPlayerKill) {
+            // A condicao do jogo e sobre quem matou, e nao sobre o bicho: sem ela, um drop de
+            // jogador cairia tambem quando o bicho morresse de queda ou de fogo.
+            conditions.add("""
+                                {"condition": "minecraft:killed_by_player"}""");
+        }
+
+        String functions = drop.min == 1 && drop.max == 1
+                ? ""
+                : """
+                            ,
+                              "functions": [
+                                {
+                                  "function": "minecraft:set_count",
+                                  "count": {"min": %s, "max": %s}
+                                }
+                              ]""".formatted(number(drop.min), number(drop.max));
+
+        String conditionBlock = conditions.isEmpty()
+                ? ""
+                : """
+                            ,
+                          "conditions": [
+                %s
+                          ]""".formatted(String.join("," + NEWLINE, conditions));
+
+        return """
+                    {
+                      "rolls": 1,
+                      "entries": [
+                        {
+                          "type": "minecraft:item",
+                          "name": %s%s
+                        }
+                      ]%s
+                    }""".formatted(quote(drop.item), functions, conditionBlock);
+    }
+
+    /** Numero em forma estavel: sem notacao cientifica e sem o separador decimal do sistema. */
+    private static String number(float value) {
+        if (value == Math.rint(value) && !Float.isInfinite(value)) {
+            return String.valueOf((long) value);
+        }
+        return java.math.BigDecimal.valueOf(value)
+                .stripTrailingZeros().toPlainString();
+    }
+
     private void assembleLanguage(ModLoader.LoadedMod mod, Path generatedRoot) throws IOException {
         String namespace = mod.manifest().id;
         Map<String, String> entries = new LinkedHashMap<>();
@@ -237,6 +566,23 @@ public final class ResourcePackAssembler {
             for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
                 if (item == null || item.id == null || item.name == null) continue;
                 entries.put("item." + namespace + "." + item.id, item.name);
+            }
+        }
+        if (mod.manifest().entities != null) {
+            for (EntityDefinition entity : mod.manifest().entities) {
+                if (entity == null || entity.id == null || entity.name == null) continue;
+                entries.put("entity." + namespace + "." + entity.id, entity.name);
+
+                // O ovo e um item, com chave propria. Sem ela o criativo mostra a chave crua.
+                EntityDefinition.SpawnEggDefinition egg = entity.spawnEgg;
+                if (egg == null || !egg.register) continue;
+                String eggId = egg.id == null || egg.id.isBlank()
+                        ? entity.id + "_spawn_egg"
+                        : egg.id;
+                String eggName = egg.name == null || egg.name.isBlank()
+                        ? entity.name + " Spawn Egg"
+                        : egg.name;
+                entries.put("item." + namespace + "." + eggId, eggName);
             }
         }
         ModManifest.CreativeTabDefinition tab = mod.manifest().creativeTab;

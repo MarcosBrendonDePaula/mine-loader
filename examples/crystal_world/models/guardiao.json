@@ -1,0 +1,61 @@
+{
+  "_comentario": [
+    "A forma do Guardiao de Cristal.",
+    "",
+    "Os nomes dos ossos sao os que minecraft:iron_golem anima -- head, body, right_arm, left_arm,",
+    "right_leg, left_leg. Nao e detalhe: a classe de modelo da base procura os filhos por esses",
+    "nomes para gira-los a cada quadro. Trocar um por 'arm' faria a peca simplesmente nao aparecer,",
+    "sem erro nenhum no jogo.",
+    "",
+    "As medidas ficam propositalmente longe das do golem, para a diferenca ser visivel na tela: um",
+    "cristal de cabeca pontuda sobre um tronco fino, com bracos e pernas em lasca."
+  ],
+
+  "texture_size": [128, 128],
+
+  "bones": {
+    "head": {
+      "pivot": [0, -7, -2],
+      "cubes": [
+        { "from": [-5, -14, -5], "size": [10, 10, 10], "uv": [0, 0] },
+        { "from": [-2, -19, -2], "size": [4, 6, 4], "uv": [0, 0], "inflate": -0.2 }
+      ]
+    },
+
+    "body": {
+      "pivot": [0, -7, 0],
+      "cubes": [
+        { "from": [-5, -2, -3], "size": [10, 16, 6], "uv": [0, 40] },
+        { "from": [-7, 0, -1], "size": [14, 3, 2], "uv": [0, 70] }
+      ]
+    },
+
+    "right_arm": {
+      "pivot": [0, -7, 0],
+      "cubes": [
+        { "from": [-9, -2, -2], "size": [4, 22, 4], "uv": [60, 21] }
+      ]
+    },
+
+    "left_arm": {
+      "pivot": [0, -7, 0],
+      "cubes": [
+        { "from": [5, -2, -2], "size": [4, 22, 4], "uv": [60, 58] }
+      ]
+    },
+
+    "right_leg": {
+      "pivot": [-4, 11, 0],
+      "cubes": [
+        { "from": [-3.5, -1, -3], "size": [5, 13, 5], "uv": [37, 0], "mirror": true }
+      ]
+    },
+
+    "left_leg": {
+      "pivot": [4, 11, 0],
+      "cubes": [
+        { "from": [-1.5, -1, -3], "size": [5, 13, 5], "uv": [60, 0] }
+      ]
+    }
+  }
+}

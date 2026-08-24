@@ -23,7 +23,10 @@ na mesma mudança que o implementa.
 | Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` — as tres primeiras e `set_hud` dizem se chegaram ao cliente |
 | Tela do jogo | `set_overlay`, `clear_overlay` |
 | Diagnóstico de tela | `dump_screen` — devolve onde cada elemento foi parar, e vai para o log |
-| Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity` |
+| Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity`, `teleport_entity`, `push_entity` |
+| Bestiário do loader | `declared_entities`, `entity_definition` |
+| Fase de registro | `register.entity`, `register.declared` |
+| Leitura de mundo | `biome_at`, `light_at` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
 | Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
@@ -85,13 +88,39 @@ primeiro.
 
 **Largar item solto no mundo**, sem passar pelo inventário de alguém, também não.
 
-**Bioma e nível de luz** numa posição não são legíveis. Um mod que gera algo condicionalmente
-precisa perguntar isso antes de decidir.
+**Bioma e nível de luz** são legíveis por `biome_at` e `light_at`. A luz volta separada por origem
+— bloco, céu e total —, porque é a luz de **bloco** que decide se um monstro nasce: um lugar
+iluminado só pelo sol tem quinze de total ao meio-dia e continua escuro à noite.
 
 ### Conteúdo que o loader não registra
 
-**Entidade nova.** Dá para criar e configurar as do jogo, não declarar uma espécie própria. Um mob
-customizado exige modelo, animação e comportamento, que são três sistemas separados.
+**Entidade nova, do zero.** Uma espécie própria *derivada* de uma do jogo já é declarável em
+`entities` — id, nome, tamanho, atributos, equipamento, saque e ovo de criação —, e é o que cobre a
+maioria dos casos: um guardião que é um golem mais forte, um lobo que resiste ao gelo. Ela herda
+modelo, animação e comportamento da base, e por isso a base é obrigatória.
+
+A espécie pode ser declarada em `entities`, herdada de outra espécie declarada — inclusive de outro
+mod — ou criada por script na fase de registro (`registration`), com o mesmo resultado nas duas
+plataformas. Ela aceita pele própria (`texture`), atributos, efeitos, equipamento, saque, tags e ovo
+de criação; a escala visual sai do atributo `minecraft:generic.scale`.
+
+O que continua faltando é a **forma**:
+
+**Geometria própria existe** (`entities[].model`): ossos e caixas em JSON, animados pela base. Os
+nomes de osso são os que a base anima, e um nome fora dessa lista é avisado na carga — no jogo ele
+não daria erro, a peça só não apareceria.
+
+O que continua faltando:
+
+- **Animação própria.** A forma nova se move com a animação da base. Um bicho de quatro patas
+  derivado de um bípede vai andar como bípede, porque é a animação do bípede que gira os ossos.
+- **IA declarada.** O comportamento é o da base. Herdar é útil e quase sempre o que se quer, mas não
+  há vocabulário para "vagar, fugir de, seguir quem segura tal item".
+- **Hierarquia de ossos.** O formato de hoje é plano: todo osso é filho da raiz, porque é assim que
+  as classes de modelo do jogo procuram as peças. Um osso preso a outro ainda não é declarável.
+
+As bases suportadas são uma lista explícita no adaptador; uma base fora dela é recusada na carga, e
+não aproximada — registrar assim daria um mob invisível.
 
 **Fluido, dimensão, bioma, encantamento, efeito.** Nenhum é declarável. Cada um tem um registro com
 regras próprias, e o loader só cobre bloco e item.
@@ -99,10 +128,17 @@ regras próprias, e o loader só cobre bloco e item.
 **Geração de mundo.** Um minério declarado não aparece no terreno. Estruturas só entram por
 `place_structure`, chamado por um script.
 
+Espécie **nasce** sozinha (`entities[].spawn`): bioma ou tag de bioma, peso, tamanho de grupo,
+faixa de luz e de altura. O que ainda falta é o mesmo para **bloco** — minério gerado no terreno.
+
 ### Comportamento
 
-**Eventos de entidade.** Há eventos de bloco e de item, e nenhum de entidade: morte, dano, nascimento
-e domesticação não avisam o mod. É a lacuna que mais bloqueia mod de combate.
+**Eventos de entidade: nascimento, dano, morte e domesticação existem** (`entity_spawned`,
+`entity_damaged`, `entity_died`, `entity_tamed`), e valem para qualquer criatura do mundo, não só
+para as declaradas pelo loader. `entity_damaged` é cancelável.
+
+O que ainda falta é **ataque como evento próprio** — hoje se descobre pelo `source_uuid` de quem
+apanhou, o que responde "quem bateu" mas não avisa quando um golpe erra.
 
 **Redstone e comparador.** Um bloco declarado não emite nem lê sinal.
 
@@ -157,6 +193,7 @@ iguais: é ali que a próxima plataforma encontra a lista de trabalho.
 | `world.containers` | inventário de bloco |
 | `entity.read` | listar por raio, dados de uma entidade |
 | `entity.spawn` | criar entidade |
+| `entity.register` | declarar espécie nova, só na fase de registro |
 | `entity.modify` | ferir, curar, remover, aplicar dados |
 | `server.read` | jogadores online, registro do jogo |
 | `server.command.register` | registrar comando |

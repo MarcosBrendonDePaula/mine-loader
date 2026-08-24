@@ -3,6 +3,7 @@ package dev.lualoader.neoforge;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.manifest.ModLoader;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -34,6 +35,9 @@ public class NeoForgeLuaLoader {
     private static NeoForgeGameBridge bridge;
     private static List<ModLoader.LoadedMod> loadedMods = List.of();
     private static NeoForgeContentRegistrar content;
+
+    /** As especies declaradas. Publico para o cliente conferir a cobertura. */
+    private static NeoForgeEntityRegistrar entities;
     private static dev.lualoader.install.ModInstaller modInstaller;
     private static dev.lualoader.install.InstallPolicy installPolicy;
 
@@ -45,6 +49,7 @@ public class NeoForgeLuaLoader {
         // durante a inicializacao, e um bloco declarado depois disso simplesmente nao existe. O
         // runtime Lua vem bem depois, e nao precisa existir para o conteudo estar registrado.
         content = new NeoForgeContentRegistrar(LOGGER, modBus);
+        entities = new NeoForgeEntityRegistrar(LOGGER, modBus);
         registerDeclaredContent();
 
         // O pack gerado precisa existir antes de o jogo montar a lista de recursos. No Fabric isso
@@ -56,6 +61,12 @@ public class NeoForgeLuaLoader {
         // fogo guarda dois mapas proprios, indexados pelo bloco ja registrado.
         modBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) ->
                 event.enqueueWork(NeoForgeLuaLoader::registerFlammability));
+
+        // O posicionamento do nascimento natural: a outra metade -- em que biomas a especie entra
+        // como candidata -- vem do modificador escrito no data pack. Esquecer qualquer uma das duas
+        // da o mesmo sintoma: nada nasce, e nenhum log reclama.
+        modBus.addListener((RegisterSpawnPlacementsEvent event) ->
+                NeoForgeNaturalSpawns.register(event, LOGGER, entities, loadedMods));
 
         // O inventario declarado so existe para a automacao quando publicado como capability: e
         // por ela que funil e tubo procuram, e sem isto o bloco tem itens que nenhuma maquina ve.
@@ -93,11 +104,24 @@ public class NeoForgeLuaLoader {
         new NeoForgeInteractionEvents(() -> runtime, () -> bridge, content)
                 .register(NeoForge.EVENT_BUS);
 
+        // Os eventos de criatura valem para o mundo inteiro, e nao so para o que o loader
+        // declarou: e o que permite um mod de combate reagir ao zumbi do jogo.
+        new NeoForgeEntityEvents(() -> runtime).register(NeoForge.EVENT_BUS);
+
+        // O que a especie declara como padrao vale ao nascer, e nao ao registrar: o tipo e
+        // construido pelo jogo, sem passar pelo loader.
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) ->
+                        entities.applyDeclaredDefaults(event.getEntity()));
+
 
         // O lado cliente so existe no cliente: no servidor dedicado as classes de renderizacao
         // nem sao carregadas, e nomea-las fora deste guarda derrubaria o servidor na inicializacao.
         if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
             dev.lualoader.neoforge.client.NeoForgeLuaLoaderClient.install(modBus);
+            // Sem desenhista a especie existe e nao aparece: o log fica verde e so quem
+            // esta olhando percebe que nao ha nada onde o servidor diz haver um bicho.
+            dev.lualoader.neoforge.client.NeoForgeEntityRenderers.install(modBus);
             dev.lualoader.neoforge.client.NeoForgeGameScreenOverlay.register();
         }
 
@@ -138,11 +162,18 @@ public class NeoForgeLuaLoader {
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {
                     content.declare(mod.manifest());
+                    entities.declare(mod.manifest());
                 } catch (RuntimeException error) {
                     LOGGER.error("Falha ao registrar o conteudo de {}: {}",
                             mod.manifest().id, error.getMessage());
                 }
             }
+
+            // A fase de registro roda aqui, e nao com o servidor: o RegisterEvent ainda nao
+            // disparou, entao ha o que registrar. E o momento que faltava a esta plataforma, e o
+            // que faz register.entity valer nas duas em vez de so no Fabric.
+            new dev.lualoader.lua.RegistrationRuntime(
+                    LOGGER, gameDirectory.resolve("lua-loader/cache/registro")).runAll(loadedMods);
         } catch (IOException | RuntimeException error) {
             LOGGER.error("Falha ao descobrir mods em {}: {}", modsDirectory, error.getMessage());
         }
@@ -281,6 +312,10 @@ public class NeoForgeLuaLoader {
     }
 
     /** O registrador de conteudo, que sabe quantas variantes cada bloco declara. */
+    public static NeoForgeEntityRegistrar entityRegistrar() {
+        return entities;
+    }
+
     public static NeoForgeContentRegistrar contentRegistrar() {
         return content;
     }

@@ -1,0 +1,34 @@
+{
+  "id": "crystal_guardian",
+  "name": "Guardiao de Cristal",
+  "base": "minecraft:iron_golem",
+  "category": "misc",
+  "texture": "@guardiao",
+  "model": "@forma_guardiao",
+  "tags": [
+    "crystal_world:guardians"
+  ],
+  "fire_immune": true,
+  "defaults": {
+    "health": 60.0,
+    "glowing": true,
+    "attributes": {
+      "minecraft:generic.movement_speed": 0.3,
+      "minecraft:generic.attack_damage": 9.0
+    }
+  },
+  "loot": {
+    "drops": [
+      {
+        "item": "crystal_world:crystal_shard",
+        "min": 2,
+        "max": 5
+      }
+    ]
+  },
+  "spawn_egg": {
+    "name": "Ovo de Guardiao de Cristal",
+    "primary_color": 8375321,
+    "secondary_color": 3381759
+  }
+}
