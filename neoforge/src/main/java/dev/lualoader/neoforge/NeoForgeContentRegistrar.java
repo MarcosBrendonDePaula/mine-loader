@@ -157,11 +157,22 @@ public final class NeoForgeContentRegistrar {
                 var collision = NeoForgeShapes.declared(definition.shape,
                         definition.shape == null ? null : definition.shape.collision);
 
-                Block block = withData
-                        ? new NeoForgeDeclarativeDataBlock(
-                                settingsOf(definition), values.luminance, outline, collision)
-                        : new NeoForgeDeclarativeBlock(
-                                settingsOf(definition), values.luminance, outline, collision);
+                // As propriedades declaradas sao publicadas antes do construtor porque o jogo monta
+                // a definicao de estado de dentro dele, quando nenhum campo de instancia existe
+                // ainda. O par begin/end fica em try/finally: uma excecao no meio deixaria a
+                // publicacao valendo, e o proximo bloco registrado herdaria as propriedades deste.
+                NeoForgeStateProperties declaredState = NeoForgeStateProperties.from(definition);
+                Block block;
+                NeoForgeDeclarativeBlock.beginConstruction(declaredState);
+                try {
+                    block = withData
+                            ? new NeoForgeDeclarativeDataBlock(
+                                    settingsOf(definition), values.luminance, outline, collision)
+                            : new NeoForgeDeclarativeBlock(
+                                    settingsOf(definition), values.luminance, outline, collision);
+                } finally {
+                    NeoForgeDeclarativeBlock.endConstruction();
+                }
                 sink.accept(id, block);
 
                 blocks.put(id, block);
@@ -188,8 +199,24 @@ public final class NeoForgeContentRegistrar {
                 Block block = blocks.get(id);
                 if (block == null) continue;
 
-                sink.accept(id, new BlockItem(block, new Item.Properties()));
+                // O bloco pode declarar como o proprio item se comporta -- empilhamento,
+                // durabilidade, raridade, resistencia ao fogo -- e ate pedir para nao ter item
+                // nenhum. Enquanto isto era um Item.Properties vazio, os cinco campos eram
+                // aceitos pelo manifesto e descartados aqui, "register": false inclusive.
+                ModManifest.ItemDefinition itemDefinition = definition.item == null
+                        ? new ModManifest.ItemDefinition()
+                        : definition.item;
+                if (!itemDefinition.register) continue;
 
+                var itemProperties = new Item.Properties()
+                        .stacksTo(Math.max(1, Math.min(64, itemDefinition.maxStackSize)))
+                        .rarity(rarityOf(itemDefinition.rarity));
+                if (itemDefinition.maxDamage > 0) {
+                    itemProperties = itemProperties.durability(itemDefinition.maxDamage);
+                }
+                if (itemDefinition.fireResistant) itemProperties = itemProperties.fireResistant();
+
+                sink.accept(id, new BlockItem(block, itemProperties));
             }
         }
 
@@ -206,7 +233,17 @@ public final class NeoForgeContentRegistrar {
                 if (definition.maxDamage > 0) properties = properties.durability(definition.maxDamage);
                 if (definition.fireResistant) properties = properties.fireResistant();
 
-                Item item = new Item(properties);
+                // Ferramenta e armadura vem antes do item comum: as duas trazem a propria
+                // durabilidade e os proprios atributos, e cair no Item comum era o que fazia uma
+                // picareta declarada virar enfeite empilhavel nesta plataforma.
+                Item item;
+                if (definition.tool != null) {
+                    item = NeoForgeToolMaterial.create(definition.tool, properties);
+                } else if (definition.armor != null) {
+                    item = NeoForgeArmorMaterial.create(definition.armor, properties);
+                } else {
+                    item = new Item(properties);
+                }
                 sink.accept(id, item);
 
                 items.put(id, item);
@@ -225,6 +262,10 @@ public final class NeoForgeContentRegistrar {
      */
     private void registerCreativeTab(ModManifest manifest, Sink<CreativeModeTab> sink) {
         if (manifest.creativeTab == null) return;
+        // Um mod pode declarar a aba e pedir que ela nao seja registrada -- e como ele coloca o
+        // conteudo numa aba do jogo em vez de criar a propria. Sem esta guarda, "register": false
+        // era lido e ignorado, e a aba aparecia assim mesmo.
+        if (!manifest.creativeTab.register) return;
 
         // A lista sai do manifesto, e nao do que ja foi registrado: a ordem em que o jogo processa
         // os registros nao e a que este arquivo declara, e a aba criativa e montada antes dos
@@ -282,20 +323,120 @@ public final class NeoForgeContentRegistrar {
         return item == null ? ItemStack.EMPTY : new ItemStack(item);
     }
 
+    /**
+     * Converte o manifesto para as propriedades de bloco do NeoForge.
+     *
+     * <p>A ordem dos campos aqui acompanha {@code BlockSettingsFactory} do adaptador Fabric de
+     * proposito: os dois leem o mesmo manifesto e precisam chegar ao mesmo bloco, e ler os dois
+     * lado a lado e a unica forma barata de conferir isso. Enquanto este metodo aplicava seis dos
+     * cerca de trinta campos, um gelo escorregadio declarado uma vez escorregava numa plataforma e
+     * nao na outra -- e {@code randomTicks} ficar de fora fazia {@code block_random_tick} nunca
+     * ocorrer, o que parecia falta do evento e era falta da propriedade.
+     */
     private static BlockBehaviour.Properties settingsOf(ModManifest.BlockDefinition definition) {
+        ModManifest.MaterialDefinition material = definition.material == null
+                ? new ModManifest.MaterialDefinition()
+                : definition.material;
         ModManifest.SettingsDefinition values = definition.settings == null
                 ? new ModManifest.SettingsDefinition()
                 : definition.settings;
 
         var properties = BlockBehaviour.Properties.of()
+                .mapColor(mapColorOf(material.mapColor))
+                .sound(soundOf(material.sound))
+                .instrument(instrumentOf(material.instrument))
+                .pushReaction(pushReactionOf(material.pistonBehavior))
                 .strength((float) values.hardness, (float) values.resistance)
-                .mapColor(mapColorOf(definition.material == null ? null : definition.material.mapColor))
-                .sound(soundOf(definition.material == null ? null : definition.material.sound));
+                .friction(values.slipperiness)
+                .speedFactor(values.velocityMultiplier)
+                .jumpFactor(values.jumpVelocityMultiplier);
 
         if (values.requiresTool) properties = properties.requiresCorrectToolForDrops();
+        if (values.randomTicks) properties = properties.randomTicks();
+        if (values.noCollision || !values.collidable) properties = properties.noCollission();
+        if (values.nonOpaque || !material.opaque) properties = properties.noOcclusion();
+        if (values.breakInstantly) properties = properties.instabreak();
+        if (material.burnable) properties = properties.ignitedByLava();
+        if (material.replaceable) properties = properties.replaceable();
+        if (material.liquid) properties = properties.liquid();
+        if (material.air) properties = properties.air();
+        if (values.solid && material.solid) properties = properties.forceSolidOn();
+        if (!values.blockBreakParticles) properties = properties.noTerrainParticles();
+        if (values.dynamicBounds || (definition.shape != null && definition.shape.dynamic)) {
+            properties = properties.dynamicShape();
+        }
+        if (values.offset != null) properties = properties.offsetType(offsetOf(values.offset));
+        if (values.dropsNothing) properties = properties.noLootTable();
+        // Largar o mesmo que outro bloco e como se declara uma variante decorativa sem repetir a
+        // tabela de loot -- o minerio que larga o mesmo do minerio do jogo, por exemplo. O alvo e
+        // resolvido por fornecedor porque este metodo roda durante o registro, quando o bloco
+        // apontado pode ainda nao existir.
+        if (values.dropsLike != null && !values.dropsLike.isBlank()) {
+            ResourceLocation alvo = ResourceLocation.tryParse(values.dropsLike.trim());
+            if (alvo != null) {
+                properties = properties.lootFrom(
+                        () -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(alvo));
+            }
+        }
+
         // A luminancia nao entra aqui: o bloco a le do estado, para um script poder acender um
         // exemplar sem acender todos os outros do mesmo tipo no mundo.
         return properties;
+    }
+
+    private static net.minecraft.world.level.block.state.properties.NoteBlockInstrument instrumentOf(
+            String name) {
+        var fallback = net.minecraft.world.level.block.state.properties.NoteBlockInstrument.HARP;
+        if (name == null || name.isBlank()) return fallback;
+        return switch (name.trim().toLowerCase(Locale.ROOT).replace('-', '_')) {
+            case "basedrum", "base_drum" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BASEDRUM;
+            case "snare" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.SNARE;
+            case "hat" -> net.minecraft.world.level.block.state.properties.NoteBlockInstrument.HAT;
+            case "bass" -> net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BASS;
+            case "flute" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.FLUTE;
+            case "bell" -> net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BELL;
+            case "guitar" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.GUITAR;
+            case "chime" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.CHIME;
+            case "xylophone" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.XYLOPHONE;
+            case "iron_xylophone" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.IRON_XYLOPHONE;
+            case "cow_bell" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.COW_BELL;
+            case "didgeridoo" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.DIDGERIDOO;
+            case "bit" -> net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BIT;
+            case "banjo" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BANJO;
+            case "pling" ->
+                    net.minecraft.world.level.block.state.properties.NoteBlockInstrument.PLING;
+            default -> fallback;
+        };
+    }
+
+    private static net.minecraft.world.level.material.PushReaction pushReactionOf(String name) {
+        var fallback = net.minecraft.world.level.material.PushReaction.NORMAL;
+        if (name == null || name.isBlank()) return fallback;
+        return switch (name.trim().toLowerCase(Locale.ROOT).replace('-', '_')) {
+            case "block" -> net.minecraft.world.level.material.PushReaction.BLOCK;
+            case "destroy" -> net.minecraft.world.level.material.PushReaction.DESTROY;
+            case "push_only" -> net.minecraft.world.level.material.PushReaction.PUSH_ONLY;
+            default -> fallback;
+        };
+    }
+
+    private static BlockBehaviour.OffsetType offsetOf(String name) {
+        if (name == null || name.isBlank()) return BlockBehaviour.OffsetType.NONE;
+        return switch (name.trim().toLowerCase(Locale.ROOT)) {
+            case "xz" -> BlockBehaviour.OffsetType.XZ;
+            case "xyz" -> BlockBehaviour.OffsetType.XYZ;
+            default -> BlockBehaviour.OffsetType.NONE;
+        };
     }
 
     private static MapColor mapColorOf(String name) {

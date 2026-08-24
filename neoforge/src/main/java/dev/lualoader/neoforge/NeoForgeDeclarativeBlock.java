@@ -38,6 +38,28 @@ public class NeoForgeDeclarativeBlock extends Block {
      */
     public static final IntegerProperty LUMINANCE = IntegerProperty.create("lua_luminance", 0, 15);
 
+    /**
+     * Propriedades declaradas no manifesto para o bloco que esta sendo construido.
+     *
+     * <p>O Minecraft chama {@link #createBlockStateDefinition} de dentro do construtor de
+     * {@code Block}, antes de qualquer campo de instancia existir, entao as propriedades precisam
+     * ser publicadas por fora. O registro e sequencial e o valor e limpo logo apos o construtor.
+     */
+    private static final ThreadLocal<NeoForgeStateProperties> PENDING = new ThreadLocal<>();
+
+    /** Publica as propriedades declaradas antes de instanciar o bloco. */
+    public static void beginConstruction(NeoForgeStateProperties declared) {
+        PENDING.set(declared);
+    }
+
+    /** Limpa a publicacao feita por {@link #beginConstruction}. */
+    public static void endConstruction() {
+        PENDING.remove();
+    }
+
+    private final java.util.Map<String, net.minecraft.world.level.block.state.properties.Property<?>>
+            declaredProperties = new java.util.LinkedHashMap<>();
+
     // Propriedades físicas que um script troca em tempo de execução. Diferente da luminância, estas
     // valem para o bloco todo: sao caracteristicas do material, nao do exemplar no mundo. NaN
     // significa "nao sobrescrito", e o valor declarado no manifesto continua valendo.
@@ -60,12 +82,43 @@ public class NeoForgeDeclarativeBlock extends Block {
                                     net.minecraft.world.phys.shapes.VoxelShape collision) {
         // A luz sai do estado, e nao do valor fixo: e o que permite um script acender um bloco so.
         super(properties.lightLevel(state -> state.getValue(LUMINANCE)));
-        registerDefaultState(getStateDefinition().any()
+        BlockState base = getStateDefinition().any()
                 .setValue(VARIANT, 0)
-                .setValue(LUMINANCE, Math.max(0, Math.min(15, declaredLuminance))));
+                .setValue(LUMINANCE, Math.max(0, Math.min(15, declaredLuminance)));
+
+        NeoForgeStateProperties declared = PENDING.get();
+        if (declared != null) {
+            this.declaredProperties.putAll(declared.properties());
+            base = applyDefaults(base, declared);
+        }
+        registerDefaultState(base);
 
         this.outline = outline;
         this.collision = collision;
+    }
+
+    private BlockState applyDefaults(BlockState state, NeoForgeStateProperties declared) {
+        BlockState result = state;
+        for (java.util.Map.Entry<String, String> entry : declared.defaults().entrySet()) {
+            var property = declaredProperties.get(entry.getKey());
+            if (property == null) continue;
+            result = withParsed(result, property, entry.getValue());
+        }
+        return result;
+    }
+
+    private static <T extends Comparable<T>> BlockState withParsed(
+            BlockState state,
+            net.minecraft.world.level.block.state.properties.Property<T> property,
+            String rawValue) {
+        return property.getValue(rawValue).map(value -> state.setValue(property, value))
+                .orElse(state);
+    }
+
+    /** Propriedades declaradas no manifesto, por nome. */
+    public java.util.Map<String, net.minecraft.world.level.block.state.properties.Property<?>>
+            declaredProperties() {
+        return java.util.Map.copyOf(declaredProperties);
     }
 
     @Override
@@ -83,9 +136,69 @@ public class NeoForgeDeclarativeBlock extends Block {
         return collision == null ? super.getCollisionShape(state, level, pos, context) : collision;
     }
 
+    /**
+     * O tique aleatório do jogo, entregue ao script.
+     *
+     * <p>Estes dois eventos nascem no próprio bloco, e não numa interação do jogador: não há quem
+     * os tenha causado, e por isso não passam pelo caminho de {@code NeoForgeInteractionEvents},
+     * que exige um jogador. É a mesma divisão do adaptador Fabric.
+     *
+     * <p>O tique só chega aqui quando {@code settings.random_ticks} foi declarado — enquanto a
+     * propriedade não era aplicada nesta plataforma, o evento parecia faltar e o que faltava era o
+     * bloco pedir para ser tiqueado.
+     */
+    @Override
+    protected void randomTick(BlockState state, net.minecraft.server.level.ServerLevel level,
+                              BlockPos pos, net.minecraft.util.RandomSource random) {
+        notifyLoader("block_random_tick", level, pos, state);
+    }
+
+    @Override
+    protected void neighborChanged(BlockState state, net.minecraft.world.level.Level level,
+                                   BlockPos pos, Block sourceBlock, BlockPos sourcePos,
+                                   boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, sourceBlock, sourcePos, movedByPiston);
+        notifyLoader("block_neighbor_update", level, pos, state);
+    }
+
+    /** Entrega ao runtime um evento originado pelo proprio bloco, sem jogador. */
+    private void notifyLoader(String event, net.minecraft.world.level.Level level, BlockPos pos,
+                              BlockState state) {
+        if (!(level instanceof net.minecraft.server.level.ServerLevel serverLevel)) return;
+
+        var runtime = NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null) return;
+
+        var id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(this);
+        if (id == null) return;
+
+        var registrar = NeoForgeLuaLoader.contentRegistrar();
+        var data = new dev.lualoader.platform.BlockEventData(
+                id.toString(),
+                pos.getX(), pos.getY(), pos.getZ(),
+                state.hasProperty(VARIANT) ? state.getValue(VARIANT) : 0,
+                registrar == null ? 1 : registrar.variantCount(id));
+
+        // A ponte precisa saber em que dimensao o evento aconteceu, e precisa esquecer depois: um
+        // mundo que sobra faria a proxima chamada sem contexto agir na dimensao errada.
+        var bridge = NeoForgeLuaLoader.gameBridge();
+        if (bridge != null) bridge.setCurrentLevel(serverLevel);
+        try {
+            runtime.triggerBlock(event, null, data);
+        } finally {
+            if (bridge != null) bridge.setCurrentLevel(null);
+        }
+    }
+
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(VARIANT, LUMINANCE);
+
+        NeoForgeStateProperties declared = PENDING.get();
+        if (declared == null) return;
+        for (var property : declared.properties().values()) {
+            builder.add(property);
+        }
     }
 
     /**

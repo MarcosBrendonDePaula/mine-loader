@@ -187,6 +187,40 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return insertInto(x, y, z, itemId, count);
+
+        IItemHandler handler = itemHandlerAt(x, y, z);
+        if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+        if (slot >= handler.getSlots()) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem "
+                    + handler.getSlots());
+        }
+
+        ItemStack remaining = new ItemStack(requireItem(itemId), count);
+        return handler.insertItem(slot, remaining, false).getCount();
+    }
+
+    @Override
+    public int extractFromSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return extractFrom(x, y, z, itemId, count);
+
+        IItemHandler handler = itemHandlerAt(x, y, z);
+        if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+        if (slot >= handler.getSlots()) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem "
+                    + handler.getSlots());
+        }
+
+        // O item pedido e conferido contra o que esta no slot: sem isso, errar o indice esvaziaria
+        // o slot errado em silencio.
+        ItemStack present = handler.getStackInSlot(slot);
+        if (present.isEmpty() || present.getItem() != requireItem(itemId)) return 0;
+
+        return handler.extractItem(slot, count, false).getCount();
+    }
+
+    @Override
     public int insertInto(int x, int y, int z, String itemId, int count) {
         IItemHandler handler = itemHandlerAt(x, y, z);
         if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
@@ -291,12 +325,33 @@ public class NeoForgeGameBridge implements GameBridge {
 
     @Override
     public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
+        playSoundIn(soundId, x, y, z, volume, pitch, net.minecraft.sounds.SoundSource.BLOCKS);
+    }
+
+    @Override
+    public void playSound(String soundId, int x, int y, int z, float volume, float pitch,
+                          String category) {
+        playSoundIn(soundId, x, y, z, volume, pitch, categoryOf(category));
+    }
+
+    private void playSoundIn(String soundId, int x, int y, int z, float volume, float pitch,
+                             net.minecraft.sounds.SoundSource category) {
         ResourceLocation id = parse(soundId);
         var sound = BuiltInRegistries.SOUND_EVENT.get(id);
         if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
 
-        requireLevel().playSound(null, new BlockPos(x, y, z), sound,
-                net.minecraft.sounds.SoundSource.BLOCKS, volume, pitch);
+        requireLevel().playSound(null, new BlockPos(x, y, z), sound, category, volume, pitch);
+    }
+
+    /** A categoria pedida, ou a de blocos quando o script nao disse. */
+    private static net.minecraft.sounds.SoundSource categoryOf(String name) {
+        if (name == null || name.isBlank()) return net.minecraft.sounds.SoundSource.BLOCKS;
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
+        if (!GameBridge.SOUND_CATEGORIES.contains(normalized)) {
+            throw new BridgeException("categoria de som desconhecida: " + name
+                    + "; conhecidas: " + GameBridge.SOUND_CATEGORIES);
+        }
+        return net.minecraft.sounds.SoundSource.valueOf(normalized.toUpperCase(Locale.ROOT));
     }
 
     @Override
@@ -313,6 +368,20 @@ public class NeoForgeGameBridge implements GameBridge {
         }
 
         requireLevel().sendParticles(options, x, y, z, count, spread, spread, spread, 0.0);
+    }
+
+    @Override
+    public void spawnParticles(String particleId, double x, double y, double z,
+                               int count, double spread, double speed) {
+        ResourceLocation id = parse(particleId);
+        var type = BuiltInRegistries.PARTICLE_TYPE.get(id);
+        if (type == null) throw new BridgeException("particula desconhecida: " + particleId);
+
+        if (!(type instanceof net.minecraft.core.particles.ParticleOptions options)) {
+            throw new BridgeException("particula exige parametros e nao e suportada: " + particleId);
+        }
+
+        requireLevel().sendParticles(options, x, y, z, count, spread, spread, spread, speed);
     }
 
     // ------------------------------------------------------------------ dados por bloco
@@ -435,16 +504,36 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     /**
-     * A variante visual ainda nao e aplicada neste adaptador.
+     * A variante visual, quando a espécie tem uma.
      *
-     * <p>O metodo que define a cor do cavalo e privado aqui, e nao ha caminho publico equivalente ao
-     * do adaptador Fabric. O campo continua sendo lido e validado -- um mod que o declare nao falha
-     * --, mas nao tem efeito, e isso esta registrado em docs/COMPATIBILIDADE.md em vez de descoberto
-     * por quem escreve o mod.
+     * <p>Cobertura estreita de propósito, e dita em voz alta: cada espécie nomeia a própria
+     * variante de um jeito, e não há um contrato do jogo que sirva a todas. Cobrir o cavalo, onde a
+     * cor é o caso que alguém quer declarar, é melhor que um mapeamento inventado que acertaria uma
+     * espécie e mentiria nas outras.
+     *
+     * <p>Um nome que a espécie não conhece é ignorado, como qualquer campo que não se aplica.
      */
     private static void applyVariant(net.minecraft.world.entity.Entity entity,
                                      dev.lualoader.platform.EntitySpec spec) {
-        // Sem implementacao por ora. Ver o comentario acima.
+        if (spec.variant == null || spec.variant.isBlank()) return;
+
+        if (entity instanceof net.minecraft.world.entity.animal.horse.Horse horse) {
+            var color = horseColor(spec.variant);
+            if (color != null) horse.setVariant(color);
+        }
+    }
+
+    private static net.minecraft.world.entity.animal.horse.Variant horseColor(String name) {
+        return switch (name.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "white" -> net.minecraft.world.entity.animal.horse.Variant.WHITE;
+            case "creamy" -> net.minecraft.world.entity.animal.horse.Variant.CREAMY;
+            case "chestnut" -> net.minecraft.world.entity.animal.horse.Variant.CHESTNUT;
+            case "brown" -> net.minecraft.world.entity.animal.horse.Variant.BROWN;
+            case "black" -> net.minecraft.world.entity.animal.horse.Variant.BLACK;
+            case "gray" -> net.minecraft.world.entity.animal.horse.Variant.GRAY;
+            case "dark_brown" -> net.minecraft.world.entity.animal.horse.Variant.DARK_BROWN;
+            default -> null;
+        };
     }
 
     /** Vida, atributos e o cuidado de aplicar o máximo antes do valor atual. */
@@ -815,8 +904,13 @@ public class NeoForgeGameBridge implements GameBridge {
     @Override
     public String weather() {
         ServerLevel level = requireLevel();
-        if (level.isThundering()) return "thunder";
-        return level.isRaining() ? "rain" : "clear";
+        // A leitura sai dos dados do mundo, e nao de level.isThundering(): aquele metodo compara a
+        // intensidade *visual* da tempestade, que sobe e desce ao longo de varios tiques. Logo
+        // depois de set_weather("clear") a flag ja esta limpa e a intensidade ainda nao desceu,
+        // entao o par escrever-e-ler se contradizia -- o script limpava o clima e lia "thunder".
+        var data = level.getLevelData();
+        if (data.isThundering()) return "thunder";
+        return data.isRaining() ? "rain" : "clear";
     }
 
     @Override
