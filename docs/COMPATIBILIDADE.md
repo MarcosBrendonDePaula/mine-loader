@@ -40,6 +40,7 @@ núcleo não conhecer Minecraft.
 | Recurso | Fabric | NeoForge | Nota |
 |---|---|---|---|
 | Blocos e itens | sim | sim | |
+| Recursos nomeados (`resources` + `"@nome"`) | sim | sim | Vive no núcleo; a forma inline continua válida |
 | Aba criativa | sim | sim | |
 | Resource pack gerado (textura, modelo, nome) | sim | sim | |
 | Receitas | sim | sim | Geradas como datapack pelo núcleo |

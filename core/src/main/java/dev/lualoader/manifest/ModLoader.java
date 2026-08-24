@@ -27,6 +27,10 @@ public final class ModLoader {
 
     private final Gson gson = new GsonBuilder()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            // Sem o adaptador, "texture": "@cristal" seria erro de leitura: o campo espera um
+            // objeto, e uma string no lugar faz o Gson recusar o manifesto inteiro.
+            .registerTypeAdapter(ModManifest.TextureDefinition.class,
+                    new TextureReferenceAdapter())
             .create();
     private final Logger logger;
     private final Path importCache;
@@ -136,6 +140,7 @@ public final class ModLoader {
         validateStructures(manifest);
         validateRecipes(manifest);
         validateCreativeTab(manifest);
+        validateResources(manifest);
 
         Set<String> blockIds = new HashSet<>();
         if (manifest.blocks != null) {
@@ -325,6 +330,74 @@ public final class ModLoader {
                     }
                 }
             }
+        }
+    }
+
+    /** Nome de recurso: as mesmas letras de um id, para nao surpreender quem ja escreveu um. */
+    private static final Pattern RESOURCE_NAME = Pattern.compile("^[a-z0-9][a-z0-9_-]{0,63}$");
+
+    /**
+     * Confere os recursos declarados e as referências a eles.
+     *
+     * <p>Uma referência quebrada precisa falhar aqui, e não quando alguém olha o bloco pela
+     * primeira vez: o sintoma lá é um cubo roxo, que não diz nome de recurso nenhum.
+     */
+    private void validateResources(ModManifest manifest) {
+        if (manifest.resources != null) {
+            for (Map.Entry<String, ModManifest.ResourceDefinition> entry
+                    : manifest.resources.entrySet()) {
+                String name = entry.getKey();
+                ModManifest.ResourceDefinition resource = entry.getValue();
+
+                require(name != null && RESOURCE_NAME.matcher(name).matches(),
+                        "nome de recurso invalido: " + name);
+                require(resource != null, "recurso vazio: " + name);
+                require(resource.from != null && !resource.from.isBlank(),
+                        "recurso @" + name + " sem 'from'");
+
+                String type = resource.type == null ? "image" : resource.type;
+                require(dev.lualoader.resources.ResourceCatalog.TYPES.contains(type),
+                        "tipo de recurso desconhecido em @" + name + ": " + type
+                                + "; conhecidos: " + dev.lualoader.resources.ResourceCatalog.TYPES);
+
+                if (!dev.lualoader.resources.ResourceCatalog.isRemote(resource.from)) {
+                    require(!resource.from.startsWith("/") && !resource.from.contains(".."),
+                            "caminho de recurso sai da pasta do mod: @" + name);
+                }
+            }
+        }
+
+        // As referencias so podem ser conferidas depois de todos os recursos existirem, porque a
+        // ordem no JSON nao diz nada sobre quem referencia quem.
+        var catalog = new dev.lualoader.resources.ResourceCatalog(manifest);
+        if (manifest.blocks != null) {
+            for (ModManifest.BlockDefinition block : manifest.blocks) {
+                if (block == null || block.render == null) continue;
+                requireResolvable(catalog, block.render.texture, block.id);
+
+                if (block.render.variantTextures != null) {
+                    for (ModManifest.TextureDefinition variant
+                            : block.render.variantTextures.values()) {
+                        requireResolvable(catalog, variant, block.id);
+                    }
+                }
+            }
+        }
+        if (manifest.items != null) {
+            for (ModManifest.ItemEntryDefinition item : manifest.items) {
+                if (item == null) continue;
+                requireResolvable(catalog, item.texture, item.id);
+            }
+        }
+    }
+
+    private void requireResolvable(dev.lualoader.resources.ResourceCatalog catalog,
+                                   ModManifest.TextureDefinition texture, String owner) {
+        if (texture == null || texture.ref == null) return;
+        try {
+            catalog.resolveTexture(texture);
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException("em " + owner + ": " + error.getMessage(), error);
         }
     }
 

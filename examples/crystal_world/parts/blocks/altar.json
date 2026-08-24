@@ -18,11 +18,7 @@
   },
   "render": {
     "model": "cube_all",
-    "texture": {
-      "source": "local",
-      "path": "assets/crystal_world/textures/block/crystal_block.png",
-      "fallback": "minecraft:block/amethyst_block"
-    }
+    "texture": "@cristal"
   },
   "loot": {
     "mode": "self"

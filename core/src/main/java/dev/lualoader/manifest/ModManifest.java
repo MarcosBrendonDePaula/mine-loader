@@ -21,6 +21,8 @@ public final class ModManifest {
     public List<BlockDefinition> blocks = new ArrayList<>();
     public List<ItemEntryDefinition> items = new ArrayList<>();
     public CreativeTabDefinition creativeTab;
+    /** Recursos nomeados do mod, referenciados no resto do manifesto por {@code "@nome"}. */
+    public Map<String, ResourceDefinition> resources = new LinkedHashMap<>();
     public List<StructureDefinition> structures = new ArrayList<>();
     public List<RecipeDefinition> recipes = new ArrayList<>();
     /**
@@ -185,6 +187,41 @@ public final class ModManifest {
         public String sha256;
         public long maxBytes = 1_048_576;
         public String fallback = "minecraft:block/stone";
+        /**
+         * Nome de um recurso declarado em {@code resources}, sem o arroba.
+         *
+         * <p>Preenchido quando o manifesto escreve {@code "texture": "@cristal"}. Quando presente,
+         * os demais campos vem do recurso e o que estiver aqui e ignorado.
+         */
+        public String ref;
+    }
+
+    /**
+     * Um recurso nomeado, declarado uma vez e referenciado onde for preciso.
+     *
+     * <p>Antes cada recurso era declarado no lugar em que era usado, o que trazia tres problemas de
+     * uma vez: dez blocos com a mesma textura repetiam a declaracao dez vezes; a integridade nao
+     * tinha onde morar junto do recurso, e acabou num campo paralelo -- {@code behaviorSha256},
+     * duplicado em bloco e item; e nao havia como listar o que o mod precisa baixar antes de entrar
+     * no mundo.
+     *
+     * <p>O tipo nao e enfeite: cada um valida de um jeito -- dimensao para imagem, JSON para modelo,
+     * sandbox para script. O que nao muda e a resolucao: local ou remoto, cache e integridade sao
+     * os mesmos para todos.
+     */
+    public static final class ResourceDefinition {
+        /** {@code image}, {@code model}, {@code sound}, {@code script} ou {@code data}. */
+        public String type = "image";
+        /**
+         * Onde o recurso esta: um caminho dentro do mod ou um endereco http.
+         *
+         * <p>Um campo so, e nao {@code path} mais {@code url}: o prefixo ja diz qual dos dois e, e
+         * dois campos permitiriam declarar os dois e deixar a duvida sobre qual vale.
+         */
+        public String from;
+        /** Conferido apos baixar. Fica junto do recurso, e nao num campo separado. */
+        public String sha256;
+        public long maxBytes = 1_048_576;
     }
 
     public static final class LootDefinition {
