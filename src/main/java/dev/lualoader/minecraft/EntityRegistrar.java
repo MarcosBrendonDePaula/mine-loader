@@ -239,7 +239,19 @@ public final class EntityRegistrar {
      */
     public void applyDeclaredDefaults(Entity entity) {
         EntityDefinition definition = definitions.get(Registries.ENTITY_TYPE.getId(entity.getType()));
-        if (definition == null || definition.defaults == null) return;
+        if (definition == null) return;
+
+        // A IA e aplicada a cada entrada no mundo, e nao uma vez so: os seletores de meta nao sao
+        // salvos com a entidade, entao ao recarregar o pedaco de mundo a criatura voltaria com o
+        // comportamento da base. Acrescentar duas vezes a mesma meta nao acontece porque, ao
+        // recarregar, ela e uma instancia nova com os seletores da base.
+        if (definition.ai != null && entity instanceof net.minecraft.entity.mob.MobEntity mob) {
+            DeclaredGoals.apply(logger, mob, definition.ai);
+        }
+
+        if (definition.defaults == null) return;
+        // Os padroes, ao contrario, sao salvos: nome, equipamento e efeitos sobrevivem ao
+        // recarregar, e aplica-los de novo daria outra armadura a cada carga.
         if (!entity.addCommandTag(READY_TAG)) return;
 
         FabricGameBridge.applyDeclaredSpec(entity, definition.defaults);

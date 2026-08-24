@@ -114,8 +114,21 @@ O que continua faltando:
 
 - **Animação própria.** A forma nova se move com a animação da base. Um bicho de quatro patas
   derivado de um bípede vai andar como bípede, porque é a animação do bípede que gira os ossos.
-- **IA declarada.** O comportamento é o da base. Herdar é útil e quase sempre o que se quer, mas não
-  há vocabulário para "vagar, fugir de, seguir quem segura tal item".
+
+  O caminho está claro: o jogo tem um sistema de keyframes desde a 1.19.4 — `Animation`,
+  `Keyframe`, `Transformation` — e é o que anima o Warden, a Rã e o Tatu. Um keyframe é tempo,
+  alvo (`ROTATE`, `TRANSLATE`, `SCALE`) e interpolação (`LINEAR` ou `CUBIC`): declara-se onde o
+  osso está em cada instante e **o jogo preenche o meio**. Mapeia quase um-para-um para JSON, e o
+  Blockbench já exporta nessa forma. A alternativa do ecossistema é o GeckoLib, que traria uma
+  dependência e um formato que não é o do jogo.
+
+  O que decide o desenho quando isso entrar: **animação própria e animação da base são
+  exclusivas.** Tocar keyframes exige uma classe de modelo própria, e nela a base deixa de mover os
+  ossos. O padrão será: sem `animation` declarada, herda a da base como hoje; com ela, a espécie
+  assume o controle.
+(A IA **é** declarável desde `entities[].ai`: metas — `float`, `wander`, `panic`, `melee_attack`,
+`follow_item`, `avoid`, `look_at_player`, `look_around` — e alvos — `hurt_by`, `attack_player`,
+`attack_entity`. Sem declarar, herda a da base.)
 - **Hierarquia de ossos.** O formato de hoje é plano: todo osso é filho da raiz, porque é assim que
   as classes de modelo do jogo procuram as peças. Um osso preso a outro ainda não é declarável.
 

@@ -1582,6 +1582,17 @@ public final class LuaRuntime {
                     }
                     table.set("spawn", spawn);
                 }
+
+                // Quantas metas e alvos, e nao a lista inteira: um mod que monta um guia quer
+                // dizer "tem comportamento proprio", e reproduzir o vocabulario aqui daria uma
+                // segunda copia dele para envelhecer junto.
+                if (definition.ai != null) {
+                    LuaTable ai = new LuaTable();
+                    ai.set("clear", LuaValue.valueOf(definition.ai.clear));
+                    ai.set("goals", LuaValue.valueOf(definition.ai.goals.size()));
+                    ai.set("targets", LuaValue.valueOf(definition.ai.targets.size()));
+                    table.set("ai", ai);
+                }
                 return table;
             }
         });

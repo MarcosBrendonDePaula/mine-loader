@@ -17,6 +17,22 @@
       "minecraft:generic.attack_damage": 9.0
     }
   },
+  "ai": {
+    "clear": true,
+    "goals": [
+      { "type": "float", "priority": 0 },
+      { "type": "melee_attack", "priority": 2, "speed": 1.0 },
+      { "type": "follow_item", "priority": 3, "speed": 1.1,
+        "items": ["crystal_world:crystal_shard"] },
+      { "type": "wander", "priority": 5, "speed": 0.7 },
+      { "type": "look_at_player", "priority": 6, "range": 10.0 },
+      { "type": "look_around", "priority": 7 }
+    ],
+    "targets": [
+      { "type": "hurt_by", "priority": 1 },
+      { "type": "attack_entity", "priority": 2, "entity": "minecraft:zombie" }
+    ]
+  },
   "loot": {
     "drops": [
       {

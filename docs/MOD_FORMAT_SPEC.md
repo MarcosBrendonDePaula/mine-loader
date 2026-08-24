@@ -364,6 +364,7 @@ manifesto -- por isso o manifesto e recusado sem ela.
 | `defaults` | objeto de dados de entidade | O **mesmo** vocabulario de `spawn_entity`: nome, natureza, corpo, equipamento, efeitos, estado, rotacao, variante. |
 | `loot` | objeto | Ver abaixo. |
 | `spawn_egg` | objeto | Ausente nao gera ovo. |
+| `ai` | objeto | Comportamento. Ausente **herda a IA da base inteira**. **Nao e herdado** entre especies. Ver abaixo. |
 | `spawn` | objeto | Nascimento natural. Ausente significa que a especie **so** chega ao mundo por comando, ovo ou script. **Nao e herdado.** Ver abaixo. |
 | `model` | `"@recurso"`, caminho no mod ou URL | A **forma** da criatura: ossos e caixas em JSON. Sem declarar, ela tem a forma da base. **Nao e herdada.** Ver abaixo. |
 | `texture` | `"@recurso"`, caminho no mod ou URL | A pele da criatura. **Sem declarar, ela usa a da base** -- e o que faz um guardiao sair identico a um golem de ferro. Copiada para `textures/entity/<id>.png`. **Nao e herdada.** |
@@ -531,6 +532,60 @@ mod. O loader entao gera a tabela no datapack virtual:
 Os `drops` **somam** ao que a tabela herdada ja produz. Substituir seria pior: declarar um unico
 drop proprio apagaria em silencio tudo que a base derrubava, e a perda so apareceria matando o
 bicho.
+
+### Comportamento
+
+```json
+"ai": {
+  "clear": true,
+  "goals": [
+    { "type": "float", "priority": 0 },
+    { "type": "melee_attack", "priority": 2, "speed": 1.0 },
+    { "type": "follow_item", "priority": 3, "items": ["crystal_world:crystal_shard"] },
+    { "type": "wander", "priority": 5, "speed": 0.7 },
+    { "type": "look_at_player", "priority": 6, "range": 10.0 },
+    { "type": "look_around", "priority": 7 }
+  ],
+  "targets": [
+    { "type": "hurt_by", "priority": 1 },
+    { "type": "attack_entity", "priority": 2, "entity": "minecraft:zombie" }
+  ]
+}
+```
+
+**A prioridade e a do jogo, e menor vence.** Duas metas que querem controlar o mesmo movimento nao
+rodam juntas. Nadar costuma ser zero -- afogar-se interrompe qualquer plano --, e vagar costuma ser
+alto, porque e o que se faz quando nao ha nada melhor. Sem declarar prioridade, vale a ordem da
+lista.
+
+Metas e alvos sao listas separadas porque o jogo as executa em seletores diferentes: uma decide o
+que a criatura **faz**, a outra decide em quem ela **presta atencao**.
+
+| Meta | O que faz | Campos que usa |
+|---|---|---|
+| `float` | Nao se afogar | — |
+| `panic` | Fugir ao apanhar ou pegar fogo | `speed` |
+| `melee_attack` | Perseguir e bater no alvo | `speed` |
+| `follow_item` | Ir atras de quem segura um item | `items` (obrigatorio), `speed` |
+| `avoid` | Manter distancia de uma especie | `entity` (obrigatorio), `range`, `speed` |
+| `look_at_player` | Encarar o jogador mais proximo | `range` |
+| `look_around` | Olhar em volta | — |
+| `wander` | Andar sem destino | `speed` |
+
+| Alvo | O que faz | Campos |
+|---|---|---|
+| `hurt_by` | Revidar em quem feriu | — |
+| `attack_player` | Cacar jogadores | — |
+| `attack_entity` | Cacar uma especie | `entity` (obrigatorio) |
+
+`clear` decide se as metas da base saem antes: falso **acrescenta** as dela -- bom para dar um
+comportamento a mais a um lobo --, verdadeiro da controle total, e e o que se quer quando a criatura
+so emprestou o corpo da base. Limpar sem declarar meta nenhuma deixa a criatura parada para sempre;
+o loader avisa, porque quase sempre e engano.
+
+**Nem toda base aceita toda meta.** Metade delas exige uma criatura que ande por caminho -- um
+morcego nao anda --, e nesse caso a meta e dita no log e pulada, sem derrubar o resto do que a
+especie declarou.
 
 ### Nascimento natural
 

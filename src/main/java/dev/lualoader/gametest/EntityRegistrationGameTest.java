@@ -202,4 +202,46 @@ public class EntityRegistrationGameTest implements FabricGameTest {
         }
         context.complete();
     }
+
+    /**
+     * O comportamento declarado chegou à criatura.
+     *
+     * <p>Não basta compilar: as metas são aplicadas quando a entidade entra no mundo, e um erro no
+     * caminho daria uma criatura que se comporta como a base sem que nada reclame. O que se
+     * pergunta é o que o jogo tem nas mãos.
+     */
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void comportamentoDeclaradoChegaNaCriatura(TestContext context) {
+        BlockPos position = context.getAbsolutePos(new BlockPos(1, 2, 1));
+        Entity entity = requireType().spawn(context.getWorld(), position, SpawnReason.COMMAND);
+
+        if (!(entity instanceof net.minecraft.entity.mob.MobEntity mob)) {
+            throw new AssertionError("a especie deveria ser uma criatura, veio " + entity);
+        }
+
+        var goals = ((dev.lualoader.mixin.MobEntityAccessor) mob).lua_loader$goalSelector();
+        var targets = ((dev.lualoader.mixin.MobEntityAccessor) mob).lua_loader$targetSelector();
+
+        // O manifesto do exemplo declara seis metas e dois alvos, com clear ligado -- entao o que
+        // esta ali e exatamente o declarado, e nao o do golem mais o declarado.
+        int declaredGoals = goals.getGoals().size();
+        if (declaredGoals != 6) {
+            throw new AssertionError("deveria haver 6 metas declaradas, ha " + declaredGoals);
+        }
+        int declaredTargets = targets.getGoals().size();
+        if (declaredTargets != 2) {
+            throw new AssertionError("deveria haver 2 alvos declarados, ha " + declaredTargets);
+        }
+
+        // E a traducao: "melee_attack" precisa ter virado a meta de ataque do jogo, e nao um
+        // objeto qualquer que ocupa espaco na lista.
+        boolean temAtaque = goals.getGoals().stream().anyMatch(entry ->
+                entry.getGoal() instanceof net.minecraft.entity.ai.goal.MeleeAttackGoal);
+        if (!temAtaque) {
+            throw new AssertionError("a meta melee_attack nao virou a meta de ataque do jogo");
+        }
+
+        entity.discard();
+        context.complete();
+    }
 }

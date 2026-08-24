@@ -194,6 +194,7 @@ public final class EntityDerivation {
         // dificuldade que cria uma variante de elite nao deveria, sem dizer nada, faze-la nascer em
         // todo bioma onde o original nasce -- dobrando a populacao do mundo de quem instalou.
         merged.spawn = child.spawn;
+        merged.ai = child.ai;
         return merged;
     }
 

@@ -246,7 +246,18 @@ public final class NeoForgeEntityRegistrar {
     public void applyDeclaredDefaults(Entity entity) {
         EntityDefinition definition =
                 definitions.get(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()));
-        if (definition == null || definition.defaults == null) return;
+        if (definition == null) return;
+
+        // A IA e aplicada a cada entrada no mundo, e nao uma vez so: os seletores de meta nao sao
+        // salvos com a entidade, entao ao recarregar o pedaco de mundo a criatura voltaria com o
+        // comportamento da base.
+        if (definition.ai != null && entity instanceof net.minecraft.world.entity.Mob mob) {
+            NeoForgeDeclaredGoals.apply(logger, mob, definition.ai);
+        }
+
+        if (definition.defaults == null) return;
+        // Os padroes, ao contrario, sao salvos: nome, equipamento e efeitos sobrevivem ao
+        // recarregar, e aplica-los de novo daria outra armadura a cada carga.
         if (!entity.addTag(READY_TAG)) return;
 
         NeoForgeGameBridge.applyDeclaredSpec(entity, definition.defaults);

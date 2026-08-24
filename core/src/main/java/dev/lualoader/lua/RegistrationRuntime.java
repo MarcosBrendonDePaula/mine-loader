@@ -292,6 +292,7 @@ public final class RegistrationRuntime {
         definition.model = text(value, "model");
 
         readSpawn(definition, value.get("spawn"));
+        readAi(definition, value.get("ai"));
 
         LuaValue tags = value.get("tags");
         if (tags.istable()) {
@@ -339,6 +340,64 @@ public final class RegistrationRuntime {
         if (!spawn.get("max_y").isnil()) declared.maxY = spawn.get("max_y").toint();
 
         definition.spawn = declared;
+    }
+
+    /**
+     * O comportamento declarado, quando o script declara um.
+     *
+     * <p>Ausente herda a IA da base inteira -- um lobo declarado se comporta como lobo sem que
+     * ninguem precise descrever o que e ser lobo.
+     */
+    private static void readAi(EntityDefinition definition, LuaValue ai) {
+        if (!ai.istable()) return;
+
+        var declared = new dev.lualoader.content.EntityAi();
+        declared.clear = flag(ai, "clear", false);
+
+        LuaValue goals = ai.get("goals");
+        if (goals.istable()) {
+            for (int index = 1; index <= goals.length(); index++) {
+                LuaValue entry = goals.get(index);
+                if (!entry.istable()) continue;
+
+                var goal = new dev.lualoader.content.EntityAi.Goal();
+                goal.type = text(entry, "type");
+                if (!entry.get("priority").isnil()) {
+                    goal.priority = entry.get("priority").toint();
+                }
+                goal.speed = number(entry, "speed", 1.0);
+                goal.range = number(entry, "range", 8.0);
+                goal.entity = text(entry, "entity");
+
+                LuaValue items = entry.get("items");
+                if (items.istable()) {
+                    List<String> list = new ArrayList<>();
+                    for (int item = 1; item <= items.length(); item++) {
+                        list.add(items.get(item).tojstring());
+                    }
+                    goal.items = list;
+                }
+                declared.goals.add(goal);
+            }
+        }
+
+        LuaValue targets = ai.get("targets");
+        if (targets.istable()) {
+            for (int index = 1; index <= targets.length(); index++) {
+                LuaValue entry = targets.get(index);
+                if (!entry.istable()) continue;
+
+                var target = new dev.lualoader.content.EntityAi.Target();
+                target.type = text(entry, "type");
+                if (!entry.get("priority").isnil()) {
+                    target.priority = entry.get("priority").toint();
+                }
+                target.entity = text(entry, "entity");
+                declared.targets.add(target);
+            }
+        }
+
+        definition.ai = declared;
     }
 
     private static void readLoot(EntityDefinition definition, LuaValue loot) {

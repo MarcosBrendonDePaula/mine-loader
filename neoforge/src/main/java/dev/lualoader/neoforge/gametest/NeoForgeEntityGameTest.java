@@ -203,4 +203,44 @@ public class NeoForgeEntityGameTest {
         }
         helper.succeed();
     }
+
+    /**
+     * O comportamento declarado chegou à criatura.
+     *
+     * <p>O par do lado Fabric, e é a pergunta que denuncia divergência: as duas plataformas nomeiam
+     * as classes de meta de formas diferentes, e o mesmo manifesto precisa produzir a mesma
+     * criatura. Se um lado traduzir errado, só esta pergunta descobre.
+     */
+    @GameTest(template = EMPTY)
+    public static void comportamentoDeclaradoChegaNaCriatura(GameTestHelper helper) {
+        BlockPos position = helper.absolutePos(new BlockPos(1, 2, 1));
+        Entity entity = requireType().spawn(helper.getLevel(), position, MobSpawnType.COMMAND);
+
+        if (!(entity instanceof net.minecraft.world.entity.Mob mob)) {
+            throw new AssertionError("a especie deveria ser uma criatura, veio " + entity);
+        }
+
+        var goals = ((dev.lualoader.neoforge.mixin.MobAccessor) mob).lua_loader$goalSelector();
+        var targets = ((dev.lualoader.neoforge.mixin.MobAccessor) mob).lua_loader$targetSelector();
+
+        // Seis metas e dois alvos, com clear ligado: o que esta ali e o declarado, e nao o do
+        // golem mais o declarado. O mesmo numero e conferido no Fabric.
+        int declaredGoals = goals.getAvailableGoals().size();
+        if (declaredGoals != 6) {
+            throw new AssertionError("deveria haver 6 metas declaradas, ha " + declaredGoals);
+        }
+        int declaredTargets = targets.getAvailableGoals().size();
+        if (declaredTargets != 2) {
+            throw new AssertionError("deveria haver 2 alvos declarados, ha " + declaredTargets);
+        }
+
+        boolean temAtaque = goals.getAvailableGoals().stream().anyMatch(entry ->
+                entry.getGoal() instanceof net.minecraft.world.entity.ai.goal.MeleeAttackGoal);
+        if (!temAtaque) {
+            throw new AssertionError("a meta melee_attack nao virou a meta de ataque do jogo");
+        }
+
+        entity.discard();
+        helper.succeed();
+    }
 }

@@ -422,4 +422,116 @@ class EntityDeclarationTest {
         // mesma mensagem que teria dentro do mod.json.
         assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("precisa de uma base")));
     }
+    // ------------------------------------------------------------------ comportamento declarado
+
+    @Test
+    void oComportamentoDeclaradoELido(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": {
+                        "clear": true,
+                        "goals": [
+                          { "type": "float", "priority": 0 },
+                          { "type": "avoid", "priority": 1, "entity": "minecraft:wolf",
+                            "range": 12.0, "speed": 1.3 },
+                          { "type": "follow_item", "priority": 2,
+                            "items": ["minecraft:diamond"] }
+                        ],
+                        "targets": [ { "type": "hurt_by", "priority": 1 } ]
+                      }"""));
+
+        EntityDefinition entity = discover(dir).get(0).manifest().entities.get(0);
+        assertNotNull(entity.ai);
+        assertTrue(entity.ai.clear);
+        assertEquals(3, entity.ai.goals.size());
+        assertEquals(1, entity.ai.targets.size());
+
+        assertEquals("minecraft:wolf", entity.ai.goals.get(1).entity);
+        assertEquals(12.0, entity.ai.goals.get(1).range);
+        assertEquals(List.of("minecraft:diamond"), entity.ai.goals.get(2).items);
+    }
+
+    @Test
+    void metaDesconhecidaERecusadaComOVocabulario(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "goals": [ { "type": "voar_para_a_lua" } ] }"""));
+
+        List<String> errors = refusalFor(dir);
+        // Recusada, e nao ignorada: ignorar daria uma criatura que nao faz o que o manifesto diz
+        // que ela faz. E a mensagem lista o vocabulario, para nao virar adivinhacao.
+        assertTrue(errors.stream().anyMatch(e -> e.contains("meta desconhecida")
+                        && e.contains("wander")),
+                "a recusa deveria listar o vocabulario, veio: " + errors);
+    }
+
+    @Test
+    void fugirSemDeQuemFugirERecusado(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "goals": [ { "type": "avoid" } ] }"""));
+
+        // Uma meta de fugir sem alvo nunca dispara, e nao da erro no jogo.
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("de quem fugir")));
+    }
+
+    @Test
+    void seguirItemSemItemERecusado(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "goals": [ { "type": "follow_item" } ] }"""));
+
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("item que atraia")));
+    }
+
+    @Test
+    void velocidadeZeradaERecusada(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "goals": [ { "type": "wander", "speed": 0.0 } ] }"""));
+
+        // Velocidade zero deixaria a criatura parada tentando andar, para sempre.
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("speed")));
+    }
+
+    @Test
+    void alvoDesconhecidoERecusado(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "targets": [ { "type": "amar" } ] }"""));
+
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("alvo desconhecido")));
+    }
+
+    @Test
+    void cacarSemDizerQuemERecusado(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith("""
+                      "id": "stone_guardian",
+                      "name": "Guardiao",
+                      "base": "minecraft:zombie",
+                      "ai": { "targets": [ { "type": "attack_entity" } ] }"""));
+
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("quem cacar")));
+    }
+
+    @Test
+    void semAiDeclaradaAEspecieHerdaADaBase(@TempDir Path dir) throws IOException {
+        writeMod(dir, manifestWith(MINIMAL));
+
+        // Nulo, e nao uma lista vazia: a diferenca entre "herda a IA do zumbi" e "nao faz nada"
+        // decide se a criatura anda.
+        assertNull(discover(dir).get(0).manifest().entities.get(0).ai);
+    }
 }

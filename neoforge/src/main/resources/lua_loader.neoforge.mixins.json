@@ -7,7 +7,8 @@
     "LootTableAccessor",
     "LootPoolAccessor",
     "LootItemAccessor",
-    "CompositeEntryAccessor"
+    "CompositeEntryAccessor",
+    "MobAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

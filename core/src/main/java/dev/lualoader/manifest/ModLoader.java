@@ -658,6 +658,7 @@ public final class ModLoader {
             validateEntityLoot(entity);
             validateSpawnEgg(entity);
             validateNaturalSpawn(entity);
+            validateAi(entity);
         }
     }
 
@@ -813,6 +814,73 @@ public final class ModLoader {
 
         require(spawn.minY == null || spawn.maxY == null || spawn.maxY >= spawn.minY,
                 "max_y de " + entity.id + " nao pode ser menor que min_y");
+    }
+
+    /**
+     * Confere o comportamento declarado.
+     *
+     * <p>Uma meta de tipo desconhecido é recusada em vez de ignorada: ignorar daria uma criatura
+     * que simplesmente não faz o que o manifesto diz que ela faz, e a mensagem lista o vocabulário
+     * para quem escreveu não ter que adivinhar o nome certo.
+     */
+    private void validateAi(EntityDefinition entity) {
+        var ai = entity.ai;
+        if (ai == null) return;
+
+        if (ai.goals != null) {
+            for (dev.lualoader.content.EntityAi.Goal goal : ai.goals) {
+                require(goal != null, "meta vazia em " + entity.id);
+                String type = dev.lualoader.content.EntityAi.normalized(goal.type);
+                require(dev.lualoader.content.EntityAi.GOAL_TYPES.contains(type),
+                        "meta desconhecida em " + entity.id + ": " + goal.type
+                                + " (use uma de " + dev.lualoader.content.EntityAi.GOAL_TYPES + ")");
+
+                // Uma meta de fugir sem de quem fugir nunca dispara, e nao da erro no jogo.
+                require(!dev.lualoader.content.EntityAi.goalNeedsEntity(type)
+                                || (goal.entity != null && goal.entity.indexOf(':') > 0),
+                        "a meta " + type + " de " + entity.id
+                                + " precisa de entity com namespace, de quem fugir");
+                require(!dev.lualoader.content.EntityAi.goalNeedsItems(type)
+                                || (goal.items != null && !goal.items.isEmpty()),
+                        "a meta " + type + " de " + entity.id
+                                + " precisa de ao menos um item que atraia a criatura");
+
+                for (String item : goal.items == null ? List.<String>of() : goal.items) {
+                    require(item != null && item.indexOf(':') > 0,
+                            "item de " + entity.id + " precisa de namespace: " + item);
+                }
+                require(goal.speed > 0, "speed de uma meta de " + entity.id
+                        + " precisa ser maior que zero; zero deixaria a criatura parada");
+                require(goal.range > 0, "range de uma meta de " + entity.id
+                        + " precisa ser maior que zero");
+                require(goal.priority == null || goal.priority >= 0,
+                        "priority de uma meta de " + entity.id + " nao pode ser negativa");
+            }
+        }
+
+        if (ai.targets != null) {
+            for (dev.lualoader.content.EntityAi.Target target : ai.targets) {
+                require(target != null, "alvo vazio em " + entity.id);
+                String type = dev.lualoader.content.EntityAi.normalized(target.type);
+                require(dev.lualoader.content.EntityAi.TARGET_TYPES.contains(type),
+                        "alvo desconhecido em " + entity.id + ": " + target.type
+                                + " (use um de "
+                                + dev.lualoader.content.EntityAi.TARGET_TYPES + ")");
+                require(!dev.lualoader.content.EntityAi.targetNeedsEntity(type)
+                                || (target.entity != null && target.entity.indexOf(':') > 0),
+                        "o alvo " + type + " de " + entity.id
+                                + " precisa de entity com namespace, quem cacar");
+                require(target.priority == null || target.priority >= 0,
+                        "priority de um alvo de " + entity.id + " nao pode ser negativa");
+            }
+        }
+
+        // Limpar as metas da base e nao declarar nenhuma deixa a criatura parada para sempre. E
+        // legitimo -- uma estatua -- mas quase sempre e engano, entao vale dizer.
+        if (ai.clear && (ai.goals == null || ai.goals.isEmpty())) {
+            logger.warn("Especie {} limpa a IA da base e nao declara meta nenhuma;"
+                    + " ela ficara parada", entity.id);
+        }
     }
 
     private static void require(boolean condition, String message) {

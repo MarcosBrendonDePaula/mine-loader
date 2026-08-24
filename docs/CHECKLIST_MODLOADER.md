@@ -95,7 +95,8 @@ As quatorze permissões: `chat.send`, `server.read`, `server.command.register`, 
 - [ ] Tipo de receita próprio, com regras de processamento novas
 - [x] Entidade — espécie própria derivada de uma do jogo (`entities`), nas duas plataformas
 - [x] Entidade — forma própria (`model`), animada pela base
-- [ ] Entidade — animação e comportamento próprios
+- [x] Entidade — comportamento próprio (`ai`)
+- [ ] Entidade — animação própria
 - [ ] Fluido
 - [ ] Bioma
 - [ ] Dimensão
@@ -573,7 +574,7 @@ possível, e é o gênero mais popular.
 - [ ] Registro de entidade própria
 - [x] Modelo de entidade (ossos e caixas declarados)
 - [ ] Animação de entidade
-- [ ] Comportamento de IA declarado
+- [x] Comportamento de IA declarado (`entities[].ai`)
 - [ ] Fluido
 - [ ] Bioma
 - [ ] Dimensão

@@ -113,6 +113,18 @@ public final class EntityDefinition {
      */
     public SpawnDefinition spawn;
 
+    /**
+     * O comportamento declarado: o que a criatura tenta fazer, e em que ordem.
+     *
+     * <p>Ausente herda a IA da base inteira, que é o padrão certo — um lobo declarado se comporta
+     * como lobo sem que ninguém precise descrever o que é ser lobo.
+     *
+     * <p><b>Não é herdado entre espécies declaradas</b>, pela mesma razão de textura, modelo e
+     * nascimento: uma variante de elite não deveria mudar de comportamento por causa de um campo
+     * que ela não escreveu.
+     */
+    public dev.lualoader.content.EntityAi ai;
+
     public List<String> tags = new ArrayList<>();
 
     /**

@@ -83,6 +83,7 @@ núcleo não conhecer Minecraft.
 | Fase de registro por script (`registration`) | sim | sim | Fabric na inicialização, NeoForge no `RegisterEvent`; GameTest nas duas |
 | Script de registro remoto (URL ou `remote_base`) | sim | sim | Mesma trava de hash do `behavior` de bloco, por `registration_sha256` |
 | Nascimento natural (`entities[].spawn`) | sim | sim | Fabric por API de bioma, NeoForge por modificador no data pack — caminhos diferentes, regra igual |
+| Comportamento declarado (`entities[].ai`) | sim | sim | Vocabulário fechado de metas e alvos; cada plataforma nomeia as classes do jogo de um jeito |
 | Forma própria (`entities[].model`) | sim | sim | Ossos e caixas em JSON; usa a **animação da base**. Nomes de osso conferidos na carga |
 | Textura de espécie (`entities[].texture`) | sim | sim | Recurso, caminho ou URL; sem declarar usa a pele da base. Não é herdada |
 | Ovo com modelo e cor (`spawn_egg`) | sim | sim | Modelo gerado do molde do jogo; **só o cliente mostra se falta** |
@@ -128,7 +129,6 @@ outra forma.
 | Tamanho | atributo `minecraft:generic.scale` |
 | Silhueta de partida | escolher entre as bases suportadas |
 | **Animação própria** | **não existe** — a da base move a forma nova |
-| **IA declarada** | **não existe** — herda a da base |
 
 A forma própria funciona por um detalhe que vale saber: as classes de modelo do jogo recebem uma
 raiz e procuram os filhos **por nome** para girá-los. Uma geometria declarada com os mesmos nomes de
@@ -136,8 +136,11 @@ osso que a base usa é animada por ela sem que ela saiba que mudou. O preço é 
 vocabulário fechado — e um nome errado não dá erro, a peça só não aparece, por isso o loader avisa
 na carga.
 
-Os dois últimos não aparecem na matriz porque ela compara plataformas, e eles faltam nas duas
-igualmente. Estão em `API_GAPS.md`, e são o que resta do Nível 7 de `CHECKLIST_MODLOADER.md`.
+O comportamento **é** declarável (`ai`), com um vocabulário fechado de metas e alvos: sem declarar,
+a espécie herda a IA da base inteira, que é o padrão certo — um lobo declarado se comporta como lobo
+sem que ninguém precise descrever o que é ser lobo.
+
+A animação não aparece na matriz porque ela compara plataformas, e falta nas duas igualmente. Estão em `API_GAPS.md`, e são o que resta do Nível 7 de `CHECKLIST_MODLOADER.md`.
 
 ## Uma divergência estrutural, e o que foi feito com ela
 
