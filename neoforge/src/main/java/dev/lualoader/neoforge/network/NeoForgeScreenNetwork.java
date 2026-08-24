@@ -25,6 +25,35 @@ public final class NeoForgeScreenNetwork {
     }
 
     /**
+     * O que o cliente faz com cada carga que chega.
+     *
+     * <p>Existe para este arquivo não nomear nenhuma classe de cliente. No NeoForge os dois lados
+     * compartilham o mesmo conjunto de classes, e uma referência a {@code Minecraft} aqui seria
+     * carregada também no servidor dedicado, onde ela não existe — o servidor cai na inicialização,
+     * e não quando a tela abre. O cliente instala a implementação; o servidor deixa nula.
+     */
+    public interface ClientSink {
+        void openScreen(int version, String screenId, String description);
+
+        void updateScreen(String description);
+
+        void closeScreen();
+
+        void setHud(String description);
+
+        void setOverlay(int version, String overlayId, String description);
+
+        void clearOverlay(String overlayId);
+    }
+
+    private static volatile ClientSink client;
+
+    /** Chamado pela inicialização do cliente, e só por ela. */
+    public static void setClientSink(ClientSink sink) {
+        client = sink;
+    }
+
+    /**
      * Registra os tipos de carga.
      *
      * <p>Todos opcionais, e isso não é detalhe: uma carga obrigatória faz o servidor recusar
@@ -39,23 +68,35 @@ public final class NeoForgeScreenNetwork {
                 event.registrar(String.valueOf(ScreenProtocol.VERSION)).optional();
 
         registrar.playToClient(NeoForgeScreenPayloads.OpenScreen.TYPE,
-                NeoForgeScreenPayloads.OpenScreen.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.OpenScreen.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.openScreen(payload.version(), payload.screenId(), payload.description());
+                        }));
         registrar.playToClient(NeoForgeScreenPayloads.UpdateScreen.TYPE,
-                NeoForgeScreenPayloads.UpdateScreen.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.UpdateScreen.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.updateScreen(payload.description());
+                        }));
         registrar.playToClient(NeoForgeScreenPayloads.CloseScreen.TYPE,
-                NeoForgeScreenPayloads.CloseScreen.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.CloseScreen.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.closeScreen();
+                        }));
         registrar.playToClient(NeoForgeScreenPayloads.SetHud.TYPE,
-                NeoForgeScreenPayloads.SetHud.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.SetHud.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.setHud(payload.description());
+                        }));
         registrar.playToClient(NeoForgeScreenPayloads.SetOverlay.TYPE,
-                NeoForgeScreenPayloads.SetOverlay.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.SetOverlay.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.setOverlay(payload.version(), payload.overlayId(), payload.description());
+                        }));
         registrar.playToClient(NeoForgeScreenPayloads.ClearOverlay.TYPE,
-                NeoForgeScreenPayloads.ClearOverlay.CODEC, (payload, context) -> {
-                });
+                NeoForgeScreenPayloads.ClearOverlay.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.clearOverlay(payload.overlayId());
+                        }));
 
         registrar.playToServer(NeoForgeScreenPayloads.ScreenEvent.TYPE,
                 NeoForgeScreenPayloads.ScreenEvent.CODEC,

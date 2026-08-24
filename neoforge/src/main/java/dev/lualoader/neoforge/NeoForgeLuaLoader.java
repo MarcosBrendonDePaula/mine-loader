@@ -65,6 +65,13 @@ public class NeoForgeLuaLoader {
                 .register(NeoForge.EVENT_BUS);
 
 
+        // O lado cliente so existe no cliente: no servidor dedicado as classes de renderizacao
+        // nem sao carregadas, e nomea-las fora deste guarda derrubaria o servidor na inicializacao.
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            dev.lualoader.neoforge.client.NeoForgeLuaLoaderClient.install(modBus);
+            dev.lualoader.neoforge.client.NeoForgeGameScreenOverlay.register();
+        }
+
         LOGGER.info("Adaptador NeoForge do Lua Loader carregado");
     }
 
