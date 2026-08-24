@@ -108,6 +108,16 @@ public interface GameBridge {
     String spawnEntity(String entityId, double x, double y, double z);
 
     /**
+     * Cria uma entidade com o que o mod declarou sobre ela.
+     *
+     * <p>Padrao que ignora os dados, para um adaptador que ainda nao os aplique continuar
+     * compilando e funcionando -- a entidade nasce comum em vez de nao nascer.
+     */
+    default String spawnEntity(String entityId, double x, double y, double z, EntitySpec spec) {
+        return spawnEntity(entityId, x, y, z);
+    }
+
+    /**
      * Lista as entidades dentro de um raio.
      *
      * @return para cada entidade, uma linha {@code uuid;tipo;x;y;z}

@@ -7,7 +7,9 @@ import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.platform.BlockEventData;
 import dev.lualoader.platform.BridgeException;
 import dev.lualoader.platform.ItemEventData;
+import dev.lualoader.platform.EntitySpec;
 import dev.lualoader.platform.GameBridge;
+import dev.lualoader.platform.ItemSpec;
 import dev.lualoader.platform.PlayerHandle;
 import dev.lualoader.structure.StructurePlacer;
 import dev.lualoader.ui.ScreenBuilder;
@@ -30,7 +32,9 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -1291,7 +1295,8 @@ public final class LuaRuntime {
                 String id = requireIdentifier(args.arg(1).tojstring());
                 return LuaValue.valueOf(bridge.spawnEntity(id,
                         requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
-                        requireCoordinate(args.arg(4))));
+                        requireCoordinate(args.arg(4)),
+                        readEntitySpec(args.arg(5))));
             }
         });
         serverApi.set("entities_near", new VarArgFunction() {
@@ -1576,7 +1581,7 @@ public final class LuaRuntime {
                 String id = requireIdentifier(args.arg(1).tojstring());
                 int count = requireCount(args.arg(2));
                 // Devolve quantos nao couberam no inventario e cairam no chao.
-                return LuaValue.valueOf(player.giveItem(id, count));
+                return LuaValue.valueOf(player.giveItem(id, count, readItemSpec(args.arg(3))));
             }
         });
         playerApi.set("take_item", new VarArgFunction() {
@@ -1890,6 +1895,89 @@ public final class LuaRuntime {
             throw new LuaError("coordenada fora do intervalo permitido: " + coordinate);
         }
         return coordinate;
+    }
+
+    /**
+     * Lê o que o script declarou sobre uma entidade.
+     *
+     * <p>Campo ausente vira {@code null}, e não o valor padrão: significam coisas diferentes. Um
+     * {@code false} declarado impede o jogo de escolher outra coisa; ausente deixa o jogo decidir,
+     * como faria sem o mod.
+     */
+    private static EntitySpec readEntitySpec(LuaValue value) {
+        if (value == null || !value.istable()) return EntitySpec.EMPTY;
+        LuaTable table = value.checktable();
+
+        return new EntitySpec(
+                optionalText(table, "name"),
+                optionalBoolean(table, "name_visible"),
+                optionalBoolean(table, "tame"),
+                optionalBoolean(table, "baby"),
+                optionalBoolean(table, "invulnerable"),
+                optionalBoolean(table, "persistent"),
+                optionalBoolean(table, "silent"),
+                optionalBoolean(table, "no_gravity"),
+                optionalBoolean(table, "no_ai"),
+                optionalNumber(table, "health"));
+    }
+
+    /** Lê o que o script declarou sobre um item. */
+    private static ItemSpec readItemSpec(LuaValue value) {
+        if (value == null || !value.istable()) return ItemSpec.EMPTY;
+        LuaTable table = value.checktable();
+
+        List<String> lore = new ArrayList<>();
+        LuaValue lines = table.get("lore");
+        if (lines.istable()) {
+            for (int index = 1; index <= lines.length(); index++) {
+                LuaValue line = lines.get(index);
+                if (!line.isnil()) lore.add(line.tojstring());
+            }
+        }
+
+        Map<String, Integer> enchantments = new LinkedHashMap<>();
+        LuaValue declared = table.get("enchantments");
+        if (declared.istable()) {
+            LuaTable levels = declared.checktable();
+            for (LuaValue key : levels.keys()) {
+                // O identificador e conferido aqui, e nao no adaptador: um encantamento escrito
+                // errado deve virar erro para quem escreveu o script, com o nome na mensagem.
+                String id = requireIdentifier(key.tojstring());
+                int level = levels.get(key).toint();
+                if (level > 0) enchantments.put(id, level);
+            }
+        }
+
+        Integer damage = optionalInteger(table, "damage");
+        if (damage != null && damage < 0) throw new LuaError("damage nao pode ser negativo");
+
+        return new ItemSpec(
+                optionalText(table, "name"),
+                lore.isEmpty() ? null : List.copyOf(lore),
+                damage,
+                optionalBoolean(table, "unbreakable"),
+                enchantments.isEmpty() ? null : Map.copyOf(enchantments),
+                optionalInteger(table, "custom_model_data"));
+    }
+
+    private static String optionalText(LuaTable table, String field) {
+        LuaValue value = table.get(field);
+        return value.isnil() ? null : value.tojstring();
+    }
+
+    private static Boolean optionalBoolean(LuaTable table, String field) {
+        LuaValue value = table.get(field);
+        return value.isnil() ? null : value.toboolean();
+    }
+
+    private static Double optionalNumber(LuaTable table, String field) {
+        LuaValue value = table.get(field);
+        return value.isnil() ? null : value.todouble();
+    }
+
+    private static Integer optionalInteger(LuaTable table, String field) {
+        LuaValue value = table.get(field);
+        return value.isnil() ? null : value.toint();
     }
 
     private static String requireIdentifier(String value) {

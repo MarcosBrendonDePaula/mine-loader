@@ -30,6 +30,16 @@ public interface PlayerHandle {
     int giveItem(String itemId, int count);
 
     /**
+     * Entrega um item com o que o mod declarou sobre ele.
+     *
+     * <p>Padrao que ignora os dados, pela mesma razao do spawn: um adaptador que ainda nao os
+     * aplique entrega o item comum, em vez de recusar.
+     */
+    default int giveItem(String itemId, int count, ItemSpec spec) {
+        return giveItem(itemId, count);
+    }
+
+    /**
      * Remove itens do inventário.
      *
      * @return quantidade efetivamente removida, que pode ser menor que a pedida

@@ -249,6 +249,69 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public String spawnEntity(String entityId, double x, double y, double z,
+                              dev.lualoader.platform.EntitySpec spec) {
+        String uuid = spawnEntity(entityId, x, y, z);
+        if (spec == null || spec.isEmpty()) return uuid;
+
+        var world = requireWorld();
+        Entity entity = world.getEntity(java.util.UUID.fromString(uuid));
+        if (entity == null) return uuid;
+
+        applySpec(entity, spec);
+        return uuid;
+    }
+
+    /**
+     * Aplica o que o mod declarou sobre a entidade.
+     *
+     * <p>Cada campo é traduzido para o que esta versão do jogo chama daquilo. É o trabalho que
+     * justifica o vocabulário fechado: o mod diz "domado", e onde isso mora muda entre versões.
+     *
+     * <p>O que a entidade não suporta é ignorado em silêncio, e não recusado. Um mod que declara
+     * {@code tame} para um conjunto de bichos não deveria falhar no que não é domesticável — o
+     * campo simplesmente não se aplica ali, como não se aplica a um bloco.
+     */
+    private static void applySpec(Entity entity, dev.lualoader.platform.EntitySpec spec) {
+        if (spec.name() != null) entity.setCustomName(Text.literal(spec.name()));
+        if (spec.nameVisible() != null) entity.setCustomNameVisible(spec.nameVisible());
+        if (spec.invulnerable() != null) entity.setInvulnerable(spec.invulnerable());
+        if (spec.silent() != null) entity.setSilent(spec.silent());
+        if (spec.noGravity() != null) entity.setNoGravity(spec.noGravity());
+
+        if (entity instanceof net.minecraft.entity.mob.MobEntity mob) {
+            if (spec.noAi() != null) mob.setAiDisabled(spec.noAi());
+            // Persistente e o que impede o jogo de remover o bicho quando ninguem esta por perto;
+            // sem isso, um guardiao invocado por um mod sumiria sozinho.
+            if (Boolean.TRUE.equals(spec.persistent())) mob.setPersistent();
+        }
+        if (entity instanceof net.minecraft.entity.passive.PassiveEntity passive
+                && spec.baby() != null) {
+            passive.setBaby(spec.baby());
+        }
+        if (entity instanceof net.minecraft.entity.passive.TameableEntity tameable
+                && spec.tame() != null) {
+            tameable.setTamed(spec.tame(), true);
+        }
+        if (entity instanceof net.minecraft.entity.passive.AbstractHorseEntity horse
+                && spec.tame() != null) {
+            // Cavalos nao sao TameableEntity: tem a propria nocao de domado, e sem este ramo
+            // declarar tame num cavalo nao faria nada -- que e o caso mais obvio de todos.
+            horse.setTame(spec.tame());
+        }
+
+        if (spec.health() != null && entity instanceof net.minecraft.entity.LivingEntity living) {
+            float health = (float) Math.max(1.0, spec.health());
+            var attribute = living.getAttributeInstance(
+                    net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH);
+            // O maximo primeiro: definir a vida acima do maximo sem mexer no atributo faria o jogo
+            // recortar o valor de volta, e o mod veria a declaracao sumir.
+            if (attribute != null) attribute.setBaseValue(health);
+            living.setHealth(health);
+        }
+    }
+
+    @Override
     public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
         var world = requireWorld();
         var box = new net.minecraft.util.math.Box(

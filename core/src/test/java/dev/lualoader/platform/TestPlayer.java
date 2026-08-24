@@ -69,6 +69,15 @@ public class TestPlayer implements PlayerHandle {
         return count - fits;
     }
 
+    /** O que foi declarado no ultimo item entregue, para o teste conferir. */
+    public ItemSpec lastItemSpec = ItemSpec.EMPTY;
+
+    @Override
+    public int giveItem(String itemId, int count, ItemSpec spec) {
+        lastItemSpec = spec == null ? ItemSpec.EMPTY : spec;
+        return giveItem(itemId, count);
+    }
+
     @Override
     public int takeItem(String itemId, int count) {
         int current = inventory.getOrDefault(itemId, 0);

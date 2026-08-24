@@ -81,6 +81,15 @@ public abstract class TestBridge implements GameBridge {
 
     @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
+        return spawnEntity(entityId, x, y, z, EntitySpec.EMPTY);
+    }
+
+    /** O que foi declarado na ultima entidade criada, para o teste conferir. */
+    public EntitySpec lastEntitySpec = EntitySpec.EMPTY;
+
+    @Override
+    public String spawnEntity(String entityId, double x, double y, double z, EntitySpec spec) {
+        lastEntitySpec = spec == null ? EntitySpec.EMPTY : spec;
         return "00000000-0000-0000-0000-000000000000";
     }
 

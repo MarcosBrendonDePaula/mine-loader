@@ -59,6 +59,47 @@ arquivo `.lua`, uma URL `https` ou o nome de uma função exportada pelo `main.l
 
 O `entrypoint` é opcional: um mod pode ter apenas manifesto e scripts por peça.
 
+## Entidade e item com dados
+
+`spawn_entity` e `give_item` aceitam uma tabela com o que o mod quer declarar. Sem ela, nasce a
+entidade comum e o item comum.
+
+```lua
+local uuid = ctx.server.spawn_entity("minecraft:horse", x, y, z, {
+    name = "Corcel",
+    name_visible = true,
+    tame = true,
+    baby = false,
+    persistent = true,   -- impede o jogo de remover o bicho quando ninguem esta por perto
+    invulnerable = false,
+    silent = false,
+    no_gravity = false,
+    no_ai = false,
+    health = 30
+})
+
+ctx.player.give_item("minecraft:diamond_sword", 1, {
+    name = "Espada do Chefe",
+    lore = {"Forjada em cristal"},
+    unbreakable = true,
+    damage = 0,
+    custom_model_data = 3,
+    enchantments = { ["minecraft:sharpness"] = 5, ["minecraft:unbreaking"] = 3 }
+})
+```
+
+**Campo ausente não é o mesmo que campo declarado com o valor padrão.** Ausente deixa o jogo
+decidir, como faria sem o mod; `baby = false` declarado impede o jogo de escolher outra coisa.
+
+O que a entidade não suporta é ignorado, não recusado: declarar `tame` para uma lista de bichos não
+falha nos que não são domesticáveis. Encantamento com nível zero é descartado — é a ausência dele,
+e guardá-lo mostraria uma linha sem efeito no item.
+
+**Por que não é NBT.** O formato interno de item virou componentes na 1.20.5, e um mod que tivesse
+escrito a forma anterior pararia de funcionar sem ter mudado uma linha. O vocabulário aqui é uma
+pergunta que qualquer versão responde; traduzir para o que aquela versão chama daquilo é trabalho
+do adaptador.
+
 ## Permissões
 
 Um mod só faz o que declara. Pedir uma permissão que não será usada é ruído; usar uma operação sem

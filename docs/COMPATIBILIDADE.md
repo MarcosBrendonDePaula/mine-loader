@@ -13,7 +13,7 @@ Legenda: **sim** funciona · **não** ainda não implementado · **n/a** não se
 
 ## Contratos de plataforma
 
-As 53 operações de `GameBridge` e `PlayerHandle`. São o que um script Lua alcança, e a razão de o
+As operações de `GameBridge` e `PlayerHandle`. São o que um script Lua alcança, e a razão de o
 núcleo não conhecer Minecraft.
 
 | Área | Operações | Fabric | NeoForge |
@@ -27,6 +27,7 @@ núcleo não conhecer Minecraft.
 | HUD e sobreposições | definir, limpar | sim | sim |
 | Som e partículas | tocar, emitir | sim | sim |
 | Entidades | criar, remover, ferir, listar por raio | sim | sim |
+| Dados declarados | entidade (nome, domado, vida…) e item (nome, lore, encantamento) | sim | sim |
 | Dados por bloco | ler, gravar | sim | sim |
 | Inventário de bloco | capacidades, ler, inserir, extrair | sim | sim |
 | Registro do jogo | listar itens, receitas, drops | sim | sim |

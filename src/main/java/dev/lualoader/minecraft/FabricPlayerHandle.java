@@ -74,6 +74,92 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
+    public int giveItem(String itemId, int count, dev.lualoader.platform.ItemSpec spec) {
+        if (spec == null || spec.isEmpty()) return giveItem(itemId, count);
+
+        Item item = resolveItem(itemId);
+        int remaining = count;
+        int dropped = 0;
+
+        while (remaining > 0) {
+            int batch = Math.min(remaining, item.getMaxCount());
+            ItemStack stack = new ItemStack(item, batch);
+            applySpec(stack, spec, player.getWorld());
+
+            player.getInventory().insertStack(stack);
+            if (!stack.isEmpty()) {
+                dropped += stack.getCount();
+                player.dropItem(stack, false);
+            }
+            remaining -= batch;
+        }
+        return dropped;
+    }
+
+    /**
+     * Aplica o que o mod declarou sobre o item.
+     *
+     * <p>Traduz para componentes, que é como esta versão do jogo guarda essas coisas. Um mod que
+     * escrevesse NBT cru teria escrito a forma anterior e pararia de funcionar na 1.20.5 sem ter
+     * mudado uma linha — é o motivo de o vocabulário ser declarado.
+     */
+    private static void applySpec(ItemStack stack, dev.lualoader.platform.ItemSpec spec,
+                                  net.minecraft.world.World world) {
+        if (spec.name() != null) {
+            stack.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME,
+                    Text.literal(spec.name()));
+        }
+        if (spec.lore() != null && !spec.lore().isEmpty()) {
+            java.util.List<Text> lines = new java.util.ArrayList<>();
+            for (String line : spec.lore()) lines.add(Text.literal(line));
+            stack.set(net.minecraft.component.DataComponentTypes.LORE,
+                    new net.minecraft.component.type.LoreComponent(lines));
+        }
+        if (spec.damage() != null) {
+            // Recortado ao maximo do item: um dano acima dele quebraria a peca na hora de aparecer,
+            // e o mod veria o item sumir sem explicacao.
+            stack.setDamage(Math.min(spec.damage(), Math.max(0, stack.getMaxDamage())));
+        }
+        if (Boolean.TRUE.equals(spec.unbreakable())) {
+            stack.set(net.minecraft.component.DataComponentTypes.UNBREAKABLE,
+                    new net.minecraft.component.type.UnbreakableComponent(true));
+        }
+        if (spec.customModelData() != null) {
+            stack.set(net.minecraft.component.DataComponentTypes.CUSTOM_MODEL_DATA,
+                    new net.minecraft.component.type.CustomModelDataComponent(
+                            spec.customModelData()));
+        }
+
+        if (spec.enchantments() == null || spec.enchantments().isEmpty()) return;
+
+        // Encantamento deixou de ser um registro fixo e passou a vir do datapack, entao so existe
+        // com um mundo carregado -- e por isso a consulta sai do registro do mundo, e nao de
+        // Registries como os itens e blocos.
+        var registry = world.getRegistryManager()
+                .getOptional(net.minecraft.registry.RegistryKeys.ENCHANTMENT)
+                .orElse(null);
+        if (registry == null) return;
+
+        var builder = new net.minecraft.component.type.ItemEnchantmentsComponent.Builder(
+                net.minecraft.component.type.ItemEnchantmentsComponent.DEFAULT);
+        boolean applied = false;
+
+        for (var entry : spec.enchantments().entrySet()) {
+            Identifier id = Identifier.tryParse(entry.getKey());
+            if (id == null) continue;
+
+            var found = registry.getEntry(id).orElse(null);
+            if (found == null) continue;
+
+            builder.add(found, entry.getValue());
+            applied = true;
+        }
+        if (applied) {
+            stack.set(net.minecraft.component.DataComponentTypes.ENCHANTMENTS, builder.build());
+        }
+    }
+
+    @Override
     public int takeItem(String itemId, int count) {
         Item item = resolveItem(itemId);
         int remaining = count;

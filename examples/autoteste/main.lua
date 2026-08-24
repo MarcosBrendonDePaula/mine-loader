@@ -161,6 +161,44 @@ TESTES.inventario_declarado = function(ctx)
     ctx.server.set_block(antes, x, y, z)
 end
 
+-- Entidade e item nascem com o que o mod declarou, e nao genericos.
+--
+-- Esta e a diferenca entre invocar "um cavalo" e invocar o cavalo do chefe. O que se verifica aqui
+-- e que a declaracao atravessa o nucleo e chega ao jogo: se um adaptador ignorasse a tabela, a
+-- entidade nasceria sem nome e este teste diria.
+TESTES.dados_declarados = function(ctx)
+    local x, y, z = 0, 100, 0
+
+    local uuid = ctx.server.spawn_entity("minecraft:horse", x, y + 1, z, {
+        name = "Corcel de Teste",
+        tame = true,
+        persistent = true,
+        health = 30
+    })
+    exigir(uuid ~= nil and uuid ~= "", "spawn_entity deveria devolver o uuid")
+
+    -- entities_near le o mundo de verdade: se o bicho nao nasceu, nao esta aqui.
+    local achou = false
+    for _, entidade in ipairs(ctx.server.entities_near(x, y + 1, z, 6)) do
+        if entidade.type == "minecraft:horse" then achou = true end
+    end
+    exigir(achou, "o cavalo declarado deveria estar no mundo")
+
+    ctx.server.remove_entity(uuid)
+
+    -- O item so pode ser conferido pelo que o inventario responde, porque o contrato de leitura
+    -- devolve identificador e quantidade -- nao o nome nem os encantamentos.
+    local sobrou = ctx.player and ctx.player.give_item("minecraft:diamond_sword", 1, {
+        name = "Espada de Teste",
+        lore = {"Item de verificacao"},
+        unbreakable = true,
+        enchantments = { ["minecraft:sharpness"] = 3 }
+    })
+    if ctx.player then
+        exigir(sobrou == 0, "a espada deveria caber no inventario, sobrou " .. tostring(sobrou))
+    end
+end
+
 -- Ferramenta declarada precisa virar ferramenta de verdade, e nao um item com numeros.
 --
 -- O que separa as duas coisas nao aparece no manifesto: e o item ser da classe que o jogo usa para
