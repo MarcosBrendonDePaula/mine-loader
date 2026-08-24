@@ -15,7 +15,7 @@ return function(ctx)
         return
     end
 
-    ctx.player.open_menu("Altar: " .. dados.oferendas .. " oferendas", 3, {
+    ctx.player.open_menu("altar", "Altar: " .. dados.oferendas .. " oferendas", 3, {
         { item = "crystal_world:crystal_shard", count = math.min(64, dados.oferendas) },
         { item = "crystal_world:crystal_block", count = 1 },
         "minecraft:amethyst_shard"

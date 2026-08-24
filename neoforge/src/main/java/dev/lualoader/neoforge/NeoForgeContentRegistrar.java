@@ -42,6 +42,9 @@ public final class NeoForgeContentRegistrar {
     private final Map<ResourceLocation, Block> blocks = new LinkedHashMap<>();
     private final Map<ResourceLocation, Item> items = new LinkedHashMap<>();
 
+    /** Quantas variantes cada bloco declara; o evento leva o número ao script. */
+    private final Map<ResourceLocation, Integer> variantCounts = new LinkedHashMap<>();
+
     public NeoForgeContentRegistrar(Logger logger, IEventBus modBus) {
         this.logger = logger;
         modBus.addListener(this::onRegister);
@@ -55,6 +58,28 @@ public final class NeoForgeContentRegistrar {
     /** Blocos registrados, por identificador. */
     public List<String> registeredBlocks() {
         return blocks.keySet().stream().map(ResourceLocation::toString).toList();
+    }
+
+    /**
+     * Quantas variantes visuais o bloco declara, no mínimo uma.
+     *
+     * <p>É o total declarado no manifesto, e não a faixa fixa da propriedade de estado: um script
+     * que cicla variantes precisa saber onde a volta fecha, e a faixa do bloco tem sempre dezesseis
+     * valores mesmo quando o mod declarou dois.
+     */
+    public int variantCount(ResourceLocation id) {
+        return variantCounts.getOrDefault(id, 1);
+    }
+
+    /**
+     * Se o item foi declarado por um mod Lua.
+     *
+     * <p>O adaptador Fabric responde isso pela classe do item; aqui os itens declarados são
+     * {@code Item} comuns, então quem sabe é o registro. O filtro existe para os eventos de item
+     * não dispararem para todo item do jogo.
+     */
+    public boolean isDeclaredItem(ResourceLocation id) {
+        return items.containsKey(id);
     }
 
     private void onRegister(RegisterEvent event) {
@@ -90,10 +115,18 @@ public final class NeoForgeContentRegistrar {
                 // O pack descreve o bloco por variante, e um bloco sem a propriedade nao casa com
                 // nenhuma: o jogo procura a variante sem propriedades, nao acha, e desenha o cubo
                 // de textura ausente -- os quadrados roxos e pretos.
-                Block block = new NeoForgeDeclarativeBlock(settingsOf(definition));
+                ModManifest.SettingsDefinition values = definition.settings == null
+                        ? new ModManifest.SettingsDefinition()
+                        : definition.settings;
+                Block block =
+                        new NeoForgeDeclarativeBlock(settingsOf(definition), values.luminance);
                 sink.accept(id, block);
 
                 blocks.put(id, block);
+                variantCounts.put(id, definition.render == null
+                        || definition.render.variantTextures == null
+                        ? 1
+                        : Math.max(1, definition.render.variantTextures.size()));
                 logger.info("Lua Loader registrou bloco {} ({})", id, definition.name);
             } catch (RuntimeException error) {
                 logger.error("Falha ao registrar o bloco {}: {}", id, error.getMessage());
@@ -216,10 +249,8 @@ public final class NeoForgeContentRegistrar {
                 .sound(soundOf(definition.material == null ? null : definition.material.sound));
 
         if (values.requiresTool) properties = properties.requiresCorrectToolForDrops();
-        if (values.luminance > 0) {
-            final int light = Math.min(15, values.luminance);
-            properties = properties.lightLevel(state -> light);
-        }
+        // A luminancia nao entra aqui: o bloco a le do estado, para um script poder acender um
+        // exemplar sem acender todos os outros do mesmo tipo no mundo.
         return properties;
     }
 

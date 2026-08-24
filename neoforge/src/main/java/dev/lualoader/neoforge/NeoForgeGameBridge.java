@@ -12,6 +12,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
 
@@ -231,19 +232,58 @@ public class NeoForgeGameBridge implements GameBridge {
         return new BridgeException(operation + " ainda nao existe no adaptador NeoForge");
     }
 
+    /** Só um bloco declarado tem as propriedades que estas operações escrevem. */
+    private static NeoForgeDeclarativeBlock requireDeclarativeBlock(String blockId) {
+        Block block = requireBlock(blockId);
+        if (!(block instanceof NeoForgeDeclarativeBlock declarative)) {
+            throw new BridgeException("bloco nao foi declarado por um mod Lua: " + blockId);
+        }
+        return declarative;
+    }
+
+    /**
+     * Escreve uma propriedade no bloco daquela posição, preservando as demais.
+     *
+     * <p>Parte do estado que já está no mundo, e não do estado padrão: um bloco aceso que trocasse
+     * de variante voltaria a apagar, porque o padrão não sabe o que o script fez antes.
+     */
+    private void setBlockState(String blockId, int x, int y, int z,
+                               IntegerProperty property, int value) {
+        NeoForgeDeclarativeBlock block = requireDeclarativeBlock(blockId);
+        ServerLevel level = requireLevel();
+        BlockPos pos = new BlockPos(x, y, z);
+
+        BlockState current = level.getBlockState(pos);
+        BlockState next = current.is(block)
+                ? current.setValue(property, value)
+                : block.defaultBlockState().setValue(property, value);
+
+        level.setBlockAndUpdate(pos, next);
+    }
+
     @Override
     public void setBlockVariant(String blockId, int x, int y, int z, int variant) {
-        throw pending("set_block_variant");
+        if (variant < 0 || variant >= NeoForgeDeclarativeBlock.VARIANT_COUNT) {
+            throw new BridgeException("variante fora da faixa aceita: " + variant);
+        }
+        setBlockState(blockId, x, y, z, NeoForgeDeclarativeBlock.VARIANT, variant);
     }
 
     @Override
     public void setBlockProperty(String blockId, String property, float value) {
-        throw pending("set_block_property");
+        try {
+            requireDeclarativeBlock(blockId).setDynamicProperty(property, value);
+        } catch (IllegalArgumentException error) {
+            throw new BridgeException(error.getMessage(), error);
+        }
     }
 
     @Override
     public void setBlockLuminance(String blockId, int x, int y, int z, int luminance) {
-        throw pending("set_block_luminance");
+        if (luminance < 0 || luminance > 15) {
+            throw new BridgeException("luminancia fora da faixa aceita: " + luminance);
+        }
+        setBlockState(blockId, x, y, z, NeoForgeDeclarativeBlock.LUMINANCE, luminance);
     }
 
     // ------------------------------------------------------------------ feedback

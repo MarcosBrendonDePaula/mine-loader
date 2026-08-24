@@ -53,6 +53,12 @@ public class NeoForgeLuaLoader {
         NeoForge.EVENT_BUS.addListener(NeoForgeLuaLoader::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(NeoForgeLuaLoader::onServerStopping);
 
+        // As interacoes sao ligadas agora, mas leem o runtime por fornecedor: ele so nasce quando o
+        // servidor sobe, e ate la os ouvintes simplesmente nao tem o que disparar. Sem isto o
+        // conteudo declarado aparece no jogo e nao reage a nada -- clicar nao faz nada.
+        new NeoForgeInteractionEvents(() -> runtime, () -> bridge, content)
+                .register(NeoForge.EVENT_BUS);
+
 
         LOGGER.info("Adaptador NeoForge do Lua Loader carregado");
     }
