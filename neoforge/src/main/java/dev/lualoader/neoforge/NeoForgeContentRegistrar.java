@@ -149,9 +149,19 @@ public final class NeoForgeContentRegistrar {
                 // Um bloco so paga o custo de guardar dados quando o manifesto pede. Um
                 // inventario tambem mora na entidade, entao pedi-lo implica te-la.
                 boolean withData = definition.blockData || definition.inventory != null;
+
+                // A forma vem do nucleo, a mesma que gera o modelo desenhado: e o que impede um
+                // bloco de ter colisao de laje e aparencia de cubo.
+                var outline = NeoForgeShapes.declared(definition.shape,
+                        definition.shape == null ? null : definition.shape.outline);
+                var collision = NeoForgeShapes.declared(definition.shape,
+                        definition.shape == null ? null : definition.shape.collision);
+
                 Block block = withData
-                        ? new NeoForgeDeclarativeDataBlock(settingsOf(definition), values.luminance)
-                        : new NeoForgeDeclarativeBlock(settingsOf(definition), values.luminance);
+                        ? new NeoForgeDeclarativeDataBlock(
+                                settingsOf(definition), values.luminance, outline, collision)
+                        : new NeoForgeDeclarativeBlock(
+                                settingsOf(definition), values.luminance, outline, collision);
                 sink.accept(id, block);
 
                 blocks.put(id, block);

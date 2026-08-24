@@ -402,6 +402,29 @@ public final class ModLoader {
             require(RARITIES.contains(rarityOf(block.item.rarity)),
                     "rarity de item de bloco desconhecida: " + block.item.rarity);
         }
+        if (block.shape != null) {
+            for (String forma : new String[]{
+                    block.shape.collision, block.shape.outline, block.shape.visual}) {
+                if (forma == null || forma.isBlank()) continue;
+                require(dev.lualoader.content.BlockShapes.isKnown(forma),
+                        "forma desconhecida: " + forma + "; conhecidas: "
+                                + dev.lualoader.content.BlockShapes.names());
+            }
+
+            for (List<Float> caixa : block.shape.boxes) {
+                require(caixa != null && caixa.size() == 6,
+                        "cada caixa de shape.boxes precisa de seis numeros: x1,y1,z1,x2,y2,z2");
+                for (Float valor : caixa) {
+                    require(valor != null && valor >= 0 && valor <= 16,
+                            "coordenada de caixa fora do bloco (0 a 16): " + valor);
+                }
+                // Uma caixa invertida desenha do avesso: as faces apontam para dentro e a peca
+                // fica invisivel de fora, que e um defeito dificil de ligar a causa.
+                require(caixa.get(0) < caixa.get(3) && caixa.get(1) < caixa.get(4)
+                                && caixa.get(2) < caixa.get(5),
+                        "caixa invertida: cada coordenada final precisa ser maior que a inicial");
+            }
+        }
         if (block.inventory != null) {
             // O teto e o do bau grande, e nao um numero escolhido aqui: a janela do jogo desenha
             // ate seis fileiras de nove, e um inventario maior teria slots que ninguem alcanca.

@@ -47,12 +47,40 @@ public class NeoForgeDeclarativeBlock extends Block {
     private float dynamicSpeedFactor = Float.NaN;
     private float dynamicJumpFactor = Float.NaN;
 
+    /** Contorno e colisao declarados; nulos quando o bloco e um cubo inteiro. */
+    private final net.minecraft.world.phys.shapes.VoxelShape outline;
+    private final net.minecraft.world.phys.shapes.VoxelShape collision;
+
     public NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties, int declaredLuminance) {
+        this(properties, declaredLuminance, null, null);
+    }
+
+    public NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties, int declaredLuminance,
+                                    net.minecraft.world.phys.shapes.VoxelShape outline,
+                                    net.minecraft.world.phys.shapes.VoxelShape collision) {
         // A luz sai do estado, e nao do valor fixo: e o que permite um script acender um bloco so.
         super(properties.lightLevel(state -> state.getValue(LUMINANCE)));
         registerDefaultState(getStateDefinition().any()
                 .setValue(VARIANT, 0)
                 .setValue(LUMINANCE, Math.max(0, Math.min(15, declaredLuminance))));
+
+        this.outline = outline;
+        this.collision = collision;
+    }
+
+    @Override
+    protected net.minecraft.world.phys.shapes.VoxelShape getShape(
+            BlockState state, BlockGetter level, BlockPos pos,
+            net.minecraft.world.phys.shapes.CollisionContext context) {
+        return outline == null ? super.getShape(state, level, pos, context) : outline;
+    }
+
+    @Override
+    protected net.minecraft.world.phys.shapes.VoxelShape getCollisionShape(
+            BlockState state, BlockGetter level, BlockPos pos,
+            net.minecraft.world.phys.shapes.CollisionContext context) {
+        // Uma forma sem colisao, como uma planta, e representada por uma caixa vazia.
+        return collision == null ? super.getCollisionShape(state, level, pos, context) : collision;
     }
 
     @Override

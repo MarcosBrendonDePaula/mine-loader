@@ -62,12 +62,13 @@ public final class BlockRegistrar {
                 // Um bloco so paga o custo de guardar dados quando o manifesto pede. Um
                 // inventario tambem mora na entidade, entao pedi-lo implica te-la.
                 boolean withData = definition.blockData || definition.inventory != null;
-                var outline = definition.shape == null
-                        ? null
-                        : DeclarativeShapes.byName(definition.shape.outline);
-                var collision = definition.shape == null
-                        ? null
-                        : DeclarativeShapes.byName(definition.shape.collision);
+                // declared() em vez de byName(): caixas proprias no manifesto ganham do nome.
+                var outline = DeclarativeShapes.declared(
+                        definition.shape,
+                        definition.shape == null ? null : definition.shape.outline);
+                var collision = DeclarativeShapes.declared(
+                        definition.shape,
+                        definition.shape == null ? null : definition.shape.collision);
 
                 var settings = BlockSettingsFactory.create(definition);
                 if (withData) {

@@ -21,8 +21,10 @@ import org.jetbrains.annotations.Nullable;
  * de dados.
  */
 public class NeoForgeDeclarativeDataBlock extends NeoForgeDeclarativeBlock implements EntityBlock {
-    public NeoForgeDeclarativeDataBlock(BlockBehaviour.Properties properties, int declaredLuminance) {
-        super(properties, declaredLuminance);
+    public NeoForgeDeclarativeDataBlock(BlockBehaviour.Properties properties, int declaredLuminance,
+                                       net.minecraft.world.phys.shapes.VoxelShape outline,
+                                       net.minecraft.world.phys.shapes.VoxelShape collision) {
+        super(properties, declaredLuminance, outline, collision);
     }
 
     @Nullable

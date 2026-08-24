@@ -1,6 +1,7 @@
 package dev.lualoader.resources;
 
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.content.BlockShapes;
 import dev.lualoader.manifest.ModManifest;
 import org.slf4j.Logger;
 
@@ -440,7 +441,7 @@ public final class ResourcePackAssembler {
             String modelId = namespace + ":block/" + blockId + suffix;
             write(generatedRoot.resolve("assets").resolve(namespace)
                             .resolve("models/block").resolve(blockId + suffix + ".json"),
-                    "{\n  \"parent\": \"minecraft:block/cube_all\",\n  \"textures\": {\"all\": \"" + textureReference + "\"}\n}\n");
+                    blockModel(block, textureReference));
             models.put(variant, modelId);
         }
 
@@ -472,6 +473,105 @@ public final class ResourcePackAssembler {
         } catch (NumberFormatException error) {
             return -1;
         }
+    }
+
+    /**
+     * O modelo desenhado de um bloco, conforme a forma declarada.
+     *
+     * <p>Antes isto era sempre {@code cube_all}, e a forma declarada só mudava a colisão. O
+     * resultado era um bloco incoerente: uma laje com colisão de laje e aparência de cubo inteiro,
+     * em que o jogador via um bloco cheio e atravessava a metade de cima.
+     *
+     * <p>A forma visual sai de {@code shape.visual} quando declarada, e do contorno quando não —
+     * quem declarou só {@code outline} quis dizer qual é a silhueta do bloco, e desenhar diferente
+     * disso seria a mesma incoerência de antes com outro nome.
+     */
+    private String blockModel(ModManifest.BlockDefinition block, String texture) {
+        List<BlockShapes.Box> boxes = shapeOf(block);
+
+        // O cubo inteiro continua usando o modelo pronto do jogo: desenha-lo por caixas daria o
+        // mesmo desenho, mais caro de montar e sem o sombreamento de face que o cube_all traz.
+        if (BlockShapes.isFullCube(boxes)) {
+            return "{\n  \"parent\": \"minecraft:block/cube_all\",\n"
+                    + "  \"textures\": {\"all\": \"" + texture + "\"}\n}\n";
+        }
+
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        // Sem o parent de bloco a peca perderia a iluminacao ambiente e ficaria chapada.
+        json.append("  \"parent\": \"minecraft:block/block\",\n");
+        json.append("  \"textures\": {\n");
+        json.append("    \"all\": \"").append(texture).append("\",\n");
+        // O particle diz de que textura sai a poeira ao quebrar e ao andar por cima; sem ele o jogo
+        // usa a textura de bloco ausente e a poeira sai roxa.
+        json.append("    \"particle\": \"").append(texture).append("\"\n");
+        json.append("  },\n");
+        json.append("  \"elements\": [\n");
+
+        for (int index = 0; index < boxes.size(); index++) {
+            BlockShapes.Box box = boxes.get(index);
+            if (index > 0) json.append(",\n");
+            json.append("    {\n");
+            json.append("      \"from\": [").append(number(box.fromX())).append(", ")
+                    .append(number(box.fromY())).append(", ").append(number(box.fromZ())).append("],\n");
+            json.append("      \"to\": [").append(number(box.toX())).append(", ")
+                    .append(number(box.toY())).append(", ").append(number(box.toZ())).append("],\n");
+            json.append("      \"faces\": {\n");
+
+            String[] faces = {"down", "up", "north", "south", "west", "east"};
+            // Uma face so pode ser cortada pelo vizinho quando encosta na borda do bloco. Numa
+            // caixa interna -- o pe de uma mesa, que vai de 2 a 14 -- o cullface faria a face
+            // sumir assim que houvesse um bloco ao lado, e a peca ficaria oca sem motivo aparente.
+            boolean[] onEdge = {
+                    box.fromY() == 0, box.toY() == 16,
+                    box.fromZ() == 0, box.toZ() == 16,
+                    box.fromX() == 0, box.toX() == 16};
+
+            for (int face = 0; face < faces.length; face++) {
+                if (face > 0) json.append(",\n");
+                // uv ausente faz o jogo derivar do tamanho da caixa, que e o que se quer: a textura
+                // acompanha a peca em vez de esticar.
+                json.append("        \"").append(faces[face]).append("\": {\"texture\": \"#all\"");
+                if (onEdge[face]) {
+                    json.append(", \"cullface\": \"").append(faces[face]).append("\"");
+                }
+                json.append("}");
+            }
+            json.append("\n      }\n    }");
+        }
+
+        json.append("\n  ]\n}\n");
+        return json.toString();
+    }
+
+    /** As caixas da forma declarada, com aviso quando o nome não existe. */
+    private List<BlockShapes.Box> shapeOf(ModManifest.BlockDefinition block) {
+        if (block.shape == null) return BlockShapes.FULL_CUBE;
+
+        // Caixas proprias ganham do nome: quem as escreveu foi especifico de proposito.
+        List<BlockShapes.Box> declaredBoxes = BlockShapes.fromNumbers(block.shape.boxes);
+        if (declaredBoxes != null) return declaredBoxes;
+
+        // Sem visual declarado, a silhueta e a do contorno -- e nao o cubo inteiro. Um bloco que
+        // declara ser uma mesa para andar em cima precisa parecer uma mesa.
+        String declared = block.shape.visual != null && !block.shape.visual.isBlank()
+                ? block.shape.visual
+                : block.shape.outline;
+
+        List<BlockShapes.Box> boxes = BlockShapes.byName(declared);
+        if (boxes == null) {
+            logger.warn("Forma visual desconhecida em {}: {}; usando cubo inteiro. Conhecidas: {}",
+                    block.id, declared, BlockShapes.names());
+            return BlockShapes.FULL_CUBE;
+        }
+        return boxes;
+    }
+
+    /** Escreve um número sem o {@code .0} que o JSON de modelo não espera. */
+    private static String number(double value) {
+        return value == Math.floor(value)
+                ? String.valueOf((int) value)
+                : String.valueOf(value);
     }
 
     private static String fallbackTexture(ModManifest.BlockDefinition block) {

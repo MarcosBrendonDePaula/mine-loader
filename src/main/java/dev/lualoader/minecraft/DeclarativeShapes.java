@@ -1,5 +1,7 @@
 package dev.lualoader.minecraft;
 
+import dev.lualoader.content.BlockShapes;
+import dev.lualoader.manifest.ModManifest;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
@@ -9,7 +11,6 @@ import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 
-import java.util.Locale;
 
 /**
  * Formas de colisão e contorno para blocos que não são cubos inteiros.
@@ -25,32 +26,43 @@ public final class DeclarativeShapes {
     private DeclarativeShapes() {
     }
 
-    /** Devolve a forma correspondente ao nome declarado, ou {@code null} para cubo inteiro. */
+    /**
+     * Devolve a forma correspondente ao nome declarado, ou {@code null} para cubo inteiro.
+     *
+     * <p>As caixas vem do nucleo, e nao daqui: a mesma definicao alimenta o modelo desenhado no
+     * resource pack e a colisao das duas plataformas. Enquanto cada lado tinha a propria lista, uma
+     * laje podia ter colisao de laje e aparencia de cubo inteiro -- e tinha.
+     */
     public static VoxelShape byName(String name) {
-        if (name == null || name.isBlank()) return null;
-        return switch (name.trim().toLowerCase(Locale.ROOT)) {
-            case "full_cube" -> null;
-            case "slab", "slab_bottom" -> Block.createCuboidShape(0, 0, 0, 16, 8, 16);
-            case "slab_top" -> Block.createCuboidShape(0, 8, 0, 16, 16, 16);
-            case "carpet", "layer" -> Block.createCuboidShape(0, 0, 0, 16, 1, 16);
-            case "pane", "panel" -> Block.createCuboidShape(0, 0, 7, 16, 16, 9);
-            case "post", "pillar" -> Block.createCuboidShape(6, 0, 6, 10, 16, 10);
-            case "plate" -> Block.createCuboidShape(1, 0, 1, 15, 1, 15);
-            case "cross", "plant" -> Block.createCuboidShape(2, 0, 2, 14, 14, 14);
-            case "small" -> Block.createCuboidShape(4, 0, 4, 12, 12, 12);
-            case "table" -> VoxelShapes.combineAndSimplify(
-                    Block.createCuboidShape(0, 12, 0, 16, 16, 16),
-                    Block.createCuboidShape(2, 0, 2, 14, 12, 14),
-                    BooleanBiFunction.OR);
-            default -> null;
-        };
+        return fromBoxes(BlockShapes.byName(name));
+    }
+
+    /** Converte caixas do nucleo na forma do jogo. */
+    public static VoxelShape fromBoxes(java.util.List<BlockShapes.Box> boxes) {
+        if (boxes == null || BlockShapes.isFullCube(boxes)) return null;
+
+        VoxelShape combined = null;
+        for (BlockShapes.Box box : boxes) {
+            VoxelShape part = Block.createCuboidShape(
+                    box.fromX(), box.fromY(), box.fromZ(), box.toX(), box.toY(), box.toZ());
+            combined = combined == null
+                    ? part
+                    : VoxelShapes.combineAndSimplify(combined, part, BooleanBiFunction.OR);
+        }
+        return combined;
+    }
+
+    /** A forma declarada de um bloco, ja considerando caixas proprias. */
+    public static VoxelShape declared(ModManifest.ShapeDefinition shape, String name) {
+        if (shape == null) return null;
+
+        java.util.List<BlockShapes.Box> proprias = BlockShapes.fromNumbers(shape.boxes);
+        return proprias != null ? fromBoxes(proprias) : byName(name);
     }
 
     /** Indica se o nome descreve uma forma conhecida diferente do cubo inteiro. */
     public static boolean isKnown(String name) {
-        if (name == null || name.isBlank()) return true;
-        String key = name.trim().toLowerCase(Locale.ROOT);
-        return key.equals("full_cube") || byName(key) != null;
+        return BlockShapes.isKnown(name);
     }
 
     /** Bloco declarativo com forma própria. */

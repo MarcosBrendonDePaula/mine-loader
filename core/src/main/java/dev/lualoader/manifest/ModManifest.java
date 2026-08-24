@@ -143,8 +143,19 @@ public final class ModManifest {
     public static final class ShapeDefinition {
         public String collision = "full_cube";
         public String outline = "full_cube";
-        public String visual = "full_cube";
+        /**
+         * A silhueta desenhada. Nulo por padrao, e nao "full_cube": e o que permite herdar o
+         * contorno quando so ele foi declarado. Um bloco que diz ser uma mesa para andar em cima
+         * precisa parecer uma mesa, e exigir a repeticao do nome so multiplicaria a chance de os
+         * dois divergirem.
+         */
+        public String visual;
         public boolean dynamic = false;
+        /**
+         * Caixas proprias, cada uma como {@code [x1, y1, z1, x2, y2, z2]} em unidades de bloco.
+         *
+         * <p>Para o que os nomes prontos nao cobrem. Quando presente, tem prioridade sobre o nome.
+         */
         public List<List<Float>> boxes = new ArrayList<>();
     }
 

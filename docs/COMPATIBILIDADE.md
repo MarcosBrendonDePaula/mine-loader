@@ -51,10 +51,10 @@ núcleo não conhecer Minecraft.
 | **Inventário de bloco** (`inventory`) | sim | sim | |
 | Variantes visuais (`render.variant_textures`) | sim | sim | |
 | **Estados declarados** (`state.properties`) | sim | **não** | Só muda no Fabric |
-| **Formas de colisão** (`shape`) | sim | **não** | Idem |
-| **Posicionamento** (`placement`: facing, waterlog) | sim | **não** | Idem |
-| **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | **não** | Idem |
-| Modelos não cúbicos | **não** | **não** | Forma só muda colisão; tudo desenha como cubo |
+| Formas de colisão (`shape`) | sim | sim | Nomes prontos ou caixas próprias em `shape.boxes` |
+| **Posicionamento** (`placement`: facing, waterlog) | sim | **não** | Só muda no Fabric |
+| **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | **não** | Só muda no Fabric |
+| Modelos não cúbicos | sim | sim | O modelo sai da mesma forma que a colisão, gerada no núcleo |
 
 ## Eventos
 
