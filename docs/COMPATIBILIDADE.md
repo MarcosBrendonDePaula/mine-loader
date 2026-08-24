@@ -102,7 +102,7 @@ isso as colunas têm quem as verifique:
 |---|---|---|
 | `./gradlew :core:test` | o que é agnóstico: manifesto, validação, geometria de tela, runtime Lua | n/a — é o núcleo |
 | `./gradlew runGametest` e `:neoforge:runGameTestServer` | registro, propriedades de bloco, entidade de bloco, NBT, num servidor de verdade | sim, e ambos no CI |
-| `/mod autoteste` | as APIs contra o jogo real, 26 casos | sim, pelo mesmo Lua |
+| `/mod autoteste` | as APIs contra o jogo real | sim, pelo mesmo Lua |
 
 O `autoteste` é o que mais pega divergência, porque é o **mesmo script** rodando dos dois lados: uma
 plataforma que faz diferente reporta FALHOU onde a outra reporta OK. Foi assim que se descobriu que
