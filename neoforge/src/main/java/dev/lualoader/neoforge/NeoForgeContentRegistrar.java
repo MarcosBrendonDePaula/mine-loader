@@ -90,11 +90,7 @@ public final class NeoForgeContentRegistrar {
                 // O pack descreve o bloco por variante, e um bloco sem a propriedade nao casa com
                 // nenhuma: o jogo procura a variante sem propriedades, nao acha, e desenha o cubo
                 // de textura ausente -- os quadrados roxos e pretos.
-                int variants = definition.render == null || definition.render.variantTextures == null
-                        ? 1
-                        : Math.max(1, definition.render.variantTextures.size());
-
-                Block block = NeoForgeDeclarativeBlock.create(settingsOf(definition), variants);
+                Block block = new NeoForgeDeclarativeBlock(settingsOf(definition));
                 sink.accept(id, block);
 
                 blocks.put(id, block);

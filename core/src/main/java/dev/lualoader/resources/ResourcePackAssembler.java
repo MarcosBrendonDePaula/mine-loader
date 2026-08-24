@@ -32,9 +32,39 @@ public final class ResourcePackAssembler {
         this.remoteResources = new RemoteResourceManager(cacheDirectory);
     }
 
+    /**
+     * Versao de formato do pack, para a versao de Minecraft alvo.
+     *
+     * <p>Um pack sem formato declarado nao e reconhecido como pack: o jogo le os arquivos que
+     * consegue e nao carrega textura nenhuma, o que aparece como o cubo roxo e preto de recurso
+     * ausente.
+     */
+    private static final int PACK_FORMAT = 34;
+
+    /**
+     * Escreve o {@code pack.mcmeta} na raiz.
+     *
+     * <p>O adaptador Fabric funcionava sem o arquivo porque fornece a metadata em codigo. Um
+     * adaptador que aponte para a pasta -- como o NeoForge faz -- precisa encontra-la escrita, e
+     * gerar aqui serve aos dois sem cada um repetir a mesma decisao.
+     */
+    private void writePackMetadata(Path generatedRoot) throws IOException {
+        String conteudo = "{" + NEWLINE
+                + "  " + QUOTE + "pack" + QUOTE + ": {" + NEWLINE
+                + "    " + QUOTE + "pack_format" + QUOTE + ": " + PACK_FORMAT + "," + NEWLINE
+                + "    " + QUOTE + "description" + QUOTE + ": "
+                + QUOTE + "Recursos gerados pelos mods Lua" + QUOTE + NEWLINE
+                + "  }" + NEWLINE
+                + "}" + NEWLINE;
+
+        Files.writeString(generatedRoot.resolve("pack.mcmeta"), conteudo,
+                java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     public void assemble(List<ModLoader.LoadedMod> mods, Path generatedRoot) throws IOException {
         deleteContents(generatedRoot);
         Files.createDirectories(generatedRoot);
+        writePackMetadata(generatedRoot);
 
         // Tags de vários mods podem apontar para a mesma tag vanilla; são acumuladas e
         // escritas uma única vez no fim.

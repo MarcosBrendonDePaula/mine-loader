@@ -9,69 +9,30 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 /**
  * Bloco declarado por manifesto, com a variante visual que o resource pack espera.
  *
- * <p>O pack gerado descreve o bloco por variante — {@code lua_variant=0}, {@code lua_variant=1} — e
- * um bloco sem essa propriedade não casa com nenhuma delas: o jogo procura a variante sem
- * propriedades, não encontra, e desenha o cubo de textura ausente. Declarar a propriedade é o que
- * liga o bloco registrado ao desenho gerado.
+ * <p>O pack gerado descreve o bloco por variante — {@code lua_variant=0} até {@code lua_variant=15}
+ * — e um bloco sem essa propriedade não casa com nenhuma delas: o jogo procura a variante sem
+ * propriedades, não encontra, e desenha o cubo de textura ausente.
  *
- * <p>A propriedade existe mesmo quando o manifesto declara uma variante só, porque o pack sempre
- * escreve o blockstate na forma com variante — e um formato só é mais simples de gerar e de ler que
- * dois.
+ * <p>A faixa é fixa em 16 porque é o que o montador do pack sempre escreve, mesmo quando o mod
+ * declara uma textura só — as variantes sobrando apontam todas para o primeiro modelo. Uma faixa
+ * que acompanhasse a contagem declarada teria dois problemas: não casaria com o blockstate gerado,
+ * e com uma textura só produziria uma propriedade de um valor único, que o jogo recusa.
  */
 public class NeoForgeDeclarativeBlock extends Block {
-    /** Quantas variantes o jogo aceita por bloco. */
-    public static final int MAX_VARIANTS = 16;
+    /** Quantas variantes o pack descreve, e portanto quantas o bloco precisa aceitar. */
+    public static final int VARIANT_COUNT = 16;
 
-    /**
-     * A propriedade de variante, uma por contagem possível.
-     *
-     * <p>Precisa ser criada antes do construtor rodar, porque {@code createBlockStateDefinition} é
-     * chamado de dentro dele — e um campo de instância ainda não existe nesse momento. Guardar uma
-     * propriedade pronta por contagem resolve sem depender de estado temporário.
-     */
-    private static final IntegerProperty[] VARIANTS = new IntegerProperty[MAX_VARIANTS + 1];
+    /** A variante visual, na mesma faixa que o resource pack gera. */
+    public static final IntegerProperty VARIANT =
+            IntegerProperty.create("lua_variant", 0, VARIANT_COUNT - 1);
 
-    static {
-        for (int count = 1; count <= MAX_VARIANTS; count++) {
-            VARIANTS[count] = IntegerProperty.create("lua_variant", 0, count - 1);
-        }
-    }
-
-    private final int variantCount;
-
-    /** A propriedade em construção, lida por {@code createBlockStateDefinition}. */
-    private static final ThreadLocal<Integer> BUILDING = ThreadLocal.withInitial(() -> 1);
-
-    public static Block create(BlockBehaviour.Properties properties, int variantCount) {
-        int count = Math.max(1, Math.min(MAX_VARIANTS, variantCount));
-        BUILDING.set(count);
-        try {
-            return new NeoForgeDeclarativeBlock(properties, count);
-        } finally {
-            BUILDING.remove();
-        }
-    }
-
-    protected NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties, int variantCount) {
+    public NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        this.variantCount = variantCount;
-        registerDefaultState(getStateDefinition().any().setValue(variant(variantCount), 0));
-    }
-
-    /** A propriedade de variante para uma contagem. */
-    public static IntegerProperty variant(int count) {
-        return VARIANTS[Math.max(1, Math.min(MAX_VARIANTS, count))];
-    }
-
-    /** Quantas variantes este bloco tem. */
-    public int variantCount() {
-        return variantCount;
+        registerDefaultState(getStateDefinition().any().setValue(VARIANT, 0));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        // Roda de dentro do construtor de Block, antes de o campo de instância existir: por isso a
-        // contagem vem do valor em construção, e não de this.variantCount.
-        builder.add(variant(BUILDING.get()));
+        builder.add(VARIANT);
     }
 }
