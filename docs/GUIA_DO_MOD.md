@@ -86,6 +86,78 @@ ctx.server.apply_to_entity(uuid, { name = "Renomeado", glowing = true })
 `apply_to_entity` aceita a mesma tabela de `spawn_entity`. Sem ela, os dados declarados so valiam no
 instante do nascimento.
 
+Mover uma criatura sem mata-la e cria-la de novo -- o que perderia nome, vida, equipamento e a
+domesticacao:
+
+```lua
+ctx.server.teleport_entity(uuid, x, y, z)   -- aparece na hora, mantendo os angulos
+ctx.server.push_entity(uuid, 0.4, 0.3, 0)   -- empurra: o jogo resolve colisao e queda
+```
+
+E ler o lugar antes de decidir:
+
+```lua
+local bioma = ctx.server.biome_at(x, y, z)  -- "minecraft:desert"
+local luz = ctx.server.light_at(x, y, z)    -- { block, sky, total, dark_enough_for_monster }
+```
+
+A luz vem separada por origem porque e a de **bloco** que decide se um monstro nasce ali. Um lugar
+iluminado so pelo sol tem quinze de total ao meio-dia e continua escuro a noite: um mod que olhasse
+o total erraria todo dia.
+
+## Reagir ao que acontece com as criaturas
+
+```lua
+-- no mod.json: "events": { "entity_died": "on_entity_died" }
+local function on_entity_died(ctx)
+    if ctx.entity.id == "minecraft:zombie" and ctx.entity.source_name then
+        ctx.log.info(ctx.entity.source_name .. " matou um zumbi")
+    end
+end
+```
+
+Sao quatro: `entity_spawned`, `entity_damaged`, `entity_died` e `entity_tamed`. Valem para
+**qualquer** criatura do mundo, e nao so para as que o seu mod declarou -- e filtrar por
+`ctx.entity.id` e decisao sua. So `entity_damaged` aceita cancelamento: devolver `false` impede o
+dano.
+
+O `ctx.entity` e uma fotografia do instante, com valores e nao funcoes: no momento da morte,
+perguntar a vida ao mundo ja responderia zero. Ver `EVENTS.md` para a lista de campos.
+
+## Criar uma especie propria
+
+Uma criatura nova e declarada no `mod.json`, derivando de uma do jogo. A base entrega modelo,
+animacao e comportamento; voce declara so o que muda:
+
+```json
+"entities": [
+  {
+    "id": "guardiao",
+    "name": "Guardiao de Cristal",
+    "base": "minecraft:iron_golem",
+    "defaults": { "health": 60.0 },
+    "loot": { "drops": [ { "item": "meu_mod:fragmento", "min": 2, "max": 5 } ] },
+    "spawn_egg": { "name": "Ovo de Guardiao" }
+  }
+]
+```
+
+Isso ja basta: a criatura existe, tem vida propria, cai o que voce declarou e ganha um ovo na aba do
+criativo. A partir dai da para trocar a pele (`texture`), dar forma propria (`model`), declarar
+comportamento (`ai`) e fazer nascer sozinha no mundo (`spawn`).
+
+Uma especie pode herdar de outra, inclusive de outro mod -- e como um pacote de dificuldade
+acrescenta um chefe sem repetir o bestiario:
+
+```json
+{ "id": "elite", "name": "Guardiao de Elite",
+  "base": "outro_mod:guardiao", "defaults": { "health": 120.0 } }
+```
+
+E quando o bestiario precisa ser **gerado** -- dez variantes de uma formula, em vez de dez blocos de
+JSON quase iguais --, ha a fase de registro: um script proprio, declarado em `registration`, que
+roda antes de o jogo congelar os registros. Ver `MOD_FORMAT_SPEC.md` e o exemplo `bestiario`.
+
 ## O jogador
 
 ```lua
@@ -263,6 +335,7 @@ declarar a permissão dela é erro em tempo de execução.
 | `server.command.register` | Registrar comandos |
 | `server.install` | Instalar e desinstalar mods por link — veja `INSTALACAO.md` |
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
+| `entity.register` | Declarar espécie nova por script. Mais forte que as três acima: acrescenta um tipo ao registro do jogo, que vale para o mundo inteiro e não se desfaz sem reiniciar |
 
 ## Guardar informação
 

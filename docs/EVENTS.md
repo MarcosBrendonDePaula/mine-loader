@@ -81,6 +81,55 @@ conexão por isso seria transformar diferença de versão em falha.
 | `on_neighbor_update` | `block_neighbor_update` |
 | `on_break` | apelido antigo de `on_attack`, ainda aceito |
 
+### De criatura
+
+| Evento | Quando dispara | Cancelável |
+|---|---|---|
+| `entity_spawned` | Uma criatura entra no mundo | não |
+| `entity_damaged` | Uma criatura vai apanhar | **sim** |
+| `entity_died` | Uma criatura morreu | não |
+| `entity_tamed` | Uma criatura foi domesticada | não |
+
+**Valem para qualquer criatura do mundo, e não só para as que o loader declarou.** É o que os torna
+úteis: um mod de combate reage ao zumbi do jogo. Filtrar por tipo é decisão de quem escreve o mod —
+`ctx.entity.id` traz o tipo.
+
+O jogador não dispara nenhum deles. Anunciar a entrada de quem joga como "uma criatura nasceu" faria
+todo mod de combate contar jogador como bicho.
+
+O contexto traz `ctx.entity` com uma **fotografia** do instante:
+
+| Campo | O quê |
+|---|---|
+| `uuid`, `id` | identificador no mundo e tipo |
+| `x`, `y`, `z` | onde estava |
+| `health`, `max_health` | vida no momento do evento, antes do que ele causa |
+| `name` | nome personalizado, quando há |
+| `amount` | dano envolvido, em `entity_damaged` |
+| `source` | como o dano chegou, no vocabulário do jogo |
+| `source_uuid`, `source_name` | quem causou, quando houve quem |
+
+São valores, e não funções, porque o adaptador resolve tudo antes de disparar. No instante da morte,
+perguntar a vida ao mundo já responderia zero, e um script que consultasse depois chegaria sempre
+tarde demais. Os campos de origem só aparecem quando houve uma: um bicho que morreu de queda não tem
+quem o matou, e um campo vazio ali faria o script tratar "ninguém" como um nome.
+
+Só `entity_damaged` aceita cancelamento: devolver `false` impede o dano. Os outros são avisos do que
+já aconteceu, e o retorno deles não muda nada.
+
+### Da fase de registro
+
+| Evento | Quando dispara |
+|---|---|
+| `on_register` | Antes de o jogo congelar os registros |
+
+Declarado em `registration`, e aponta um **arquivo** `.lua`, como o `behavior` de um bloco — não uma
+função do entrypoint. Carregar o `main.lua` aqui faria o topo dele executar duas vezes.
+
+É uma fase, e não um evento comum: aqui não há servidor, jogador nem bloco para tocar, porque o
+mundo ainda não existe. O contexto é pequeno de propósito — `ctx.log`, `ctx.register` e `ctx.mod_id`
+—, já que oferecer o resto seria oferecer chamadas que só podem falhar. Ver `MOD_FORMAT_SPEC.md`.
+
 ### Por janela
 
 Uma janela registra a própria lógica com `mod.menu(id, funcao)`. O callback recebe `ctx.menu` com o

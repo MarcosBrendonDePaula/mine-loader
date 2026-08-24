@@ -90,7 +90,7 @@ diferente do loader.
 | Exemplo | O que demonstra |
 |---|---|
 | `hello_lua` | Bloco declarativo com variantes, textura local e propriedades dinâmicas |
-| `crystal_world` | Estruturas, dados por bloco e aba criativa |
+| `crystal_world` | Estruturas, dados por bloco, aba criativa e uma **espécie declarada** com forma, pele, saque e comportamento próprios |
 | `github_mod` | Mod remoto: manifesto e scripts baixados por URL |
 | `guilda` | Estado persistido, comandos próprios e menu de itens |
 | `loja` | Inventário do jogador: dar, tirar e contar itens |
@@ -101,6 +101,7 @@ diferente do loader.
 | `autoteste` | Exercita as APIs dentro do jogo e reporta OK ou FALHOU por verificação |
 | `ferraria` | Ferramentas e armaduras declaradas no manifesto, sem uma linha de Java |
 | `gerenciador` | Lista os mods do loader numa tela e instala novos por link |
+| `bestiario` | Espécie declarada por script: gera variantes num laço e herda a de outro mod |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
