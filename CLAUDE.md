@@ -110,8 +110,9 @@ introduza operação que bloqueie — rede, disco síncrono — dentro de um cal
 ## Testes
 
 `core/src/test/` roda sem Minecraft, com `TestBridge` e `TestPlayer` no lugar da plataforma — é onde
-quase toda lógica é verificável. `src/main/java/dev/lualoader/gametest/` sobe um servidor de verdade
-para o que depende do jogo.
+quase toda lógica é verificável. `TestBridge` é abstrata de propósito: ela obriga cada teste a dizer
+o que precisa, para um contrato novo não passar despercebido por um dublê que responde a tudo.
+`src/main/java/dev/lualoader/gametest/` sobe um servidor de verdade para o que depende do jogo.
 
 Alguns testes carregam mods de `examples/` em tempo de execução — `catalogExampleRunsEndToEnd` e os
 outros que citam `Path.of("..", "examples", ...)`. Eles percorrem o fluxo inteiro de um mod real, e

@@ -79,6 +79,23 @@ public abstract class TestBridge implements GameBridge {
         blockData.put(x + "," + y + "," + z, json);
     }
 
+    /** O bioma que o teste quer que o mundo responda. */
+    public String biome = "minecraft:plains";
+
+    @Override
+    public String biomeAt(int x, int y, int z) {
+        return biome;
+    }
+
+    /** Luz de bloco e do ceu, para o teste montar noite e caverna sem um mundo. */
+    public int blockLight = 0;
+    public int skyLight = 15;
+
+    @Override
+    public int lightAt(int x, int y, int z, boolean sky) {
+        return sky ? skyLight : blockLight;
+    }
+
     @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
         return spawnEntity(entityId, x, y, z, EntitySpec.EMPTY);
@@ -106,6 +123,36 @@ public abstract class TestBridge implements GameBridge {
     @Override
     public boolean damageEntity(String entityUuid, float amount) {
         return false;
+    }
+
+    /** Onde cada entidade foi parar, para o teste conferir sem um mundo. */
+    public final java.util.Map<String, double[]> entityPositions = new java.util.HashMap<>();
+
+    @Override
+    public boolean teleportEntity(String uuid, double x, double y, double z) {
+        entityPositions.put(uuid, new double[]{x, y, z});
+        return true;
+    }
+
+    @Override
+    public boolean pushEntity(String uuid, double x, double y, double z) {
+        double[] current = entityPositions.getOrDefault(uuid, new double[]{0, 0, 0});
+        entityPositions.put(uuid, new double[]{current[0] + x, current[1] + y, current[2] + z});
+        return true;
+    }
+
+    /** As especies registradas, na ordem em que chegaram. */
+    private final java.util.Map<String, EntityDefinition> declared =
+            new java.util.LinkedHashMap<>();
+
+    @Override
+    public java.util.List<String> declaredEntities() {
+        return java.util.List.copyOf(declared.keySet());
+    }
+
+    @Override
+    public EntityDefinition declaredEntity(String id) {
+        return declared.get(id);
     }
 
     /** Itens que o "jogo" desta bridge conhece. */

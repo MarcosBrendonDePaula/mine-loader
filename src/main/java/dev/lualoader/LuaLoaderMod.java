@@ -6,6 +6,7 @@ import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.minecraft.BlockInteractionEvents;
 import dev.lualoader.minecraft.BlockRegistrar;
 import dev.lualoader.minecraft.ContentRegistrar;
+import dev.lualoader.minecraft.EntityRegistrar;
 import dev.lualoader.minecraft.FabricGameBridge;
 import dev.lualoader.minecraft.FabricPlayerHandle;
 import dev.lualoader.resources.GeneratedResourcePackProvider;
@@ -33,6 +34,9 @@ public final class LuaLoaderMod implements ModInitializer {
     private static ResourcePackAssembler resourcePackAssembler;
     private static FabricGameBridge gameBridge;
     private static ContentRegistrar contentRegistrar;
+
+    /** As especies declaradas. Publico para o cliente conferir a cobertura. */
+    private static EntityRegistrar entityRegistrar;
     private static dev.lualoader.install.ModInstaller modInstaller;
     private static dev.lualoader.install.InstallPolicy installPolicy;
 
@@ -48,6 +52,7 @@ public final class LuaLoaderMod implements ModInitializer {
         ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"));
         blockRegistrar = new BlockRegistrar(LOGGER);
         contentRegistrar = new ContentRegistrar(LOGGER);
+        entityRegistrar = new EntityRegistrar(LOGGER);
         luaRuntime = new LuaRuntime(LOGGER, resourceCache.resolve("scripts"),
                 gameDirectory.resolve("lua-loader/state"));
         gameBridge = new FabricGameBridge(blockRegistrar);
@@ -71,6 +76,13 @@ public final class LuaLoaderMod implements ModInitializer {
             if (dependencies.changedAnything()) {
                 loadedMods = manifestLoader.discover(modsDirectory);
             }
+            // A fase de registro vem antes de montar o pacote, e nao depois: o que um script
+            // declara entra no manifesto em memoria, e a partir dali precisa passar pelo montador
+            // como qualquer outra especie. Montar antes deixava o ovo gerado sem icone -- defeito
+            // que nenhum teste de servidor pega, porque o item existe e funciona.
+            new dev.lualoader.lua.RegistrationRuntime(LOGGER, resourceCache.resolve("registro"))
+                    .runAll(loadedMods);
+
             resourcePackAssembler.assemble(loadedMods, generatedPack);
             GeneratedResourcePackProvider.setRoot(generatedPack);
 
@@ -80,6 +92,16 @@ public final class LuaLoaderMod implements ModInitializer {
                 blockRegistrar.register(mod.manifest());
                 contentRegistrar.registerItems(mod.manifest());
             }
+
+            // As especies vem depois do laco, e nao dentro dele: uma pode descender da especie
+            // declarada por outro mod, e a ordem de descoberta nao e a ordem de heranca.
+            entityRegistrar.registerAll(loadedMods);
+
+            // O nascimento natural vem depois do registro dos tipos, porque precisa deles: um
+            // modificador que aponta para um tipo inexistente e descartado quando o bioma e
+            // montado, sem erro nenhum.
+            dev.lualoader.minecraft.NaturalSpawns.register(LOGGER, entityRegistrar, loadedMods);
+
             // O tipo de dados precisa conhecer todos os blocos, entao vem depois do registro deles.
             dev.lualoader.minecraft.BlockEntityRegistrar.register(LOGGER, blockRegistrar.dataBlocks());
 
@@ -90,8 +112,12 @@ public final class LuaLoaderMod implements ModInitializer {
 
             // A aba criativa so pode ser montada depois que blocos e itens existem no registry.
             for (ModLoader.LoadedMod mod : loadedMods) {
-                contentRegistrar.registerCreativeTab(mod.manifest(),
-                        blockRegistrar.blockItems(mod.manifest().id));
+                java.util.List<net.minecraft.util.Identifier> tabContents =
+                        new java.util.ArrayList<>(blockRegistrar.blockItems(mod.manifest().id));
+                // Sem o ovo na aba, uma especie declarada so chega ao mundo por comando -- e o
+                // criativo e como quase todo mod e experimentado primeiro.
+                tabContents.addAll(entityRegistrar.spawnEggs(mod.manifest().id));
+                contentRegistrar.registerCreativeTab(mod.manifest(), tabContents);
             }
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {
@@ -102,6 +128,10 @@ public final class LuaLoaderMod implements ModInitializer {
             }
             LOGGER.info("Minecraft Lua Loader inicializado: {} mod(s), {} bloco(s)",
                     loadedMods.size(), blockRegistrar.registeredBlocks().size());
+
+            // A partir daqui o jogo congela os registros. Fechar aqui faz um registro tardio ser
+            // recusado com o motivo, em vez de aceito e perdido.
+            entityRegistrar.close();
             luaRuntime.triggerAll("loader_ready", null);
         } catch (IOException | RuntimeException error) {
             LOGGER.error("Não foi possível inicializar os mods Lua", error);
@@ -127,6 +157,15 @@ public final class LuaLoaderMod implements ModInitializer {
                 currentServer.getCommandManager().sendCommandTree(player);
             }
         });
+        // O que a especie declara como padrao vale ao nascer, e nao ao registrar. Vem por evento
+        // porque o tipo e construido pelo jogo, sem passar pelo loader.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register(
+                (entity, world) -> entityRegistrar.applyDeclaredDefaults(entity));
+
+        // Os eventos de criatura valem para o mundo inteiro, e nao so para o que o loader
+        // declarou: e o que permite um mod de combate reagir ao zumbi do jogo.
+        new dev.lualoader.minecraft.EntityEvents(luaRuntime).register();
+
         new BlockInteractionEvents(luaRuntime, blockRegistrar).register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             currentServer = server;
@@ -193,6 +232,10 @@ public final class LuaLoaderMod implements ModInitializer {
 
     public static ContentRegistrar contentRegistrar() {
         return contentRegistrar;
+    }
+
+    public static EntityRegistrar entityRegistrar() {
+        return entityRegistrar;
     }
 
     public static BlockRegistrar blockRegistrar() {

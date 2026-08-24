@@ -93,7 +93,9 @@ As quatorze permissões: `chat.send`, `server.read`, `server.command.register`, 
 - [ ] Comida — saturação, tempo de consumo, efeito ao comer
 - [ ] Combustível e tempo de queima
 - [ ] Tipo de receita próprio, com regras de processamento novas
-- [ ] Entidade — espécie própria, com modelo, animação e comportamento
+- [x] Entidade — espécie própria derivada de uma do jogo (`entities`), nas duas plataformas
+- [x] Entidade — forma própria (`model`), animada pela base
+- [ ] Entidade — animação e comportamento próprios
 - [ ] Fluido
 - [ ] Bioma
 - [ ] Dimensão
@@ -111,7 +113,7 @@ As quatorze permissões: `chat.send`, `server.read`, `server.command.register`, 
 - [ ] Minério declarado que nasce no terreno
 - [ ] Feature de superfície — árvore, arbusto, formação
 - [ ] Estrutura colocada pelo gerador (hoje só via `place_structure` chamado por script)
-- [ ] Regra de spawn de mob por bioma
+- [x] Regra de spawn de mob por bioma (`entities[].spawn`)
 - [ ] Alteração de terreno declarada
 
 Nenhum item desta subseção existe. É o bloco mais coeso de tudo que falta, e o único cuja ausência
@@ -197,7 +199,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Remover, causar dano, curar
 - [x] Aplicar efeito a uma entidade
 - [x] `EntitySpec.variant` — cavalo, nas duas plataformas
-- [ ] Mover ou teleportar entidade
+- [x] Mover ou teleportar entidade (`teleport_entity`, `push_entity`)
 - [ ] Ler e escrever NBT arbitrário
 - [ ] Definir alvo ou comportamento de IA
 - [ ] Montar e desmontar passageiro
@@ -217,7 +219,8 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [ ] `mod_reloaded` — aceito no registro, **nunca disparado em plataforma nenhuma**
 - [ ] `menu_closed` — aceito no registro, **nunca disparado em plataforma nenhuma**
 - [ ] `onPlace` — campo do manifesto registrado e nunca disparado
-- [ ] **Entidade: morte, dano, nascimento, ataque, domesticação** — nenhum existe
+- [x] **Entidade: nascimento, dano, morte, domesticação** — `entity_spawned`, `entity_damaged`, `entity_died`, `entity_tamed`
+- [ ] Entidade: ataque como evento próprio
 - [ ] **Jogador: morte, renascimento, ataque, dano recebido**
 - [ ] Jogador: mudou de dimensão, dormiu, pegou item, subiu de nível
 - [ ] Item: craftado, fundido, consumido, quebrou
@@ -557,8 +560,8 @@ pedaço deste nível que está pronto.
 - [ ] Minério no terreno
 - [ ] Feature de superfície
 - [ ] Estrutura no gerador
-- [ ] Ler bioma e nível de luz
-- [ ] Regra de spawn por bioma
+- [x] Ler bioma e nível de luz (`biome_at`, `light_at`)
+- [x] Regra de spawn por bioma
 
 **Prova:** um minério declarado encontrado ao cavar num mundo novo.
 
@@ -568,7 +571,8 @@ possível, e é o gênero mais popular.
 ### Nível 7 — Vida própria → destrava *mob* e *dimensão*
 
 - [ ] Registro de entidade própria
-- [ ] Modelo e animação de entidade
+- [x] Modelo de entidade (ossos e caixas declarados)
+- [ ] Animação de entidade
 - [ ] Comportamento de IA declarado
 - [ ] Fluido
 - [ ] Bioma

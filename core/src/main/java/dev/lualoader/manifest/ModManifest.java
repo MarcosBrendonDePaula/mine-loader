@@ -2,6 +2,8 @@ package dev.lualoader.manifest;
 
 import com.google.gson.annotations.SerializedName;
 
+import dev.lualoader.platform.EntityDefinition;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,8 +20,20 @@ public final class ModManifest {
     public List<String> authors = new ArrayList<>();
     public List<String> permissions = new ArrayList<>();
     public Map<String, String> events = new LinkedHashMap<>();
+    /**
+     * Scripts da fase de registro, no formato {@code evento -> arquivo .lua}.
+     *
+     * <p>Aponta um arquivo, como o {@code behavior} de um bloco, e nao uma funcao do entrypoint:
+     * esta fase acontece antes de o jogo congelar os registros, e carregar o {@code main.lua} aqui
+     * faria o topo dele executar duas vezes.
+     */
+    public Map<String, String> registration = new LinkedHashMap<>();
+
+    /** Fixa a versao dos scripts remotos de {@link #registration}. Opcional. */
+    public String registrationSha256;
     public List<BlockDefinition> blocks = new ArrayList<>();
     public List<ItemEntryDefinition> items = new ArrayList<>();
+    public List<EntityDefinition> entities = new ArrayList<>();
     public CreativeTabDefinition creativeTab;
     /** Recursos nomeados do mod, referenciados no resto do manifesto por {@code "@nome"}. */
     public Map<String, ResourceDefinition> resources = new LinkedHashMap<>();

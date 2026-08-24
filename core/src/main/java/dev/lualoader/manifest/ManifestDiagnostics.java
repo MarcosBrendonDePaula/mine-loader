@@ -34,7 +34,12 @@ public final class ManifestDiagnostics {
     /** Lista, legível e ordenada, dos campos declarados que não têm efeito. */
     public List<String> collectIgnored(ModManifest manifest) {
         List<String> ignored = new ArrayList<>();
-        if (manifest.blocks == null) return ignored;
+        collectIgnoredBlocks(manifest, ignored);
+        return ignored;
+    }
+
+    private void collectIgnoredBlocks(ModManifest manifest, List<String> ignored) {
+        if (manifest.blocks == null) return;
 
         for (ModManifest.BlockDefinition block : manifest.blocks) {
             if (block == null) continue;
@@ -99,7 +104,6 @@ public final class ManifestDiagnostics {
                 addIfPresent(ignored, prefix + "render.tint", render.tint);
             }
         }
-        return ignored;
     }
 
     private static void addIfPresent(List<String> ignored, String field, String value) {
@@ -120,5 +124,4 @@ public final class ManifestDiagnostics {
                     + "; conhecidas: " + dev.lualoader.content.BlockShapes.names());
         }
     }
-
 }

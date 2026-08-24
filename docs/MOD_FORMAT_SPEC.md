@@ -309,6 +309,273 @@ O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id`
 | `fire_resistant` | booleano | Item nao queima no lava/fogo. |
 | `texture` | objeto de textura | Sem `path`, o loader usa `fallback`. |
 
+## Especies declaradas
+
+O campo `entities` declara uma especie propria, **derivada de uma do jogo**. Cada especie exige
+`id`, `name` e `base`.
+
+A base nao e conveniencia: uma criatura viva e modelo, animacao e comportamento, tres sistemas
+separados. Derivar de uma especie do jogo entrega os tres, e o manifesto declara so o que muda. Uma
+especie sem base nasceria invisivel e parada, e um mob invisivel nao se parece com erro de
+manifesto -- por isso o manifesto e recusado sem ela.
+
+```json
+{
+  "entities": [
+    {
+      "id": "crystal_guardian",
+      "name": "Guardiao de Cristal",
+      "base": "minecraft:iron_golem",
+      "category": "misc",
+      "fire_immune": true,
+      "defaults": {
+        "health": 60.0,
+        "glowing": true,
+        "attributes": {
+          "minecraft:generic.movement_speed": 0.3,
+          "minecraft:generic.attack_damage": 9.0
+        }
+      },
+      "loot": {
+        "drops": [
+          { "item": "crystal_world:crystal_shard", "min": 2, "max": 5 }
+        ]
+      },
+      "spawn_egg": {
+        "name": "Ovo de Guardiao de Cristal",
+        "primary_color": 8375321,
+        "secondary_color": 3381759
+      }
+    }
+  ]
+}
+```
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `base` | id do jogo, com namespace | Obrigatorio. Fora da lista de bases suportadas, o mod e recusado na carga com a lista no erro. |
+| `category` | `monster`, `creature`, `ambient`, `misc`, `water_creature`, `water_ambient`, `underground_water_creature`, `axolotls` | Sem declarar, a da base. Decide limite populacional e nascimento natural. |
+| `width`, `height` | 0 a 16, em blocos | Zero herda a da base. |
+| `tracking_range` | 0 a 32 | Zero herda. Distancia em que o cliente acompanha a criatura. |
+| `update_interval` | inteiro >= 0 | Zero herda. A cada quantos tiques a posicao e reenviada. |
+| `fire_immune` | booleano | |
+| `summonable` | booleano | Padrao verdadeiro. Falso tira do `/summon`. |
+| `saveable` | booleano | Padrao verdadeiro. Falso faz a criatura sumir ao descarregar o mundo. |
+| `defaults` | objeto de dados de entidade | O **mesmo** vocabulario de `spawn_entity`: nome, natureza, corpo, equipamento, efeitos, estado, rotacao, variante. |
+| `loot` | objeto | Ver abaixo. |
+| `spawn_egg` | objeto | Ausente nao gera ovo. |
+| `spawn` | objeto | Nascimento natural. Ausente significa que a especie **so** chega ao mundo por comando, ovo ou script. **Nao e herdado.** Ver abaixo. |
+| `model` | `"@recurso"`, caminho no mod ou URL | A **forma** da criatura: ossos e caixas em JSON. Sem declarar, ela tem a forma da base. **Nao e herdada.** Ver abaixo. |
+| `texture` | `"@recurso"`, caminho no mod ou URL | A pele da criatura. **Sem declarar, ela usa a da base** -- e o que faz um guardiao sair identico a um golem de ferro. Copiada para `textures/entity/<id>.png`. **Nao e herdada.** |
+| `tags` | lista de ids | Geradas em `tags/entity_type`, com `replace: false`. **Nao sao herdadas**: o data pack sai do manifesto declarado, e herdar aqui daria uma especie que o adaptador considera marcada e o jogo nao. |
+
+**Bases suportadas hoje:** `minecraft:zombie`, `minecraft:skeleton`, `minecraft:creeper`,
+`minecraft:spider`, `minecraft:pig`, `minecraft:cow`, `minecraft:sheep`, `minecraft:chicken`,
+`minecraft:wolf`, `minecraft:iron_golem`.
+
+A lista e explicita e cresce por adaptador. Registrar a partir de uma base qualquer produziria uma
+entidade que se declara como a base original e se perderia ao salvar o mundo -- entao o loader
+recusa a base desconhecida em vez de aproximar.
+
+### Herdar a especie de outro mod
+
+`base` tambem aceita uma especie declarada por outro mod, no formato `outromod:especie`. E como um
+pacote de dificuldade acrescenta um chefe sem repetir o bestiario inteiro:
+
+```json
+{
+  "dependencies": { "crystal_world": "0.1.0" },
+  "entities": [
+    {
+      "id": "elite_guardian",
+      "name": "Guardiao de Elite",
+      "base": "crystal_world:crystal_guardian",
+      "defaults": { "health": 120.0 }
+    }
+  ]
+}
+```
+
+O filho vence campo a campo, e o que ele nao declara vem do pai. Sem a mescla, o exemplo acima
+teria que repetir os atributos, o equipamento e o saque inteiros -- e as duas copias envelheceriam
+separadas.
+
+| O que | Como se junta |
+|---|---|
+| `category`, tamanho, alcance | o do filho, se declarado; senao o do pai |
+| `fire_immune` | verdadeiro se qualquer um dos dois for |
+| `summonable`, `saveable` | falso se qualquer um dos dois for: o pai restringir vale para os descendentes |
+| `defaults` simples (vida, brilho, variante...) | o do filho, campo a campo |
+| `defaults.attributes` e `defaults.equipment` | **por chave**: declarar so a velocidade nao apaga o dano do pai |
+| `defaults.effects` | **somam**: sao coisas independentes |
+| `loot.table` | a mais especifica vence |
+| `loot.drops` | **somam**, pelo mesmo motivo dos efeitos |
+| `spawn_egg` | **nao e herdado**: um ovo por descendente, todos com a mesma cor, seria indistinguivel na aba do criativo |
+| `tags` | **nao sao herdadas**: o que o filho declara e o que vale |
+| `texture` | **nao e herdada**, pelo mesmo motivo das tags |
+| `model` | **nao e herdado**, pelo mesmo motivo |
+| `spawn` | **nao e herdado** -- e a decisao mais conservadora possivel: uma variante de elite nao deveria, sem dizer nada, dobrar a populacao do mundo de quem instalou |
+
+A `base` efetiva registrada e sempre a do ancestral do jogo: e dela que vem modelo e comportamento.
+No exemplo, `elite_guardian` e registrado como derivado de `minecraft:iron_golem`, e nao de
+`crystal_world:crystal_guardian`.
+
+A ordem em que os mods sao descobertos **nao importa**: o loader ordena por heranca antes de
+registrar. Uma heranca circular e recusada com o caminho na mensagem, e uma base desconhecida derruba
+so aquela especie -- o mod ao lado continua valendo. Ver `examples/bestiario`.
+
+Em tempo de execucao a leitura fica em `ctx.server.declared_entities()` e
+`ctx.server.entity_definition(id)`, sob a permissao `entity.read`.
+
+### Registrar por script
+
+O caminho normal e declarar em `entities`: o adaptador le o manifesto e registra sozinho, no momento
+que cada plataforma exige. Quem escreve o mod nao nomeia evento nenhum do Minecraft.
+
+Quando o bestiario precisa ser **gerado** -- tres variantes de um guardiao saindo de um laco, em vez
+de tres blocos de JSON quase iguais --, ha a fase de registro:
+
+```json
+{
+  "permissions": ["entity.register"],
+  "registration": { "on_register": "scripts/registrar.lua" }
+}
+```
+
+```lua
+return function(ctx)
+    ctx.register.entity({
+        id = "guardiao_ouro",
+        name = "Guardiao de Ouro",
+        base = "minecraft:iron_golem",
+        defaults = { health = 160.0 },
+    })
+end
+```
+
+| O que | Regra |
+|---|---|
+| Quando roda | Antes de o jogo congelar os registros. **O adaptador decide o ponto exato** -- inicializacao do mod no Fabric, `RegisterEvent` no NeoForge. O script nunca nomeia um evento do jogo. |
+| O que o `ctx` tem | `ctx.log`, `ctx.register.entity`, `ctx.register.declared`, `ctx.mod_id`. **Nao ha mundo**: nem servidor, nem jogador, nem bloco. Oferecer o resto seria oferecer chamadas que so podem falhar. |
+| Arquivo proprio | Aponta um `.lua` seu, e nao uma funcao do `main.lua`. Carregar o entrypoint aqui faria o topo dele executar duas vezes -- um defeito que nao da erro, so estado errado. |
+| Namespace | Carimbado pelo loader, com o id do mod. O script nao escolhe, senao um mod publicaria conteudo no nome de outro. |
+| Permissao | `entity.register`, exigida no manifesto. Criar especie e mais forte que criar, ler ou modificar uma: acrescenta um tipo ao registro do jogo. |
+| Orcamento | 5 s, mais folgado que os 20 ms de um callback: roda uma vez, com o jogo carregando, e montar um bestiario e trabalho legitimo. |
+| Heranca | O que o script registra passa pela **mesma** resolucao do manifesto: uma especie gerada tambem pode ter `base` apontando outra declarada. |
+| Remoto | O valor aceita URL, ou caminho relativo resolvido por `remote_base`, como o `behavior` de um bloco. Fixe a versao com `registration_sha256`; sem ele o script e buscado a cada carga. A carga registra em aviso qual endereco foi usado. |
+
+
+
+### Forma propria
+
+`model` aponta um JSON de ossos e caixas. A criatura ganha forma propria e **continua usando a
+animacao e o comportamento da base** -- ela anda como um golem e parece outra coisa.
+
+```json
+{
+  "texture_size": [128, 128],
+  "bones": {
+    "head": {
+      "pivot": [0, -7, -2],
+      "cubes": [ { "from": [-5, -14, -5], "size": [10, 10, 10], "uv": [0, 0] } ]
+    },
+    "body": {
+      "pivot": [0, -7, 0],
+      "cubes": [ { "from": [-5, -2, -3], "size": [10, 16, 6], "uv": [0, 40] } ]
+    }
+  }
+}
+```
+
+**Os nomes dos ossos nao sao livres.** A classe de modelo da base procura os filhos por nome --
+`head`, `body`, `right_arm` -- para gira-los a cada quadro. Um modelo que usa os mesmos nomes e
+animado pela base sem que ela saiba que mudou; um nome fora da lista **nao da erro no jogo**: a peca
+simplesmente nao aparece. O loader avisa na carga, dizendo qual osso e o que a base espera.
+
+| Base | Ossos que ela anima |
+|---|---|
+| `minecraft:zombie`, `minecraft:skeleton` | `head`, `hat`, `body`, `right_arm`, `left_arm`, `right_leg`, `left_leg` |
+| `minecraft:iron_golem` | `head`, `body`, `right_arm`, `left_arm`, `right_leg`, `left_leg` |
+| `minecraft:pig`, `minecraft:cow`, `minecraft:sheep`, `minecraft:creeper` | `head`, `body`, `right_hind_leg`, `left_hind_leg`, `right_front_leg`, `left_front_leg` |
+| `minecraft:chicken` | `head`, `beak`, `red_thing`, `body`, `right_leg`, `left_leg`, `right_wing`, `left_wing` |
+| `minecraft:wolf` | `head`, `body`, `upper_body`, `tail`, e as quatro patas |
+| `minecraft:spider` | `head`, `body0`, `body1`, e as oito patas |
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `texture_size` | dois inteiros | Padrao `[64, 64]`. Precisa bater com a textura declarada. |
+| `bones` | objeto `nome -> osso` | Pelo menos um. Um osso sem caixa e recusado: ele nao apareceria. |
+| `pivot` | tres numeros | O ponto em torno do qual a animacao gira. Sem declarar, a origem. |
+| `cubes[].from`, `size` | tres numeros cada | Em pixels, a escala do formato do jogo. `size` negativo e recusado. |
+| `cubes[].uv` | dois inteiros | Canto da textura de onde a caixa e recortada. |
+| `cubes[].inflate` | numero | Cresce a caixa sem mover o pivo -- e como se faz uma camada externa. |
+| `cubes[].mirror` | booleano | Espelha o recorte, para um braco reusar a arte do outro. Vale so para a caixa que pediu. |
+
+A hierarquia e **plana**: todo osso e filho da raiz, porque e assim que as classes de modelo do jogo
+procuram as pecas. Um osso preso a outro ainda nao e declaravel.
+
+### Saque
+
+Uma especie nova procura a tabela de saque com o **proprio** id, e nao a da base. Sem gerar nada,
+um zumbi declarado morreria sem deixar carne podre, e isso pareceria decisao de quem escreveu o
+mod. O loader entao gera a tabela no datapack virtual:
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `loot.table` | id de tabela, com namespace | Substitui a da base. Sem declarar, a da base e herdada **por referencia**, e nao copiada -- uma mudanca no jogo continua valendo. |
+| `loot.drops[].item` | id com namespace | Obrigatorio. |
+| `loot.drops[].min`, `max` | inteiros | `max` menor que `min` e recusado. |
+| `loot.drops[].chance` | maior que 0 ate 1 | Chance zero e recusada: e um drop declarado que nunca cai. |
+| `loot.drops[].requires_player_kill` | booleano | So cai quando quem matou foi um jogador. |
+
+Os `drops` **somam** ao que a tabela herdada ja produz. Substituir seria pior: declarar um unico
+drop proprio apagaria em silencio tudo que a base derrubava, e a perda so apareceria matando o
+bicho.
+
+### Nascimento natural
+
+```json
+"spawn": {
+  "biomes": ["#minecraft:is_mountain"],
+  "weight": 8,
+  "min_group": 1,
+  "max_group": 2,
+  "min_light": 0,
+  "max_light": 7,
+  "min_y": 60
+}
+```
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `biomes` | ids ou tags (`#minecraft:is_forest`) | Obrigatorio. **Vazio nao significa "todos"**: significa que nada foi declarado, e a especie nao nasce em lugar nenhum. Uma tag alcanca um conjunto que cresce com o jogo e com os outros mods. |
+| `weight` | inteiro > 0 | Peso do sorteio entre as candidatas do bioma. Peso zero nunca e sorteado, e por isso e recusado. |
+| `min_group`, `max_group` | inteiros | Tamanho do grupo que nasce de uma vez. |
+| `min_light`, `max_light` | 0 a 15 | Luz de **bloco**, nao o total: um lugar iluminado so pelo sol tem quinze ao meio-dia e continua escuro a noite. Faixa invertida e recusada -- ela nunca fecharia. |
+| `min_y`, `max_y` | inteiros, opcionais | Ausente usa a faixa do mundo. |
+
+**A categoria decide se isso funciona.** `misc` nao nasce sozinho no jogo -- e a categoria do barco e
+do quadro, e o motor de spawn a substitui por porco. Como `minecraft:iron_golem` e `misc`, uma
+especie derivada dele herda essa categoria: para ela nascer naturalmente e preciso declarar
+`category` como `monster`, `creature` ou `ambient`. O loader recusa com essa mensagem em vez de
+deixar a especie nunca aparecer.
+
+Declarar peso alto **nao garante nada**: se a condicao de luz ou altura nao fechar, a criatura
+simplesmente nao nasce. Para conferir uma posicao, `ctx.server.biome_at(x, y, z)` e
+`ctx.server.light_at(x, y, z)` -- a segunda devolve `block`, `sky`, `total` e
+`dark_enough_for_monster`.
+
+### Ovo de criacao
+
+| Campo | Valor | Observacao |
+|---|---|---|
+| `register` | booleano | Padrao verdadeiro. |
+| `id` | id de item | Vazio usa `<id da especie>_spawn_egg`. |
+| `name` | texto | Vazio usa `<nome da especie> Spawn Egg`. |
+| `primary_color`, `secondary_color` | 0 a 16777215 (0xRRGGBB) | Cores do **ovo**, nao do bicho: o jogo nao olha a textura da criatura, e sem declarar sai cinza sobre cinza. |
+
+O ovo entra na aba criativa do mod junto dos blocos e itens.
+
 ## Aba do inventario criativo
 
 Sem `creative_tab`, o conteudo do mod nao aparece no inventario criativo e so pode ser obtido por comando. A aba recebe os blocos e itens do mod, na ordem em que foram declarados.

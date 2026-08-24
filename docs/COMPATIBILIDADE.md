@@ -33,11 +33,14 @@ núcleo não conhecer Minecraft.
 | Diagnóstico de tela | `dump_screen` | sim | sim |
 | Som e partículas | tocar, emitir, com categoria e velocidade | sim | sim |
 | Nível de permissão | nível bruto e `is_operator` sobre ele | sim | sim |
-| Entidades | criar, remover, ferir, curar, listar, ler dados, aplicar dados | sim | sim |
+| Entidades | criar, remover, ferir, curar, listar, ler dados, aplicar dados, **teleportar, empurrar** | sim | sim |
 | Dados declarados | entidade (nome, natureza, corpo, equipamento, efeitos, estado, rotação, variante) e item (aparência, durabilidade, encantamento, atributos) | sim | sim |
 | Dados por bloco | ler, gravar | sim | sim |
 | Inventário de bloco | capacidades, ler, inserir, extrair | sim | sim |
 | Registro do jogo | listar itens, blocos e entidades, receitas, drops | sim | sim |
+| Bestiário do loader | `declared_entities`, `entity_definition` | sim | sim |
+| Leitura de mundo | `biome_at`, `light_at` | sim | sim |
+| Fase de registro | `register.entity`, `register.declared` | sim | sim |
 
 > **Nenhuma operação recusa em nenhuma das duas plataformas.** Quando uma faltar, ela recusa com o
 > próprio nome em vez de responder errado — um mod descobre na primeira chamada, e não por um
@@ -73,6 +76,20 @@ núcleo não conhecer Minecraft.
 | Loot de outro bloco (`settings.drops_like`) | sim | sim | |
 | Inflamabilidade (`material.flammability`, `burn_spread`) | sim | sim | |
 | Item do bloco (`block.item`) | sim | sim | |
+| Espécie declarada (`entities`) | sim | sim | Deriva de uma base do jogo; GameTest nas duas confere a vida declarada |
+| Ovo de criação (`entities[].spawn_egg`) | sim | sim | Entra na aba criativa do mod |
+| Saque da espécie (`entities[].loot`) | sim | sim | Datapack gerado no núcleo; herda a tabela da base por referência |
+| Herança entre mods (`base` apontando outra espécie declarada) | sim | sim | Ordenação e detecção de ciclo no núcleo; GameTest nas duas |
+| Fase de registro por script (`registration`) | sim | sim | Fabric na inicialização, NeoForge no `RegisterEvent`; GameTest nas duas |
+| Script de registro remoto (URL ou `remote_base`) | sim | sim | Mesma trava de hash do `behavior` de bloco, por `registration_sha256` |
+| Nascimento natural (`entities[].spawn`) | sim | sim | Fabric por API de bioma, NeoForge por modificador no data pack — caminhos diferentes, regra igual |
+| Forma própria (`entities[].model`) | sim | sim | Ossos e caixas em JSON; usa a **animação da base**. Nomes de osso conferidos na carga |
+| Textura de espécie (`entities[].texture`) | sim | sim | Recurso, caminho ou URL; sem declarar usa a pele da base. Não é herdada |
+| Ovo com modelo e cor (`spawn_egg`) | sim | sim | Modelo gerado do molde do jogo; **só o cliente mostra se falta** |
+| Tags de espécie (`entities[].tags`) | sim | sim | Geradas em `tags/entity_type`; GameTest nas duas pergunta ao jogo, e não ao disco |
+| Escala da criatura (`minecraft:generic.scale` em `defaults.attributes`) | sim | sim | Atributo do jogo desde a 1.20.5; muda desenho e colisão juntos. Registra sem aviso nas duas; **ainda não conferido na tela** |
+| Atributos, efeitos e equipamento da espécie (`defaults`) | sim | sim | Mesmo vocabulário de `spawn_entity`; um atributo desconhecido é avisado e ignorado, não recusado |
+| Caixa de colisão (`width`, `height`) | sim | sim | Colisão, **não** aparência: não escala o desenho |
 | Variante de entidade (`spawn.variant`) | sim | sim | Só cavalo, nas duas |
 | **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | sim | |
 | Modelos não cúbicos | sim | sim | O modelo sai da mesma forma que a colisão, gerada no núcleo |
@@ -91,7 +108,62 @@ núcleo não conhecer Minecraft.
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |
 | Evento de tela (`click`, `change`, `submit`, `close`) | sim | sim | |
+| `entity_spawned`, `entity_damaged`, `entity_died` | sim | sim | Valem para **qualquer** criatura, não só as declaradas; `autoteste` confere nas duas |
+| `entity_tamed` | sim | sim | No NeoForge vem de `AnimalTameEvent`; no Fabric não há evento de plataforma e o disparo sai da ponte |
 | `mod_reloaded`, `menu_closed` | **não** | **não** | Aceitos no registro e nunca disparados |
+
+## O limite da espécie declarada
+
+Tudo que a matriz acima marca vem de **derivar de uma espécie do jogo**. A base entrega modelo,
+animação e comportamento como um pacote fechado, e é isso que faz uma espécie declarada custar dez
+linhas de JSON em vez de três sistemas inteiros.
+
+O preço é o limite: dá para **repintar e redimensionar** o golem, não para dizer que a criatura tem
+outra forma.
+
+| O que muda a aparência hoje | Como |
+|---|---|
+| Pele própria | `texture` |
+| **Forma própria** | `model` — ossos e caixas em JSON |
+| Tamanho | atributo `minecraft:generic.scale` |
+| Silhueta de partida | escolher entre as bases suportadas |
+| **Animação própria** | **não existe** — a da base move a forma nova |
+| **IA declarada** | **não existe** — herda a da base |
+
+A forma própria funciona por um detalhe que vale saber: as classes de modelo do jogo recebem uma
+raiz e procuram os filhos **por nome** para girá-los. Uma geometria declarada com os mesmos nomes de
+osso que a base usa é animada por ela sem que ela saiba que mudou. O preço é que os nomes são um
+vocabulário fechado — e um nome errado não dá erro, a peça só não aparece, por isso o loader avisa
+na carga.
+
+Os dois últimos não aparecem na matriz porque ela compara plataformas, e eles faltam nas duas
+igualmente. Estão em `API_GAPS.md`, e são o que resta do Nível 7 de `CHECKLIST_MODLOADER.md`.
+
+## Uma divergência estrutural, e o que foi feito com ela
+
+O momento em que o Lua carrega **não é o mesmo nas duas plataformas**, e não dá para igualar:
+
+| | Fabric | NeoForge |
+|---|---|---|
+| Onde o Lua carrega | inicialização do mod (`LuaLoaderMod`) | ao servidor subir (`NeoForgeLuaLoader`) |
+| Registro do jogo já congelou? | não | **sim** |
+
+Isso significava que registrar conteúdo por script funcionaria no Fabric e **falharia sempre** no
+NeoForge. Não é um adaptador atrasado: é o ciclo de vida de cada plataforma.
+
+A primeira resposta foi não oferecer a operação — uma que só vale numa plataforma é pior que
+nenhuma, porque o mod passa nos testes de quem o escreveu e some para metade de quem o usa. A
+resposta certa foi outra: **dar ao NeoForge o momento que faltava**, em vez de tirar a capacidade do
+Fabric.
+
+A **fase de registro** (`registration` no manifesto) roda antes de o jogo congelar os registros, em
+cada plataforma no ponto que lhe cabe — inicialização do mod no Fabric, `RegisterEvent` no NeoForge.
+O mod declara **o quê**; o adaptador decide **quando**, e nenhum nome de evento do Minecraft aparece
+no script. O que o script registra é guardado e aplicado pelo adaptador no seu próprio momento, e
+passa pela mesma resolução de herança que o conteúdo do manifesto.
+
+Nessa fase não há mundo: nem servidor, nem jogador, nem bloco para tocar. O contexto é pequeno de
+propósito — oferecer o resto seria oferecer chamadas que só podem falhar.
 
 ## Como cada linha é conferida
 
@@ -100,7 +172,7 @@ isso as colunas têm quem as verifique:
 
 | Ferramenta | Alcança | Roda nas duas |
 |---|---|---|
-| `./gradlew :core:test` | o que é agnóstico: manifesto, validação, geometria de tela, runtime Lua | n/a — é o núcleo |
+| `./gradlew :core:test` | o que é agnóstico: manifesto, validação, geometria de tela e de entidade, runtime Lua, fase de registro, herança entre espécies | n/a — é o núcleo |
 | `./gradlew runGametest` e `:neoforge:runGameTestServer` | registro, propriedades de bloco, entidade de bloco, NBT, num servidor de verdade | sim, e ambos no CI |
 | `/mod autoteste` | as APIs contra o jogo real | sim, pelo mesmo Lua |
 

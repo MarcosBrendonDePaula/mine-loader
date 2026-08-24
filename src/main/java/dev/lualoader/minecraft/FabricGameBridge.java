@@ -304,6 +304,17 @@ public final class FabricGameBridge implements GameBridge {
      * {@code tame} para um conjunto de bichos não deveria falhar no que não é domesticável — o
      * campo simplesmente não se aplica ali, como não se aplica a um bloco.
      */
+    /**
+     * A mesma aplicação, para quem faz nascer uma espécie declarada.
+     *
+     * <p>Existe para o registrador não repetir a tradução de vinte campos: o que uma espécie
+     * declara como padrão é o mesmo que um script declara ao criar uma entidade, e duas cópias
+     * divergiriam no primeiro campo novo.
+     */
+    public static void applyDeclaredSpec(Entity entity, dev.lualoader.platform.EntitySpec spec) {
+        if (spec != null && !spec.isEmpty()) applySpec(entity, spec);
+    }
+
     private static void applySpec(Entity entity, dev.lualoader.platform.EntitySpec spec) {
         if (spec.name != null) entity.setCustomName(Text.literal(spec.name));
         if (spec.nameVisible != null) entity.setCustomNameVisible(spec.nameVisible);
@@ -1053,5 +1064,74 @@ public final class FabricGameBridge implements GameBridge {
         }
         java.util.Collections.sort(found);
         return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    @Override
+    public String biomeAt(int x, int y, int z) {
+        var world = requireWorld();
+        var biome = world.getBiome(new BlockPos(x, y, z));
+        return biome.getKey()
+                .map(key -> key.getValue().toString())
+                // Um bioma sem chave e um bioma vindo de um datapack que nao registrou o nome.
+                // Responder vazio seria pior que dizer que nao da para saber.
+                .orElse("minecraft:plains");
+    }
+
+    @Override
+    public int lightAt(int x, int y, int z, boolean sky) {
+        var world = requireWorld();
+        BlockPos position = new BlockPos(x, y, z);
+        return sky
+                ? world.getLightLevel(net.minecraft.world.LightType.SKY, position)
+                : world.getLightLevel(net.minecraft.world.LightType.BLOCK, position);
+    }
+
+    @Override
+    public boolean teleportEntity(String uuid, double x, double y, double z) {
+        var world = requireWorld();
+        Entity entity = world.getEntity(java.util.UUID.fromString(uuid));
+        if (entity == null) return false;
+
+        // Angulos preservados: teleportar nao deveria virar o bicho para o norte, o que faria um
+        // mod que so puxa a criatura um bloco parecer estar girando ela.
+        entity.teleport(world, x, y, z, java.util.Set.of(), entity.getYaw(), entity.getPitch());
+        return true;
+    }
+
+    @Override
+    public boolean pushEntity(String uuid, double x, double y, double z) {
+        var world = requireWorld();
+        Entity entity = world.getEntity(java.util.UUID.fromString(uuid));
+        if (entity == null) return false;
+
+        entity.addVelocity(x, y, z);
+        // Sem isto o empurrao acontece no servidor e o cliente nao ve: a velocidade so viaja
+        // quando marcada, e a criatura desliza de volta como se nada tivesse acontecido.
+        entity.velocityModified = true;
+        return true;
+    }
+
+    // ------------------------------------------------------------------ especies declaradas
+
+    /**
+     * Os ids das espécies que este loader registrou, e não as do jogo.
+     *
+     * <p>Separado de {@link #registeredEntities}, que enxerga o registro inteiro: um mod que
+     * estende o bestiário de outro precisa saber o que veio de um mod, e essa distinção se perde
+     * numa lista de milhares de tipos.
+     */
+    @Override
+    public java.util.List<String> declaredEntities() {
+        var registrar = dev.lualoader.LuaLoaderMod.entityRegistrar();
+        return registrar == null ? java.util.List.of() : registrar.declaredEntities();
+    }
+
+    @Override
+    public dev.lualoader.platform.EntityDefinition declaredEntity(String id) {
+        var registrar = dev.lualoader.LuaLoaderMod.entityRegistrar();
+        if (registrar == null) return null;
+
+        Identifier parsed = Identifier.tryParse(id);
+        return parsed == null ? null : registrar.declaredEntity(parsed);
     }
 }

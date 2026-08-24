@@ -25,6 +25,17 @@ public final class GeneratedResourcePackProvider implements ResourcePackProvider
         root = generatedRoot == null ? null : generatedRoot.toAbsolutePath().normalize();
     }
 
+    /**
+     * Onde o pacote gerado foi escrito, ou {@code null} se nada foi montado.
+     *
+     * <p>O cliente precisa ler a geometria de uma especie antes da primeira carga de recursos, para
+     * montar o desenhista. Pedir o arquivo ao gerenciador de recursos nessa altura nao devolveria
+     * nada -- e a especie sairia com a forma da base sem ninguem saber por que.
+     */
+    public static Path root() {
+        return root;
+    }
+
     @Override
     public void register(Consumer<ResourcePackProfile> consumer) {
         Path currentRoot = root;

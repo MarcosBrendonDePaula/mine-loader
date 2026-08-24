@@ -457,6 +457,18 @@ public class NeoForgeGameBridge implements GameBridge {
      * conjunto de bichos não deveria falhar no que não é domesticável — o campo simplesmente não se
      * aplica ali.
      */
+    /**
+     * A mesma aplicação, para quem faz nascer uma espécie declarada.
+     *
+     * <p>Existe para o registrador não repetir a tradução de vinte campos: o que uma espécie
+     * declara como padrão é o mesmo que um script declara ao criar uma entidade, e duas cópias
+     * divergiriam no primeiro campo novo.
+     */
+    public static void applyDeclaredSpec(net.minecraft.world.entity.Entity entity,
+                                         dev.lualoader.platform.EntitySpec spec) {
+        if (spec != null && !spec.isEmpty()) applySpec(entity, spec);
+    }
+
     private static void applySpec(net.minecraft.world.entity.Entity entity,
                                   dev.lualoader.platform.EntitySpec spec) {
         if (spec.name != null) entity.setCustomName(Component.literal(spec.name));
@@ -1009,5 +1021,74 @@ public class NeoForgeGameBridge implements GameBridge {
         }
         java.util.Collections.sort(found);
         return found.size() > limit ? found.subList(0, limit) : found;
+    }
+
+    @Override
+    public String biomeAt(int x, int y, int z) {
+        var level = requireLevel();
+        var biome = level.getBiome(new net.minecraft.core.BlockPos(x, y, z));
+        return biome.unwrapKey()
+                .map(key -> key.location().toString())
+                .orElse("minecraft:plains");
+    }
+
+    @Override
+    public int lightAt(int x, int y, int z, boolean sky) {
+        var level = requireLevel();
+        var position = new net.minecraft.core.BlockPos(x, y, z);
+        return sky
+                ? level.getBrightness(net.minecraft.world.level.LightLayer.SKY, position)
+                : level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, position);
+    }
+
+    @Override
+    public boolean teleportEntity(String uuid, double x, double y, double z) {
+        var level = requireLevel();
+        net.minecraft.world.entity.Entity entity = level.getEntity(java.util.UUID.fromString(uuid));
+        if (entity == null) return false;
+
+        // Angulos preservados: teleportar nao deveria virar o bicho para o norte, o que faria um
+        // mod que so puxa a criatura um bloco parecer estar girando ela.
+        entity.teleportTo(level, x, y, z, java.util.Set.of(),
+                entity.getYRot(), entity.getXRot());
+        return true;
+    }
+
+    @Override
+    public boolean pushEntity(String uuid, double x, double y, double z) {
+        var level = requireLevel();
+        net.minecraft.world.entity.Entity entity = level.getEntity(java.util.UUID.fromString(uuid));
+        if (entity == null) return false;
+
+        entity.push(x, y, z);
+        // Sem isto o empurrao acontece no servidor e o cliente nao ve: a velocidade so viaja
+        // quando marcada, e a criatura desliza de volta como se nada tivesse acontecido.
+        entity.hurtMarked = true;
+        return true;
+    }
+
+    // ------------------------------------------------------------------ especies declaradas
+
+    /**
+     * Os ids das espécies que este loader registrou, e não as do jogo.
+     *
+     * <p>Separado de {@code registeredEntities}, que enxerga o registro inteiro: um mod que estende
+     * o bestiário de outro precisa saber o que veio de um mod, e essa distinção se perde numa lista
+     * de milhares de tipos.
+     */
+    @Override
+    public java.util.List<String> declaredEntities() {
+        var registrar = NeoForgeLuaLoader.entityRegistrar();
+        return registrar == null ? java.util.List.of() : registrar.declaredEntities();
+    }
+
+    @Override
+    public dev.lualoader.platform.EntityDefinition declaredEntity(String id) {
+        var registrar = NeoForgeLuaLoader.entityRegistrar();
+        if (registrar == null) return null;
+
+        net.minecraft.resources.ResourceLocation parsed =
+                net.minecraft.resources.ResourceLocation.tryParse(id);
+        return parsed == null ? null : registrar.declaredEntity(parsed);
     }
 }

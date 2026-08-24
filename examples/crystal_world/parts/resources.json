@@ -4,6 +4,15 @@
     "from": "assets/crystal_world/textures/block/crystal_block.png",
     "fallback": "minecraft:block/amethyst_block"
   },
+  "guardiao": {
+    "type": "image",
+    "from": "assets/crystal_world/textures/entity/guardiao.png",
+    "fallback": "minecraft:entity/iron_golem/iron_golem"
+  },
+  "forma_guardiao": {
+    "type": "model",
+    "from": "models/guardiao.json"
+  },
   "fragmento": {
     "type": "image",
     "from": "assets/crystal_world/textures/item/crystal_shard.png",

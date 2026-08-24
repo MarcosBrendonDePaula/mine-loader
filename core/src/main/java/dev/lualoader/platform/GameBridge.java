@@ -511,6 +511,28 @@ public interface GameBridge {
         throw new BridgeException("break_block nao existe neste adaptador");
     }
 
+    /**
+     * O bioma numa posicao, no formato {@code mod:bioma}.
+     *
+     * <p>Sem isto, um mod que gera algo condicionalmente nao tem como perguntar onde esta: um
+     * altar que so faz sentido no deserto tinha que adivinhar pela altura ou pela temperatura do
+     * bloco embaixo, e as duas mentem.
+     */
+    default String biomeAt(int x, int y, int z) {
+        throw new BridgeException("biome_at nao existe neste adaptador");
+    }
+
+    /**
+     * O nivel de luz numa posicao, de 0 a 15.
+     *
+     * <p>{@code sky} diferencia a luz que vem do ceu da que vem de tocha e lava. E a distincao que
+     * decide se um monstro nasce ali: o jogo olha a luz de bloco, e nao o total, entao um lugar
+     * iluminado so pelo sol continua sendo escuro a noite.
+     */
+    default int lightAt(int x, int y, int z, boolean sky) {
+        throw new BridgeException("light_at nao existe neste adaptador");
+    }
+
     // ------------------------------------------------------------------ entidades
 
     /**
@@ -538,6 +560,33 @@ public interface GameBridge {
     }
 
     /**
+     * Move uma entidade para uma posicao.
+     *
+     * <p>O par que faltava de {@link #entitiesNear} e {@link #entityInfo}: dava para descobrir onde
+     * um bicho esta e nao para mudar isso. Sem esta operacao, um mod que quisesse puxar, empurrar
+     * ou prender uma criatura tinha que mata-la e criar outra no lugar -- perdendo nome, vida,
+     * equipamento e a domesticacao.
+     *
+     * @return se a entidade existia e foi movida
+     */
+    default boolean teleportEntity(String uuid, double x, double y, double z) {
+        throw new BridgeException("teleport_entity nao existe neste adaptador");
+    }
+
+    /**
+     * Empurra uma entidade, somando a velocidade dela.
+     *
+     * <p>Diferente de teleportar: o jogo continua resolvendo colisao e queda, e quem esta olhando
+     * ve o movimento em vez de o bicho piscar de um lugar para outro. E o que faz um empurrao de
+     * explosao ou um pulo forcado parecerem parte do jogo.
+     *
+     * @return se a entidade existia
+     */
+    default boolean pushEntity(String uuid, double x, double y, double z) {
+        throw new BridgeException("push_entity nao existe neste adaptador");
+    }
+
+    /**
      * Os dados de uma entidade, no formato {@code uuid;tipo;x;y;z;vida;maxima;nome}.
      *
      * <p>{@link #entitiesNear} diz o que está por perto, mas não diz mais que o tipo e a posição.
@@ -545,6 +594,43 @@ public interface GameBridge {
      */
     default String entityInfo(String uuid) {
         throw new BridgeException("entity_info nao existe neste adaptador");
+    }
+
+    // ------------------------------------------------------------------ especies declaradas
+
+    /**
+     * <b>Nao existe registrar especie por aqui, e e deliberado.</b>
+     *
+     * <p>Uma especie criada por script entra no manifesto em memoria, na fase de registro, e dali
+     * em diante e indistinguivel de uma declarada em JSON: passa pela ordenacao por heranca, pelo
+     * montador de recursos e pelo registro do adaptador, no momento que cada plataforma exige.
+     *
+     * <p>A primeira versao tinha um {@code registerEntity} aqui, e o script registrava direto. O
+     * resultado foi um ovo de criacao sem icone: o item existia, entrava na aba do criativo e
+     * funcionava ao ser usado, mas pulava o montador de recursos e por isso nao tinha modelo. Nada
+     * no servidor reclamava, e a bateria inteira passava verde.
+     */
+
+    /**
+     * Os ids completos das especies que este loader registrou, e nao as do jogo.
+     *
+     * <p>Separado de {@link #registeredEntities}, que enxerga o registro inteiro: um mod que
+     * estende o bestiario de outro precisa saber o que veio de um mod, e essa distincao se perde
+     * numa lista de milhares de tipos.
+     */
+    default java.util.List<String> declaredEntities() {
+        throw new BridgeException("declared_entities nao existe neste adaptador");
+    }
+
+    /**
+     * O que foi declarado para uma especie deste loader, ou {@code null} se ela nao e daqui.
+     *
+     * <p>E o que permite um mod partir do bestiario de outro em vez de copia-lo: ler a definicao,
+     * mudar o que interessa e registrar a sua. Sem isto, "registrar bicho de fora" so serviria
+     * para quem escreveu o bicho.
+     */
+    default EntityDefinition declaredEntity(String id) {
+        throw new BridgeException("declared_entity nao existe neste adaptador");
     }
 
     // ------------------------------------------------------------------ registro do jogo
