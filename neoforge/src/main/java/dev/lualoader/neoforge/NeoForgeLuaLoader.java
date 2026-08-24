@@ -47,6 +47,16 @@ public class NeoForgeLuaLoader {
         // fontes, e e por ele que o conteudo declarado ganha textura, modelo e nome traduzido.
         modBus.addListener(NeoForgeLuaLoader::onAddPackFinders);
 
+        // O inventario declarado so existe para a automacao quando publicado como capability: e
+        // por ela que funil e tubo procuram, e sem isto o bloco tem itens que nenhuma maquina ve.
+        modBus.addListener((net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent event) -> {
+            if (!NeoForgeBlockEntities.isRegistered()) return;
+            event.registerBlockEntity(
+                    net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
+                    NeoForgeBlockEntities.type(),
+                    (entity, side) -> entity.handler());
+        });
+
         // O canal de telas precisa existir antes de qualquer jogador entrar: e por ele que o
         // cliente se anuncia, e e a presenca dele que supports_screens responde.
         modBus.addListener((net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) ->

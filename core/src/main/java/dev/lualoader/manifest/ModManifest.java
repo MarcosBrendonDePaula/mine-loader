@@ -61,6 +61,34 @@ public final class ModManifest {
         public String behaviorSha256;
         /** Quando verdadeiro, o bloco guarda dados proprios em cada posicao do mundo. */
         public boolean blockData = false;
+        /** Inventario proprio do bloco. Nulo quando o bloco nao guarda itens. */
+        public InventoryDefinition inventory;
+    }
+
+    /**
+     * Um inventario que vive no bloco, e nao no jogador.
+     *
+     * <p>E o que separa um bloco decorativo de uma maquina: um bau customizado, uma fornalha de mod
+     * ou um tanque precisam de itens presos aquela posicao do mundo, que sobrevivem a sair e voltar
+     * e caem no chao quando o bloco quebra.
+     *
+     * <p>As permissoes de lado existem para tubos e funis. Um bloco que aceita insercao automatica
+     * mas recusa extracao e a diferenca entre uma caixa de entrada e um bau comum, e nao ha como
+     * expressar isso sem dizer o que cada lado permite.
+     */
+    public static final class InventoryDefinition {
+        /** Quantos slots. Vira linhas de nove na tela, ate seis. */
+        public int size = 27;
+        /** Titulo da janela; o nome do bloco quando ausente. */
+        public String title;
+        /** Se clicar no bloco abre o inventario. Um mod que prefere reagir no script desliga. */
+        public boolean openOnUse = true;
+        /** Se maquinas e funis podem inserir itens. */
+        public boolean allowInsert = true;
+        /** Se maquinas e funis podem retirar itens. */
+        public boolean allowExtract = true;
+        /** Se o conteudo cai no chao quando o bloco e quebrado. */
+        public boolean dropOnBreak = true;
     }
 
     public static final class MaterialDefinition {

@@ -45,6 +45,23 @@ public final class NeoForgeContentRegistrar {
     /** Quantas variantes cada bloco declara; o evento leva o número ao script. */
     private final Map<ResourceLocation, Integer> variantCounts = new LinkedHashMap<>();
 
+    /**
+     * O inventario declarado de cada bloco que tem um.
+     *
+     * <p>Estatico porque a entidade so recebe posicao e estado ao nascer, e precisa descobrir
+     * quantos slots tem antes de ler o NBT. E o bloco quem sabe, e este mapa e o caminho ate ele.
+     */
+    private static final Map<Block, ModManifest.InventoryDefinition> inventories =
+            new LinkedHashMap<>();
+
+    /** Blocos que guardam dados ou itens, e por isso precisam de entidade. */
+    private final List<Block> dataBlocks = new ArrayList<>();
+
+    /** O inventario declarado daquele bloco, ou {@code null} se ele nao guarda itens. */
+    public static ModManifest.InventoryDefinition inventoryOf(Block block) {
+        return inventories.get(block);
+    }
+
     public NeoForgeContentRegistrar(Logger logger, IEventBus modBus) {
         this.logger = logger;
         modBus.addListener(this::onRegister);
@@ -91,6 +108,16 @@ public final class NeoForgeContentRegistrar {
             for (ModManifest manifest : manifests) registerItems(manifest, registry::register);
         });
 
+        // Depois dos blocos, e nao junto: o tipo precisa conhecer no registro todos os blocos que
+        // aceita, e ate aqui eles ja existem.
+        event.register(Registries.BLOCK_ENTITY_TYPE, registry -> {
+            var type = NeoForgeBlockEntities.create(logger, dataBlocks);
+            if (type != null) {
+                registry.register(
+                        ResourceLocation.fromNamespaceAndPath("lua_loader", "declarative"), type);
+            }
+        });
+
         event.register(Registries.CREATIVE_MODE_TAB, registry -> {
             for (ModManifest manifest : manifests) registerCreativeTab(manifest, registry::register);
         });
@@ -118,11 +145,18 @@ public final class NeoForgeContentRegistrar {
                 ModManifest.SettingsDefinition values = definition.settings == null
                         ? new ModManifest.SettingsDefinition()
                         : definition.settings;
-                Block block =
-                        new NeoForgeDeclarativeBlock(settingsOf(definition), values.luminance);
+
+                // Um bloco so paga o custo de guardar dados quando o manifesto pede. Um
+                // inventario tambem mora na entidade, entao pedi-lo implica te-la.
+                boolean withData = definition.blockData || definition.inventory != null;
+                Block block = withData
+                        ? new NeoForgeDeclarativeDataBlock(settingsOf(definition), values.luminance)
+                        : new NeoForgeDeclarativeBlock(settingsOf(definition), values.luminance);
                 sink.accept(id, block);
 
                 blocks.put(id, block);
+                if (withData) dataBlocks.add(block);
+                if (definition.inventory != null) inventories.put(block, definition.inventory);
                 variantCounts.put(id, definition.render == null
                         || definition.render.variantTextures == null
                         ? 1

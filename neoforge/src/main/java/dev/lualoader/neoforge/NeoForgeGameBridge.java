@@ -317,26 +317,35 @@ public class NeoForgeGameBridge implements GameBridge {
     // ------------------------------------------------------------------ dados por bloco
 
     /**
-     * Chave onde os dados de um bloco ficam guardados.
+     * Os dados vivem na entidade do bloco, e vão para o disco com o mundo.
      *
-     * <p>Os dados vivem no BlockEntity do loader quando o bloco e declarativo. Enquanto o registro
-     * declarativo nao existe neste adaptador, guardar em memoria por posicao mantem a operacao
-     * utilizavel e honesta: some ao desligar, e isso esta dito.
+     * <p>Antes ficavam num mapa em memória, o que funcionava dentro de uma sessão e mentia entre
+     * duas: o script gravava, o servidor reiniciava e o altar não lembrava de oferenda nenhuma.
+     * Um bloco que declara {@code block_data} agora persiste como no adaptador Fabric.
      */
-    private final java.util.Map<String, String> blockData = new java.util.HashMap<>();
-
-    private static String at(int x, int y, int z) {
-        return x + "," + y + "," + z;
+    private NeoForgeDeclarativeBlockEntity dataEntityAt(int x, int y, int z) {
+        BlockPos pos = new BlockPos(x, y, z);
+        return requireLevel().getBlockEntity(pos) instanceof NeoForgeDeclarativeBlockEntity entity
+                ? entity
+                : null;
     }
 
     @Override
     public String getBlockData(int x, int y, int z) {
-        return blockData.getOrDefault(at(x, y, z), "{}");
+        NeoForgeDeclarativeBlockEntity entity = dataEntityAt(x, y, z);
+        return entity == null ? "{}" : entity.data();
     }
 
     @Override
     public void setBlockData(int x, int y, int z, String json) {
-        blockData.put(at(x, y, z), json);
+        NeoForgeDeclarativeBlockEntity entity = dataEntityAt(x, y, z);
+        if (entity == null) {
+            // Recusar e o certo: gravar num bloco que nao declarou block_data escreveria num lugar
+            // que nao existe, e o script so descobriria ao ler de volta e achar vazio.
+            throw new BridgeException(
+                    "bloco em " + x + "," + y + "," + z + " nao declarou block_data");
+        }
+        entity.setData(json);
     }
 
     // ------------------------------------------------------------------ entidades

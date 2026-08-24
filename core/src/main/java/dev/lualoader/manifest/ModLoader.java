@@ -402,6 +402,14 @@ public final class ModLoader {
             require(RARITIES.contains(rarityOf(block.item.rarity)),
                     "rarity de item de bloco desconhecida: " + block.item.rarity);
         }
+        if (block.inventory != null) {
+            // O teto e o do bau grande, e nao um numero escolhido aqui: a janela do jogo desenha
+            // ate seis fileiras de nove, e um inventario maior teria slots que ninguem alcanca.
+            require(block.inventory.size >= 1 && block.inventory.size <= 54,
+                    "inventory.size deve estar entre 1 e 54");
+            require(block.inventory.size % 9 == 0,
+                    "inventory.size deve ser multiplo de 9, para fechar as fileiras da janela");
+        }
         if (block.state != null && block.state.properties != null) {
             Set<String> propertyNames = new HashSet<>();
             for (ModManifest.StatePropertyDefinition property : block.state.properties) {

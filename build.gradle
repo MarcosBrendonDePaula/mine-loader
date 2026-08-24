@@ -94,3 +94,19 @@ publishing {
         }
     }
 }
+
+/*
+ * Leva os mods de exemplo para o mundo do GameTest.
+ *
+ * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
+ * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio. Foi o que
+ * aconteceu com o bloco de inventario: o teste procurava um bloco que so existia em examples/.
+ */
+tasks.register('sincronizaExemplosDoGametest', Copy) {
+    from 'examples'
+    into layout.buildDirectory.dir('gametest/mods-lua')
+}
+
+tasks.named('runGametest') {
+    dependsOn 'sincronizaExemplosDoGametest'
+}

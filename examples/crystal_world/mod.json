@@ -34,6 +34,9 @@
     },
     {
       "$import": "parts/blocks/altar.json"
+    },
+    {
+      "$import": "parts/blocks/cofre.json"
     }
   ],
   "structures": [

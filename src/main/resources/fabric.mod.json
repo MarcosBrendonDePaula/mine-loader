@@ -14,7 +14,8 @@
       "dev.lualoader.LuaLoaderMod"
     ],
     "fabric-gametest": [
-      "dev.lualoader.gametest.BlockInteractionGameTest"
+      "dev.lualoader.gametest.BlockInteractionGameTest",
+      "dev.lualoader.gametest.BlockInventoryGameTest"
     ],
     "client": [
       "dev.lualoader.client.LuaLoaderClient"

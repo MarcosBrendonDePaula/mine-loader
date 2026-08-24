@@ -1,0 +1,39 @@
+{
+  "id": "cofre",
+  "name": "Cofre de Cristal",
+  "material": {
+    "map_color": "blue",
+    "sound": "metal"
+  },
+  "settings": {
+    "hardness": 4.0,
+    "resistance": 8.0,
+    "requires_tool": true
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": {
+      "source": "local",
+      "path": "assets/crystal_world/textures/block/crystal_block.png",
+      "fallback": "minecraft:block/amethyst_block"
+    }
+  },
+  "loot": {
+    "mode": "self"
+  },
+  "tags": [
+    "minecraft:mineable/pickaxe"
+  ],
+  "item": {
+    "register": true,
+    "rarity": "rare"
+  },
+  "inventory": {
+    "size": 27,
+    "title": "Cofre de Cristal",
+    "open_on_use": true,
+    "allow_insert": true,
+    "allow_extract": false,
+    "drop_on_break": true
+  }
+}

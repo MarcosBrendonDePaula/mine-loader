@@ -30,7 +30,10 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # -- ja aconteceu, e um log misturado faz a leitura mentir.
 PLATAFORMA="${PLATAFORMA:-fabric}"
 case "$PLATAFORMA" in
-    fabric)   TAREFA="runServer" ;;
+    # Os dois pontos na frente nao sao enfeite: sem eles o Gradle procura a tarefa em todos os
+    # subprojetos e sobe o servidor do NeoForge junto, os dois escrevendo no mesmo log. O
+    # resultado e um log que mistura as duas plataformas e faz a leitura mentir.
+    fabric)   TAREFA=":runServer" ;;
     neoforge) TAREFA=":neoforge:runServer" ;;
     *) echo "PLATAFORMA deve ser fabric ou neoforge, veio $PLATAFORMA" >&2; exit 1 ;;
 esac
@@ -53,8 +56,11 @@ orfaos_desta_plataforma() {
 
 iniciar() {
     # O PID guardado e do subshell que alimenta a entrada, e nao do servidor: ele sobrevive a morte
-    # do jogo. Exigir tambem o log presente evita recusar subir quando so o inutil restou.
-    if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null && [ -s "$SAIDA" ]; then
+    # do jogo. Por isso quem decide e o processo do servidor, e nao o PID -- com o tail vivo e o
+    # jogo morto, o script dizia "ja esta rodando" e devolvia um log velho, que o chamador lia como
+    # se fosse desta execucao. Custou uma leitura errada e a conclusao errada junto.
+    if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null \
+            && [ -n "$(orfaos_desta_plataforma)" ]; then
         echo "Ja esta rodando (pid $(cat "$PID"))."
         return 0
     fi

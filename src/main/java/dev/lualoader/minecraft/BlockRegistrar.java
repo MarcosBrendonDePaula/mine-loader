@@ -21,6 +21,20 @@ public final class BlockRegistrar {
     private final Logger logger;
     private final Map<Identifier, Block> blocks = new LinkedHashMap<>();
     private final Map<Identifier, Integer> variantCounts = new LinkedHashMap<>();
+
+    /**
+     * O inventario declarado de cada bloco que tem um.
+     *
+     * <p>Estatico porque a entidade so recebe posicao e estado ao nascer, e precisa descobrir
+     * quantos slots tem antes de ler o NBT. E o bloco quem sabe, e este mapa e o caminho ate ele.
+     */
+    private static final Map<Block, ModManifest.InventoryDefinition> inventories =
+            new LinkedHashMap<>();
+
+    /** O inventario declarado daquele bloco, ou {@code null} se ele nao guarda itens. */
+    public static ModManifest.InventoryDefinition inventoryOf(Block block) {
+        return inventories.get(block);
+    }
     private final Map<String, List<Identifier>> blockItemsByMod = new LinkedHashMap<>();
     private final List<Block> dataBlocks = new ArrayList<>();
 
@@ -45,8 +59,9 @@ public final class BlockRegistrar {
             // As propriedades declaradas precisam estar visiveis durante o construtor do bloco.
             DeclarativeBlock.beginConstruction(declaredState);
             try {
-                // Um bloco so paga o custo de guardar dados quando o manifesto pede.
-                boolean withData = definition.blockData;
+                // Um bloco so paga o custo de guardar dados quando o manifesto pede. Um
+                // inventario tambem mora na entidade, entao pedi-lo implica te-la.
+                boolean withData = definition.blockData || definition.inventory != null;
                 var outline = definition.shape == null
                         ? null
                         : DeclarativeShapes.byName(definition.shape.outline);
@@ -79,6 +94,7 @@ public final class BlockRegistrar {
             }
             Registry.register(Registries.BLOCK, id, block);
             blocks.put(id, block);
+            if (definition.inventory != null) inventories.put(block, definition.inventory);
             int variants = definition.render == null || definition.render.variantTextures == null
                     ? 1
                     : Math.max(1, definition.render.variantTextures.size());
