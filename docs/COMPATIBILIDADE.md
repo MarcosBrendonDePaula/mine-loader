@@ -82,6 +82,7 @@ núcleo não conhecer Minecraft.
 | Herança entre mods (`base` apontando outra espécie declarada) | sim | sim | Ordenação e detecção de ciclo no núcleo; GameTest nas duas |
 | Fase de registro por script (`registration`) | sim | sim | Fabric na inicialização, NeoForge no `RegisterEvent`; GameTest nas duas |
 | Script de registro remoto (URL ou `remote_base`) | sim | sim | Mesma trava de hash do `behavior` de bloco, por `registration_sha256` |
+| Textura e modelo de espécie remotos | sim | sim | URL ou `remote_base`, com cache e trava por hash; exige `https` |
 | Nascimento natural (`entities[].spawn`) | sim | sim | Fabric por API de bioma, NeoForge por modificador no data pack — caminhos diferentes, regra igual |
 | Comportamento declarado (`entities[].ai`) | sim | sim | Vocabulário fechado de metas e alvos; cada plataforma nomeia as classes do jogo de um jeito |
 | Forma própria (`entities[].model`) | sim | sim | Ossos e caixas em JSON; usa a **animação da base**. Nomes de osso conferidos na carga |

@@ -30,9 +30,19 @@ public final class ResourcePackAssembler {
     private final Logger logger;
     private final RemoteResourceManager remoteResources;
 
+    /**
+     * Onde guardar o que for baixado.
+     *
+     * <p>Guardado alem do {@link RemoteResourceManager} porque nem todo recurso remoto passa por
+     * ele: um modelo de entidade e texto, e nao imagem, e chega pelo mesmo leitor de imports que
+     * resolve {@code $import} -- que precisa do caminho, nao do gerenciador.
+     */
+    private final Path remoteCache;
+
     public ResourcePackAssembler(Logger logger, Path cacheDirectory) throws IOException {
         this.logger = logger;
         this.remoteResources = new RemoteResourceManager(cacheDirectory);
+        this.remoteCache = cacheDirectory;
     }
 
     /**
@@ -426,9 +436,25 @@ public final class ResourcePackAssembler {
                     .resolve("models/entity").resolve(entity.id + ".json"), json);
             logger.info("Modelo preparado para entidade {}: {} osso(s)", id, spec.bones.size());
         } catch (IOException | RuntimeException error) {
-            logger.warn("Modelo da entidade {} recusado; a especie usara a forma da base: {}",
-                    id, error.getMessage());
+            // A origem entra no aviso porque a excecao nem sempre a traz: uma falha de rede chega
+            // com mensagem nula, e "recusado: null" nao diz a ninguem o que procurar.
+            logger.warn("Modelo da entidade {} recusado ({}); a especie usara a forma da base: {}",
+                    id, entity.model, describe(error));
         }
+    }
+
+    /**
+     * O motivo de uma falha, mesmo quando ela vem muda.
+     *
+     * <p>Excecao de rede costuma chegar sem mensagem, e um log que diz "recusado: null" gasta uma
+     * linha para nao informar nada. O nome da classe ao menos separa "host nao existe" de "arquivo
+     * malformado".
+     */
+    private static String describe(Throwable error) {
+        String message = error.getMessage();
+        return message == null || message.isBlank()
+                ? error.getClass().getSimpleName()
+                : message;
     }
 
     /** As mesmas tres origens de sempre: recurso declarado, arquivo do mod ou URL. */
@@ -442,7 +468,26 @@ public final class ResourcePackAssembler {
                     mod.manifest().remoteBase), StandardCharsets.UTF_8);
         }
 
-        byte[] bytes = new dev.lualoader.manifest.ManifestImports(mod.directory(), null)
+        // URL direta, como textura e script de registro ja aceitavam. Sem este ramo o endereco
+        // caia em readRelative e era tratado como caminho de arquivo: a falha vinha como "modelo
+        // nao encontrado", mandando procurar em disco um arquivo que mora na web.
+        String lower = reference.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("http://") || lower.startsWith("https://")) {
+            // Anunciado antes de buscar, e nao depois. Se a busca travar ou falhar, o log ja diz
+            // que endereco o loader foi procurar -- o contrario deixaria uma pausa inexplicada na
+            // carga e, quando falhasse, nenhuma pista de para onde ele tinha ido.
+            logger.info("Mod {} carrega modelo de entidade de {}",
+                    mod.manifest().id, reference);
+            byte[] remote = new dev.lualoader.manifest.ManifestImports(
+                    mod.directory(), remoteCache).fetchRemote(reference, null);
+            return new String(remote, StandardCharsets.UTF_8);
+        }
+
+        // O cache de verdade, e nao nulo: com nulo o leitor recusa qualquer busca remota, e um
+        // modelo resolvido por remote_base falharia dizendo que o acesso estava desligado.
+        // O cache de verdade, e nao nulo: com nulo o leitor recusa qualquer busca remota, e um
+        // modelo resolvido por remote_base falharia dizendo que o acesso estava desligado.
+        byte[] bytes = new dev.lualoader.manifest.ManifestImports(mod.directory(), remoteCache)
                 .withRemoteBase(mod.manifest().remoteBase)
                 .readRelative(reference);
         if (bytes == null) throw new IOException("modelo nao encontrado: " + reference);

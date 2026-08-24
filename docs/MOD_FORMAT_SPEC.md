@@ -533,6 +533,56 @@ Os `drops` **somam** ao que a tabela herdada ja produz. Substituir seria pior: d
 drop proprio apagaria em silencio tudo que a base derrubava, e a perda so apareceria matando o
 bicho.
 
+### Compartilhar a especie pela web
+
+Tudo que uma especie declara pode vir de fora do computador de quem joga. Sao tres formas, e elas se
+combinam:
+
+**1. O mod inteiro por link.** E o caminho normal de distribuicao; ver `INSTALACAO.md`.
+
+**2. Uma base remota para o mod.** `remote_base` no manifesto faz todo caminho relativo ser
+procurado primeiro em disco e, se nao existir, naquele endereco. E o que permite publicar um mod
+inteiro na web e instala-lo com um `mod.json` de poucas linhas:
+
+```json
+{
+  "id": "bestiario",
+  "remote_base": "https://exemplo.com/bestiario/",
+  "entities": [
+    { "id": "guardiao", "name": "Guardiao", "base": "minecraft:iron_golem",
+      "texture": "assets/guardiao.png",
+      "model": "models/guardiao.json" }
+  ]
+}
+```
+
+**3. Uma URL direta, campo a campo.** `texture`, `model`, o script de `registration`, o `behavior` de
+bloco e de item, e `$import` aceitam um endereco no lugar do caminho.
+
+| O que | Aceita URL | Aceita `remote_base` | Trava de versao |
+|---|---|---|---|
+| `entities[].texture` | sim | sim | `sha256` do recurso declarado |
+| `entities[].model` | sim | sim | pelo recurso declarado |
+| `registration` (script) | sim | sim | `registration_sha256` |
+| `behavior` de bloco e item | sim | sim | `behavior_sha256` |
+| `$import` no manifesto | sim | sim | `sha256` ao lado do import |
+
+**Regras que valem para todos os tres:**
+
+- **Exige `https`.** Um endereco `http` e recusado, e nao aceito com aviso.
+- **Fica em cache.** A ultima copia conhecida e usada quando a rede falha, para o mod nao morrer
+  offline.
+- **Sem hash, o conteudo e buscado a cada carga** -- o mod acompanha o que foi publicado. Com hash,
+  fica fixo naquela versao. Fixar e o que impede o dono do endereco de mudar o que roda no seu
+  servidor sem voce saber.
+- **Codigo remoto e dito em voz alta no log.** Um script baixado nunca e executado em silencio: a
+  carga registra qual endereco foi usado, e se ele estava fixado por hash.
+
+**Uma limitacao que vale saber antes de contar com isso:** o pacote de recursos gerado -- textura,
+modelo, traducao -- e montado no lado que carrega o mod. Num servidor dedicado, um cliente que nao
+tenha o loader **nao recebe** esses arquivos. E o mesmo limite que ja vale para bloco e item, e nao
+uma particularidade da especie.
+
 ### Comportamento
 
 ```json

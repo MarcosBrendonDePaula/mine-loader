@@ -243,4 +243,92 @@ class EntityLootTableTest {
                         "pack/assets/bestiary/models/item/stone_guardian_spawn_egg.json")),
                 "sem ovo declarado nao deveria sobrar modelo");
     }
+
+    @Test
+    void modeloPorUrlVaiARedeEmVezDeProcurarEmDisco(@TempDir Path root, @TempDir Path out)
+            throws IOException {
+        writeMod(root, """
+                [{
+                  "id": "stone_guardian", "name": "Guardiao", "base": "minecraft:zombie",
+                  "model": "https://exemplo.invalido/guardiao.json"
+                }]""");
+
+        // Nasceu de um defeito real, e de um teste que nao o pegava. `model` nao tinha ramo para
+        // URL: o endereco caia no leitor de caminho relativo e voltava "nao encontrado", mandando
+        // procurar em disco um arquivo que mora na web. Textura e script de registro ja aceitavam.
+        //
+        // O endereco e invalido de proposito: o que se confere e *o motivo* da falha. Se voltar
+        // "nao encontrado", o ramo de URL sumiu; se voltar "desabilitado", o cache sumiu.
+        var logger = new CapturingWarnings();
+        new ResourcePackAssembler(logger, out.resolve("cache")).assemble(
+                new ModLoader(LoggerFactory.getLogger("test")).discover(root),
+                out.resolve("pack"));
+
+        // O discriminador e o anuncio da busca, e nao o texto da recusa. Duas versoes anteriores
+        // deste teste passaram verde com o ramo de URL removido: primeiro porque so negavam
+        // strings e a excecao vinha muda, depois porque o proprio aviso de recusa passou a citar o
+        // endereco. O que so acontece quando o ramo existe e o loader dizer que foi a rede.
+        assertTrue(logger.messages.stream().anyMatch(m ->
+                        m.contains("carrega modelo de entidade de")
+                                && m.contains("exemplo.invalido")),
+                () -> "o loader deveria ter ido a rede buscar o modelo, veio: " + logger.messages);
+
+        // E o acesso remoto precisa estar ligado: com cache nulo o leitor recusa antes de tentar.
+        assertFalse(logger.messages.stream().anyMatch(m -> m.contains("desabilitado")),
+                () -> "o acesso remoto nao deveria estar desligado: " + logger.messages);
+
+        // E a especie continua carregando: um modelo que falha vira aviso, e ela usa a forma da
+        // base. Feio e visivel e melhor que uma criatura deformada sem uma linha de log.
+        assertTrue(Files.isRegularFile(out.resolve(
+                "pack/data/bestiary/loot_table/entities/stone_guardian.json")));
+    }
+
+    /** Guarda tudo que o montador diz: o anuncio da busca e info, a recusa e aviso. */
+    private static final class CapturingWarnings
+            extends org.slf4j.helpers.LegacyAbstractLogger {
+        final List<String> messages = new java.util.ArrayList<>();
+
+        @Override
+        protected void handleNormalizedLoggingCall(org.slf4j.event.Level level,
+                                                   org.slf4j.Marker marker, String message,
+                                                   Object[] arguments, Throwable throwable) {
+            StringBuilder rendered = new StringBuilder(message);
+            for (Object argument : arguments == null ? new Object[0] : arguments) {
+                int slot = rendered.indexOf("{}");
+                if (slot < 0) break;
+                rendered.replace(slot, slot + 2, String.valueOf(argument));
+            }
+            messages.add(rendered.toString());
+        }
+
+        @Override
+        protected String getFullyQualifiedCallerName() {
+            return null;
+        }
+
+        @Override
+        public boolean isTraceEnabled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDebugEnabled() {
+            return false;
+        }
+
+        @Override
+        public boolean isInfoEnabled() {
+            return true;
+        }
+
+        @Override
+        public boolean isWarnEnabled() {
+            return true;
+        }
+
+        @Override
+        public boolean isErrorEnabled() {
+            return true;
+        }
+    }
 }
