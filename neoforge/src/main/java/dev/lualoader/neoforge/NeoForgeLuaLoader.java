@@ -39,8 +39,13 @@ public class NeoForgeLuaLoader {
         // A descoberta acontece aqui, e nao quando o servidor sobe: o registro do jogo fecha
         // durante a inicializacao, e um bloco declarado depois disso simplesmente nao existe. O
         // runtime Lua vem bem depois, e nao precisa existir para o conteudo estar registrado.
-        content = new NeoForgeContentRegistrar(LOGGER, modBus, ID);
+        content = new NeoForgeContentRegistrar(LOGGER, modBus);
         registerDeclaredContent();
+
+        // O pack gerado precisa existir antes de o jogo montar a lista de recursos. No Fabric isso
+        // exige um mixin no gerenciador de packs; aqui ha um evento proprio para acrescentar
+        // fontes, e e por ele que o conteudo declarado ganha textura, modelo e nome traduzido.
+        modBus.addListener(NeoForgeLuaLoader::onAddPackFinders);
 
         // A carga acontece em ServerAboutToStart, e nao em ServerStarted: a arvore de comandos e
         // montada entre os dois, e um mod carregado depois dela teria o comando declarado e nao
@@ -72,7 +77,7 @@ public class NeoForgeLuaLoader {
             loadedMods = List.copyOf(new ModLoader(LOGGER).discover(modsDirectory));
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {
-                    content.register(mod.manifest());
+                    content.declare(mod.manifest());
                 } catch (RuntimeException error) {
                     LOGGER.error("Falha ao registrar o conteudo de {}: {}",
                             mod.manifest().id, error.getMessage());
@@ -80,6 +85,71 @@ public class NeoForgeLuaLoader {
             }
         } catch (IOException | RuntimeException error) {
             LOGGER.error("Falha ao descobrir mods em {}: {}", modsDirectory, error.getMessage());
+        }
+    }
+
+    /**
+     * Monta o resource pack com as texturas, modelos e traducoes do conteudo declarado.
+     *
+     * <p>Sem ele, um bloco registrado existe no jogo e aparece sem textura e com o nome cru do
+     * identificador: funcional e invisivel. O montador vem do nucleo e e o mesmo do adaptador
+     * Fabric -- o que muda e so como cada plataforma acrescenta a fonte de recursos.
+     */
+    private static void onAddPackFinders(
+            net.neoforged.neoforge.event.AddPackFindersEvent event) {
+        if (event.getPackType() != net.minecraft.server.packs.PackType.CLIENT_RESOURCES) return;
+        if (loadedMods.isEmpty()) return;
+
+        Path gameDirectory = net.neoforged.fml.loading.FMLPaths.GAMEDIR.get();
+        Path generated = gameDirectory.resolve("lua-loader").resolve("generated-pack");
+        Path cache = gameDirectory.resolve("lua-loader").resolve("cache");
+
+        try {
+            new dev.lualoader.resources.ResourcePackAssembler(LOGGER, cache)
+                    .assemble(loadedMods, generated);
+
+            var local = new net.minecraft.server.packs.PackLocationInfo(
+                    "lua_loader_generated",
+                    net.minecraft.network.chat.Component.literal("Recursos dos mods Lua"),
+                    net.minecraft.server.packs.repository.PackSource.BUILT_IN,
+                    java.util.Optional.empty());
+
+            // O fornecedor tem dois metodos e por isso nao e uma lambda: um abre o pack sozinho e
+            // o outro abre com os metadados ja lidos. Os dois devolvem a mesma pasta gerada.
+            var recursos = new net.minecraft.server.packs.repository.Pack.ResourcesSupplier() {
+                @Override
+                public net.minecraft.server.packs.PackResources openPrimary(
+                        net.minecraft.server.packs.PackLocationInfo info) {
+                    return new net.minecraft.server.packs.PathPackResources(info, generated);
+                }
+
+                @Override
+                public net.minecraft.server.packs.PackResources openFull(
+                        net.minecraft.server.packs.PackLocationInfo info,
+                        net.minecraft.server.packs.repository.Pack.Metadata metadata) {
+                    return new net.minecraft.server.packs.PathPackResources(info, generated);
+                }
+            };
+
+            // Ligado por padrao e no topo: o pack existe para o conteudo declarado aparecer, e
+            // deixa-lo desligado ou abaixo dos outros anularia a razao de ele existir.
+            var selecao = new net.minecraft.server.packs.PackSelectionConfig(
+                    true, net.minecraft.server.packs.repository.Pack.Position.TOP, false);
+
+            var pack = net.minecraft.server.packs.repository.Pack.readMetaAndCreate(
+                    local, recursos,
+                    net.minecraft.server.packs.PackType.CLIENT_RESOURCES, selecao);
+
+            if (pack == null) {
+                LOGGER.error("O resource pack gerado nao pode ser lido; conteudo ficara sem textura");
+                return;
+            }
+            event.addRepositorySource(consumer -> consumer.accept(pack));
+
+            LOGGER.info("Resource pack dos mods Lua montado em {}", generated);
+        } catch (IOException | RuntimeException error) {
+            // Sem o pack o jogo sobe: os blocos ficam sem textura, o que e ruim mas jogavel.
+            LOGGER.error("Falha ao montar o resource pack: {}", error.getMessage());
         }
     }
 

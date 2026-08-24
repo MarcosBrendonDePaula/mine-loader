@@ -5,14 +5,16 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.RegisterEvent;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -20,74 +22,82 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * Registra no jogo os blocos e itens declarados nos manifestos.
  *
  * <p>Precisa acontecer muito antes do resto: o registro do Minecraft fecha durante a inicialização,
- * e um bloco declarado depois disso simplesmente não existe. Por isso a descoberta dos mods é feita
- * no construtor do adaptador, e não quando o servidor sobe — o runtime Lua vem bem depois, e não
- * precisa existir para o conteúdo estar registrado.
+ * e um bloco declarado depois disso simplesmente não existe.
  *
- * <p>Cobre o essencial do manifesto: bloco com dureza, resistência, som, cor de mapa e ferramenta
- * exigida, e o item correspondente. Variantes visuais, estados declarados e formas de colisão
- * continuam no adaptador Fabric — a diferença está documentada, e o que falta aqui não finge
- * existir.
+ * <p>Usa {@code RegisterEvent} em vez de {@code DeferredRegister} por um motivo que não é de estilo:
+ * o segundo fixa um namespace só, e todo conteúdo sairia como {@code lua_loader:algo}. Um mod
+ * chamado {@code crystal_world} precisa registrar {@code crystal_world:altar} — é o identificador
+ * que o adaptador Fabric usa, que o resource pack gera e que os scripts Lua escrevem. Nomes
+ * diferentes por plataforma quebrariam a promessa de o mesmo mod rodar nas duas.
  */
 public final class NeoForgeContentRegistrar {
     private final Logger logger;
-    private final DeferredRegister.Blocks blocks;
-    private final DeferredRegister.Items items;
+    private final List<ModManifest> manifests = new ArrayList<>();
 
-    private final Map<ResourceLocation, Supplier<Block>> registered = new LinkedHashMap<>();
-    private final List<String> names = new ArrayList<>();
+    private final Map<ResourceLocation, Block> blocks = new LinkedHashMap<>();
+    private final Map<ResourceLocation, Item> items = new LinkedHashMap<>();
 
-    public NeoForgeContentRegistrar(Logger logger, IEventBus modBus, String modId) {
+    public NeoForgeContentRegistrar(Logger logger, IEventBus modBus) {
         this.logger = logger;
-        this.blocks = DeferredRegister.createBlocks(modId);
-        this.items = DeferredRegister.createItems(modId);
-
-        blocks.register(modBus);
-        items.register(modBus);
+        modBus.addListener(this::onRegister);
     }
 
-    /** Blocos registrados até agora, por identificador. */
+    /** Guarda um manifesto para registrar quando o jogo pedir. */
+    public void declare(ModManifest manifest) {
+        manifests.add(manifest);
+    }
+
+    /** Blocos registrados, por identificador. */
     public List<String> registeredBlocks() {
-        return List.copyOf(names);
+        return blocks.keySet().stream().map(ResourceLocation::toString).toList();
     }
 
-    /**
-     * Registra o conteúdo de um manifesto.
-     *
-     * <p>Um mod com conteúdo inválido não impede os outros: a falha é registrada e a carga segue,
-     * como no resto do loader.
-     */
-    public void register(ModManifest manifest) {
-        registerBlocks(manifest);
-        registerItems(manifest);
+    private void onRegister(RegisterEvent event) {
+        event.register(Registries.BLOCK, registry -> {
+            for (ModManifest manifest : manifests) registerBlocks(manifest, registry::register);
+        });
+
+        event.register(Registries.ITEM, registry -> {
+            for (ModManifest manifest : manifests) registerItems(manifest, registry::register);
+        });
+
+        event.register(Registries.CREATIVE_MODE_TAB, registry -> {
+            for (ModManifest manifest : manifests) registerCreativeTab(manifest, registry::register);
+        });
     }
 
-    private void registerBlocks(ModManifest manifest) {
+    /** O que o registro do jogo aceita: um identificador e o valor. */
+    private interface Sink<T> {
+        void accept(ResourceLocation id, T value);
+    }
+
+    private void registerBlocks(ModManifest manifest, Sink<Block> sink) {
         if (manifest.blocks == null) return;
 
         for (ModManifest.BlockDefinition definition : manifest.blocks) {
             ResourceLocation id = ResourceLocation.fromNamespaceAndPath(manifest.id, definition.id);
-            if (registered.containsKey(id)) {
+            if (blocks.containsKey(id)) {
                 logger.error("Bloco ja registrado, ignorando: {}", id);
                 continue;
             }
 
             try {
-                var settings = settingsOf(definition);
-                var block = blocks.registerSimpleBlock(nameIn(manifest, definition.id), settings);
+                // O pack descreve o bloco por variante, e um bloco sem a propriedade nao casa com
+                // nenhuma: o jogo procura a variante sem propriedades, nao acha, e desenha o cubo
+                // de textura ausente -- os quadrados roxos e pretos.
+                int variants = definition.render == null || definition.render.variantTextures == null
+                        ? 1
+                        : Math.max(1, definition.render.variantTextures.size());
 
-                // O item do bloco existe para o jogador poder segurar e colocar: um bloco sem item
-                // so aparece por comando, e nao e o que o manifesto quer dizer.
-                items.registerSimpleBlockItem(nameIn(manifest, definition.id), block);
+                Block block = NeoForgeDeclarativeBlock.create(settingsOf(definition), variants);
+                sink.accept(id, block);
 
-                registered.put(id, block::get);
-                names.add(id.toString());
+                blocks.put(id, block);
                 logger.info("Lua Loader registrou bloco {} ({})", id, definition.name);
             } catch (RuntimeException error) {
                 logger.error("Falha ao registrar o bloco {}: {}", id, error.getMessage());
@@ -95,7 +105,21 @@ public final class NeoForgeContentRegistrar {
         }
     }
 
-    private void registerItems(ModManifest manifest) {
+    private void registerItems(ModManifest manifest, Sink<Item> sink) {
+        // O item de bloco vem primeiro, na mesma ordem dos blocos: e o que o jogador segura para
+        // colocar o bloco, e um bloco sem ele so aparece por comando.
+        if (manifest.blocks != null) {
+            for (ModManifest.BlockDefinition definition : manifest.blocks) {
+                ResourceLocation id =
+                        ResourceLocation.fromNamespaceAndPath(manifest.id, definition.id);
+                Block block = blocks.get(id);
+                if (block == null) continue;
+
+                sink.accept(id, new BlockItem(block, new Item.Properties()));
+
+            }
+        }
+
         if (manifest.items == null) return;
 
         for (ModManifest.ItemEntryDefinition definition : manifest.items) {
@@ -109,8 +133,10 @@ public final class NeoForgeContentRegistrar {
                 if (definition.maxDamage > 0) properties = properties.durability(definition.maxDamage);
                 if (definition.fireResistant) properties = properties.fireResistant();
 
-                final var built = properties;
-                items.registerSimpleItem(nameIn(manifest, definition.id), built);
+                Item item = new Item(properties);
+                sink.accept(id, item);
+
+                items.put(id, item);
                 logger.info("Lua Loader registrou item {} ({})", id, definition.name);
             } catch (RuntimeException error) {
                 logger.error("Falha ao registrar o item {}: {}", id, error.getMessage());
@@ -119,13 +145,68 @@ public final class NeoForgeContentRegistrar {
     }
 
     /**
-     * O nome dentro do registro do mod.
+     * Cria a aba do mod no inventario criativo.
      *
-     * <p>O DeferredRegister ja carrega o namespace, entao aqui vai so o caminho. Passar o
-     * identificador inteiro produziria {@code lua_loader:hello_lua:ruby_block}.
+     * <p>Sem ela, o conteudo declarado so aparece pela busca ou por comando: existe no jogo e nao
+     * se acha. Um mod que declara a aba espera ver o proprio conteudo agrupado.
      */
-    private static String nameIn(ModManifest manifest, String id) {
-        return manifest.id + "__" + id;
+    private void registerCreativeTab(ModManifest manifest, Sink<CreativeModeTab> sink) {
+        if (manifest.creativeTab == null) return;
+
+        // A lista sai do manifesto, e nao do que ja foi registrado: a ordem em que o jogo processa
+        // os registros nao e a que este arquivo declara, e a aba criativa e montada antes dos
+        // itens existirem. Depender da ordem produzia uma aba com um item so.
+        List<ResourceLocation> contents = new ArrayList<>();
+        if (manifest.blocks != null) {
+            for (ModManifest.BlockDefinition block : manifest.blocks) {
+                contents.add(ResourceLocation.fromNamespaceAndPath(manifest.id, block.id));
+            }
+        }
+        if (manifest.items != null) {
+            for (ModManifest.ItemEntryDefinition item : manifest.items) {
+                contents.add(ResourceLocation.fromNamespaceAndPath(manifest.id, item.id));
+            }
+        }
+
+        if (contents.isEmpty()) {
+            logger.warn("Mod {} declara creative_tab sem blocos nem itens; aba nao registrada",
+                    manifest.id);
+            return;
+        }
+
+        String tabName = manifest.creativeTab.id == null ? "main" : manifest.creativeTab.id;
+        ResourceLocation tabId = ResourceLocation.fromNamespaceAndPath(manifest.id, tabName);
+
+        // O icone declarado, ou o primeiro conteudo do mod: uma aba sem icone nao e desenhavel.
+        ResourceLocation iconId = manifest.creativeTab.icon == null
+                ? contents.get(0)
+                : ResourceLocation.tryParse(manifest.creativeTab.icon);
+        if (iconId == null) iconId = contents.get(0);
+
+        final ResourceLocation icon = iconId;
+        final List<ResourceLocation> entries = List.copyOf(contents);
+
+        try {
+            CreativeModeTab tab = CreativeModeTab.builder()
+                    .title(Component.literal(manifest.creativeTab.name == null
+                            ? manifest.name
+                            : manifest.creativeTab.name))
+                    .icon(() -> stackOf(icon))
+                    .displayItems((parameters, output) -> {
+                        for (ResourceLocation id : entries) output.accept(stackOf(id));
+                    })
+                    .build();
+
+            sink.accept(tabId, tab);
+            logger.info("Lua Loader registrou aba criativa {} com {} item(ns)", tabId, entries.size());
+        } catch (RuntimeException error) {
+            logger.error("Falha ao registrar a aba de {}: {}", manifest.id, error.getMessage());
+        }
+    }
+
+    private static ItemStack stackOf(ResourceLocation id) {
+        var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(id);
+        return item == null ? ItemStack.EMPTY : new ItemStack(item);
     }
 
     private static BlockBehaviour.Properties settingsOf(ModManifest.BlockDefinition definition) {
@@ -182,10 +263,5 @@ public final class NeoForgeContentRegistrar {
             case "epic" -> Rarity.EPIC;
             default -> Rarity.COMMON;
         };
-    }
-
-    /** Nome legível de um bloco ou item, para a tradução gerada. */
-    public static Component displayName(String name) {
-        return Component.literal(name == null ? "" : name);
     }
 }

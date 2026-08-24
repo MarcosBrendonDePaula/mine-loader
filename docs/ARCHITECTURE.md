@@ -60,6 +60,16 @@ O adaptador NeoForge existe e compila contra o mesmo `core`, sem uma linha alter
 de ser promessa e virou verificacao: o CI compila os dois em todo push, e a release publica um jar
 por plataforma.
 
+**Duas armadilhas de registro, que o segundo adaptador expos.** A primeira: `DeferredRegister` fixa
+um namespace, e todo conteudo sairia como `lua_loader:crystal_world__altar`. O mesmo mod teria
+identificadores diferentes em cada plataforma -- os scripts nao achariam o bloco, o resource pack
+geraria arquivos que o jogo nao procura, e as receitas quebrariam. `RegisterEvent` aceita
+identificador arbitrario e mantem `crystal_world:altar` nas duas.
+
+A segunda: os registros do jogo **nao rodam na ordem em que o codigo os declara**. A aba criativa e
+montada antes de os itens existirem, entao montar a lista a partir do que ja foi registrado produzia
+uma aba com um item so. A lista sai do manifesto, e nenhuma ordem a afeta.
+
 **Uma restricao de plataforma que moldou o adaptador:** o registro do Minecraft fecha durante a
 inicializacao, e um bloco declarado depois disso simplesmente nao existe. Por isso a descoberta dos
 mods acontece no construtor do adaptador NeoForge, muito antes de qualquer servidor -- enquanto no
@@ -80,7 +90,9 @@ algo ausente descobre na primeira chamada, e nao por um comportamento estranho m
 | Receitas, drops, processos | sim | sim |
 | Comandos de mod | sim | sim |
 | Som, particulas, entidades | sim | sim |
-| Variantes, estados, formas, resource pack | sim | ainda nao |
+| Resource pack: textura, modelo, traducao | sim | sim |
+| Aba criativa | sim | sim |
+| Variantes visuais, estados declarados, formas | sim | ainda nao |
 | Telas, HUD, sobreposicao | sim | ainda nao |
 
 ### Acrescentar outra plataforma
