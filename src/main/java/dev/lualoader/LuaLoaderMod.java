@@ -33,6 +33,11 @@ public final class LuaLoaderMod implements ModInitializer {
     private static ResourcePackAssembler resourcePackAssembler;
     private static FabricGameBridge gameBridge;
     private static ContentRegistrar contentRegistrar;
+    private static dev.lualoader.install.ModInstaller modInstaller;
+    private static dev.lualoader.install.InstallPolicy installPolicy;
+
+    /** Servidor no ar, necessario para republicar a arvore de comandos apos uma instalacao. */
+    private static net.minecraft.server.MinecraftServer currentServer;
 
     @Override
     public void onInitialize() {
@@ -48,9 +53,24 @@ public final class LuaLoaderMod implements ModInitializer {
         gameBridge = new FabricGameBridge(blockRegistrar);
         luaRuntime.attach(gameBridge);
 
+        // O instalador precisa da pasta de mods, e a chave de o que ele pode fazer sozinho fica em
+        // disco: e uma decisao do servidor, e reiniciar nao pode religar o que alguem desligou.
+        installPolicy = new dev.lualoader.install.InstallPolicy(
+                LOGGER, gameDirectory.resolve("lua-loader/instalacao.json"));
+        modInstaller = new dev.lualoader.install.ModInstaller(LOGGER, modsDirectory);
+        luaRuntime.attachInstaller(modInstaller, installPolicy);
+
         try {
             resourcePackAssembler = new ResourcePackAssembler(LOGGER, resourceCache);
             loadedMods = manifestLoader.discover(modsDirectory);
+
+            // As dependencias declaradas sao buscadas antes de qualquer registro: um mod que
+            // depende de outro precisa que o outro exista quando o conteudo for para o jogo.
+            var dependencies = new dev.lualoader.install.DependencyInstaller(
+                    LOGGER, modInstaller, installPolicy).resolve(loadedMods);
+            if (dependencies.changedAnything()) {
+                loadedMods = manifestLoader.discover(modsDirectory);
+            }
             resourcePackAssembler.assemble(loadedMods, generatedPack);
             GeneratedResourcePackProvider.setRoot(generatedPack);
 
@@ -62,6 +82,11 @@ public final class LuaLoaderMod implements ModInitializer {
             }
             // O tipo de dados precisa conhecer todos os blocos, entao vem depois do registro deles.
             dev.lualoader.minecraft.BlockEntityRegistrar.register(LOGGER, blockRegistrar.dataBlocks());
+
+            // A inflamabilidade tambem: ela e registrada por bloco ja existente, nao por settings.
+            for (ModLoader.LoadedMod mod : loadedMods) {
+                registerFlammability(mod.manifest());
+            }
 
             // A aba criativa so pode ser montada depois que blocos e itens existem no registry.
             for (ModLoader.LoadedMod mod : loadedMods) {
@@ -89,8 +114,21 @@ public final class LuaLoaderMod implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 LuaLoaderCommands.register(dispatcher));
+
+        // Um mod instalado com o servidor no ar registra o comando no runtime, e a arvore que o
+        // jogo publica ja foi montada. Sem republicar, o comando existe e ninguem consegue digitar.
+        luaRuntime.onCommandsChanged(() -> {
+            if (currentServer == null) return;
+            LuaLoaderCommands.register(currentServer.getCommandManager().getDispatcher());
+            // O cliente guarda a propria copia da arvore; sem reenviar, ele recusa o comando antes
+            // mesmo de mandar ao servidor.
+            for (var player : currentServer.getPlayerManager().getPlayerList()) {
+                currentServer.getCommandManager().sendCommandTree(player);
+            }
+        });
         new BlockInteractionEvents(luaRuntime, blockRegistrar).register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            currentServer = server;
             gameBridge.setServer(server);
             luaRuntime.triggerAll("server_started", null);
         });
@@ -99,6 +137,7 @@ public final class LuaLoaderMod implements ModInitializer {
             // O estado e gravado depois do evento, para o mod poder ajusta-lo antes de sair.
             luaRuntime.saveAllStates();
             gameBridge.setServer(null);
+            currentServer = null;
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player)));
@@ -111,6 +150,27 @@ public final class LuaLoaderMod implements ModInitializer {
         });
     }
 
+    /**
+     * Ensina o fogo do jogo a alcancar e consumir os blocos declarados.
+     *
+     * <p>Nao entra em {@code BlockSettingsFactory} porque nao e uma propriedade do bloco: o fogo
+     * guarda dois mapas proprios, e o bloco precisa ja existir no registro para entrar neles.
+     *
+     * <p>A ordem dos dois numeros e a mesma da chamada equivalente no NeoForge -- propagacao
+     * primeiro, inflamabilidade depois. Troca-los produziria um bloco que se comporta ao contrario
+     * numa plataforma e certo na outra, que e o tipo de divergencia mais dificil de perceber.
+     */
+    private static void registerFlammability(dev.lualoader.manifest.ModManifest manifest) {
+        for (var entry : dev.lualoader.content.Flammability.declaredIn(manifest)) {
+            var id = net.minecraft.util.Identifier.tryParse(entry.blockId());
+            if (id == null || !net.minecraft.registry.Registries.BLOCK.containsId(id)) continue;
+
+            net.fabricmc.fabric.api.registry.FlammableBlockRegistry.getDefaultInstance()
+                    .add(net.minecraft.registry.Registries.BLOCK.get(id),
+                            entry.burnSpread(), entry.flammability());
+        }
+    }
+
     public static List<ModLoader.LoadedMod> loadedMods() {
         return loadedMods;
     }
@@ -118,6 +178,16 @@ public final class LuaLoaderMod implements ModInitializer {
     /** Adaptador de plataforma em uso, necessario para publicar a dimensao do evento. */
     public static FabricGameBridge gameBridge() {
         return gameBridge;
+    }
+
+    /** A chave que diz o que o loader pode instalar sozinho. */
+    public static dev.lualoader.install.InstallPolicy installPolicy() {
+        return installPolicy;
+    }
+
+    /** O instalador de mods, usado pelos comandos. */
+    public static dev.lualoader.install.ModInstaller modInstaller() {
+        return modInstaller;
     }
 
     public static ContentRegistrar contentRegistrar() {

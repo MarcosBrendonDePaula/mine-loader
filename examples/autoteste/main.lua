@@ -337,6 +337,50 @@ TESTES.mundo = function(ctx)
     exigir(hora >= 0 and hora < 24000, "hora fora da faixa: " .. hora)
 end
 
+
+-- Eventos globais e agendador.
+--
+-- Estes dois nao apareciam em teste nenhum, e por isso passaram muito tempo mortos numa das
+-- plataformas: o adaptador NeoForge nao chamava triggerAll nem advanceScheduler, entao
+-- loader_ready, player_joined, tick e mod.after simplesmente nao aconteciam la -- sem erro, sem
+-- aviso, e com a matriz de compatibilidade afirmando o contrario. Um mod que reagia a entrada de
+-- jogador nao reagia, e nada acusava.
+--
+-- A verificacao mora aqui, e nao na suite do nucleo, porque o dublê dispara os eventos por
+-- construcao: quem esquece de liga-los e a plataforma, e so o jogo de verdade percebe.
+
+local function on_loader_ready(ctx)
+    ctx.state.loader_ready = true
+    -- Uma tarefa agendada na carga prova o relogio interno: se o agendador nao avanca, ela nunca
+    -- vence, e a marca abaixo nunca aparece.
+    mod.after(20, function(depois)
+        depois.state.agendador_rodou = true
+    end)
+end
+
+local function on_player_joined(ctx)
+    ctx.state.player_joined = true
+end
+
+local function on_tick(ctx)
+    ctx.state.ticks = (ctx.state.ticks or 0) + 1
+end
+
+TESTES.eventos_globais = function(ctx)
+    exigir(ctx.state.loader_ready, "loader_ready nao disparou nesta plataforma")
+    exigir((ctx.state.ticks or 0) > 0,
+           "o evento tick nao disparou; ticks contados: " .. tostring(ctx.state.ticks))
+    -- player_joined so vale quando ha jogador: pelo console dirigivel ninguem entrou.
+    if ctx.player then
+        exigir(ctx.state.player_joined, "player_joined nao disparou nesta plataforma")
+    end
+end
+
+TESTES.agendador = function(ctx)
+    exigir(ctx.state.agendador_rodou,
+           "mod.after agendado na carga nunca executou; o agendador nao avanca nesta plataforma")
+end
+
 mod.command("autoteste", function(ctx)
     resultados = {}
     local so = ctx.subcommand
@@ -368,4 +412,8 @@ mod.command("autoteste", function(ctx)
     if ctx.player then ctx.player.send_message(resumo) end
 end)
 
-return {}
+return {
+    on_loader_ready = on_loader_ready,
+    on_player_joined = on_player_joined,
+    on_tick = on_tick,
+}

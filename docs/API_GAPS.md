@@ -9,7 +9,7 @@ na mesma mudança que o implementa.
 | Área | Operações |
 |---|---|
 | Log | `mod.log.info`, `mod.log.warn` |
-| Servidor | `broadcast`, `players`, `time_of_day`, `set_time_of_day`, `weather`, `set_weather`, `world_name` |
+| Servidor | `broadcast`, `players`, `time_of_day`, `set_time_of_day`, `weather`, `set_weather`, `world_name`, `mods` |
 | Mundo | `get_block`, `set_block`, `break_block`, `fill`, `top_y`, `place_structure` |
 | Bloco declarativo | `set_block_variant`, `set_block_property`, `set_block_luminance` |
 | Dados por bloco | `get_block_data`, `set_block_data` |
@@ -24,11 +24,13 @@ na mesma mudança que o implementa.
 | Tela do jogo | `set_overlay`, `clear_overlay` |
 | Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
+| Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
 | Agendamento | `mod.after` |
 | Comandos | `mod.command`, publicado em `/mod <nome>` |
 | Estado | `mod.state`, por mod, persistido em disco |
 | Entre mods | `mod.require`, com `dependencies` |
+| Instalação | `mods`, `install_preview`, `install_confirm`, `uninstall`, `install_allowed`, `install_api_enabled`, `set_install_api`, `is_operator` — veja `INSTALACAO.md` |
 
 Entidade e item aceitam dados declarados na criação — nome, equipamento, efeitos, encantamentos,
 atributos. Veja `GUIA_DO_MOD.md`.

@@ -196,6 +196,25 @@ public interface PlayerHandle {
         throw new BridgeException("set_game_mode nao existe neste adaptador");
     }
 
+    /**
+     * Nível de permissão do jogador no servidor, de zero a quatro.
+     *
+     * <p>Existe para uma operação só, e é a mais poderosa do loader: instalar um mod. Sem isto,
+     * qualquer pessoa numa partida compartilhada poderia acrescentar código ao servidor, e a única
+     * defesa seria o sandbox — que limita o que um script faz, não quem pôde colocá-lo lá.
+     *
+     * <p>Zero é o padrão seguro: uma plataforma que não responda por nível trata todo mundo como
+     * jogador comum, e a instalação recusa em vez de liberar.
+     */
+    default int permissionLevel() {
+        return 0;
+    }
+
+    /** Se o jogador comanda o servidor. Nível dois é o que o jogo chama de operador. */
+    default boolean isOperator() {
+        return permissionLevel() >= 2;
+    }
+
     /** A dimensão em que o jogador está. */
     default String dimension() {
         throw new BridgeException("dimension nao existe neste adaptador");

@@ -128,7 +128,11 @@ public final class ModLoader {
                     // um mod que so quer contar itens nao deveria carregar esse poder junto.
                     "player.modify",
                     "server.read", "server.command.register", "world.read", "world.write",
-                    "entity.read", "entity.spawn", "entity.modify", "world.containers");
+                    "entity.read", "entity.spawn", "entity.modify", "world.containers",
+                    // Instalar outro mod. A mais forte da lista, porque acrescenta codigo ao
+                    // servidor -- e por isso a unica que, alem de declarada, exige que o servidor
+                    // a libere e que quem age seja operador.
+                    "server.install");
             for (String permission : manifest.permissions) {
                 require(knownPermissions.contains(permission), "permissão desconhecida: " + permission);
             }

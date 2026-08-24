@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "id": "gerenciador",
+  "name": "Gerenciador de Mods",
+  "version": "1.0.0",
+  "description": "Lista os mods do loader numa tela e instala novos por link, porque o gerenciador da plataforma nao os enxerga.",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "player.menu",
+    "server.read",
+    "server.command.register",
+    "server.install"
+  ],
+  "enabled": true
+}

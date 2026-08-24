@@ -53,6 +53,15 @@ public class NeoForgePlayerHandle implements PlayerHandle {
     // ------------------------------------------------------------------ identidade e mensagens
 
     @Override
+    public int permissionLevel() {
+        // O jogo guarda o nivel na lista de operadores; quatro e o maximo.
+        for (int level = 4; level >= 1; level--) {
+            if (player.hasPermissions(level)) return level;
+        }
+        return 0;
+    }
+
+    @Override
     public String name() {
         return player.getName().getString();
     }

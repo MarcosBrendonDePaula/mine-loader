@@ -193,13 +193,45 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public void playSound(String soundId, int x, int y, int z, float volume, float pitch,
+                          String category) {
+        playSoundIn(soundId, x, y, z, volume, pitch, categoryOf(category));
+    }
+
+    /** A categoria pedida, ou a de blocos quando o script nao disse. */
+    private static SoundCategory categoryOf(String name) {
+        if (name == null || name.isBlank()) return SoundCategory.BLOCKS;
+        String normalized = name.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!GameBridge.SOUND_CATEGORIES.contains(normalized)) {
+            throw new BridgeException("categoria de som desconhecida: " + name
+                    + "; conhecidas: " + GameBridge.SOUND_CATEGORIES);
+        }
+        return SoundCategory.valueOf(normalized.toUpperCase(java.util.Locale.ROOT));
+    }
+
+    @Override
     public void playSound(String soundId, int x, int y, int z, float volume, float pitch) {
+        playSoundIn(soundId, x, y, z, volume, pitch, SoundCategory.BLOCKS);
+    }
+
+    private void playSoundIn(String soundId, int x, int y, int z, float volume, float pitch,
+                             SoundCategory category) {
         Identifier id = parseIdentifier(soundId);
         SoundEvent sound = Registries.SOUND_EVENT.get(id);
         if (sound == null) throw new BridgeException("som desconhecido: " + soundId);
 
-        requireWorld().playSound(
-                null, new BlockPos(x, y, z), sound, SoundCategory.BLOCKS, volume, pitch);
+        requireWorld().playSound(null, new BlockPos(x, y, z), sound, category, volume, pitch);
+    }
+
+    @Override
+    public void spawnParticles(String particleId, double x, double y, double z,
+                               int count, double spread, double speed) {
+        Identifier id = parseIdentifier(particleId);
+        ParticleType<?> type = Registries.PARTICLE_TYPE.get(id);
+        if (!(type instanceof ParticleEffect effect)) {
+            throw new BridgeException("particula desconhecida ou com parametros: " + particleId);
+        }
+        requireWorld().spawnParticles(effect, x, y, z, count, spread, spread, spread, speed);
     }
 
     @Override
@@ -750,6 +782,67 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return insertInto(x, y, z, itemId, count);
+
+        var single = slotAt(x, y, z, slot);
+        var variant = net.fabricmc.fabric.api.transfer.v1.item.ItemVariant.of(
+                resolveItemForTransfer(itemId));
+
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            long inserted = single.insert(variant, count, transaction);
+            transaction.commit();
+            return (int) (count - inserted);
+        }
+    }
+
+    @Override
+    public int extractFromSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return extractFrom(x, y, z, itemId, count);
+
+        var single = slotAt(x, y, z, slot);
+        var variant = net.fabricmc.fabric.api.transfer.v1.item.ItemVariant.of(
+                resolveItemForTransfer(itemId));
+
+        // O item pedido e conferido contra o que esta no slot: sem isso, errar o indice esvaziaria
+        // o slot errado em silencio.
+        if (!variant.equals(single.getResource()) || single.getAmount() <= 0) return 0;
+
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            long extracted = single.extract(variant, count, transaction);
+            transaction.commit();
+            return (int) extracted;
+        }
+    }
+
+    /**
+     * Um slot especifico daquele inventario.
+     *
+     * <p>Nem todo inventario da Transfer API expoe slots: um tanque ou um fornecedor calculado
+     * responde por conteudo e nao por posicao. Recusar com o motivo e melhor que devolver zero, que
+     * quem escreve o mod leria como "o slot estava vazio".
+     */
+    private net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage<
+            net.fabricmc.fabric.api.transfer.v1.item.ItemVariant> slotAt(
+            int x, int y, int z, int slot) {
+        var storage = itemStorageAt(x, y, z);
+        if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+
+        if (!(storage instanceof net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage<
+                net.fabricmc.fabric.api.transfer.v1.item.ItemVariant> slotted)) {
+            throw new BridgeException("o inventario em " + x + "," + y + "," + z
+                    + " nao responde por slot");
+        }
+        if (slot >= slotted.getSlotCount()) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem "
+                    + slotted.getSlotCount());
+        }
+        return slotted.getSlot(slot);
+    }
+
+    @Override
     public int insertInto(int x, int y, int z, String itemId, int count) {
         var storage = itemStorageAt(x, y, z);
         if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
@@ -853,8 +946,14 @@ public final class FabricGameBridge implements GameBridge {
     @Override
     public String weather() {
         var world = requireWorld();
-        if (world.isThundering()) return "thunder";
-        return world.isRaining() ? "rain" : "clear";
+        // A leitura sai das propriedades do mundo, e nao de world.isThundering(): aquele metodo
+        // compara a intensidade *visual* da tempestade, que sobe e desce ao longo de varios
+        // tiques. Logo depois de set_weather("clear") a flag ja esta limpa e a intensidade ainda
+        // nao desceu, entao o par escrever-e-ler se contradizia -- o script limpava o clima e lia
+        // "thunder". O defeito valia nas duas plataformas, porque o metodo e o mesmo do jogo.
+        var properties = world.getLevelProperties();
+        if (properties.isThundering()) return "thunder";
+        return properties.isRaining() ? "rain" : "clear";
     }
 
     @Override

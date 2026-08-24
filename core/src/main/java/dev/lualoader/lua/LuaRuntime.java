@@ -146,6 +146,87 @@ public final class LuaRuntime {
         this.stateStore = new StateStore(logger, stateDirectory);
     }
 
+    /**
+     * Instalador e a chave que diz se um mod pode usa-lo.
+     *
+     * <p>Os dois vem do bootstrap e podem ser nulos: um runtime de teste ou de validacao offline
+     * nao instala nada, e a API recusa com o motivo em vez de estourar.
+     */
+    private dev.lualoader.install.ModInstaller installer;
+    private dev.lualoader.install.InstallPolicy installPolicy;
+
+    /** Previas ja mostradas, para o segundo passo gravar o que foi lido e nao uma busca nova. */
+    private final Map<String, dev.lualoader.install.ModInstaller.Preview> pendingInstalls =
+            new LinkedHashMap<>();
+
+    /**
+     * O que a plataforma precisa refazer quando um mod entra depois da carga.
+     *
+     * <p>Os nomes de comando sao literais na arvore do jogo, montada uma vez na inicializacao: um
+     * mod instalado agora tem o comando registrado no runtime e invisivel para quem digita. Quem
+     * sabe reconstruir aquela arvore e o adaptador, e nao o nucleo.
+     */
+    private Runnable commandRefresh;
+
+    /** Liga o instalador do bootstrap. Sem ele, a API de instalacao recusa. */
+    public void attachInstaller(dev.lualoader.install.ModInstaller installer,
+                                dev.lualoader.install.InstallPolicy policy) {
+        this.installer = installer;
+        this.installPolicy = policy;
+    }
+
+    /** Como a plataforma republica os comandos quando um mod entra fora da inicializacao. */
+    public void onCommandsChanged(Runnable refresh) {
+        this.commandRefresh = refresh;
+    }
+
+    /**
+     * Carrega um mod que acabou de chegar ao disco, sem reiniciar.
+     *
+     * <p>Vale para o que vive no runtime -- script, evento, comando, menu, tela. <b>Nao vale para
+     * bloco e item</b>: o registro do Minecraft fecha durante a inicializacao, e conteudo declarado
+     * depois disso simplesmente nao existe. Quem chama precisa ter conferido isso antes; aqui a
+     * carga e feita de qualquer forma, porque um mod com conteudo ainda tem scripts que funcionam.
+     *
+     * @return {@code false} quando o mod nao foi encontrado ou o script nao compilou
+     */
+    public boolean loadInstalled(java.nio.file.Path modDirectory) {
+        java.nio.file.Path root = modDirectory.getParent();
+        if (root == null) return false;
+
+        String modId = modDirectory.getFileName().toString();
+        try {
+            for (ModLoader.LoadedMod found : new ModLoader(logger).discover(root)) {
+                if (!found.manifest().id.equals(modId)) continue;
+
+                // Reinstalar por cima de um mod ja carregado troca o script no lugar, e o antigo
+                // precisa soltar o que registrou -- comando, tela, tarefa agendada.
+                if (scripts.containsKey(modId)) {
+                    scheduled.removeIf(task -> task.modId().equals(modId));
+                    commands.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
+                    menus.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
+                    screens.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
+                    processes.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
+                }
+
+                load(found);
+                if (commandRefresh != null) commandRefresh.run();
+                return true;
+            }
+            logger.error("Mod {} instalado mas nao encontrado na pasta de mods", modId);
+            return false;
+        } catch (IOException | RuntimeException error) {
+            logger.error("Mod {} instalado, mas o script nao carregou: {}", modId,
+                    error.getMessage());
+            return false;
+        }
+    }
+
+    /** A chave de instalacao em uso, ou {@code null} quando o bootstrap nao ligou nenhuma. */
+    public dev.lualoader.install.InstallPolicy installPolicy() {
+        return installPolicy;
+    }
+
     /** Conecta o adaptador de plataforma. Chamado pelo bootstrap antes de disparar eventos. */
     public void attach(GameBridge bridge) {
         this.bridge = bridge == null ? GameBridge.DETACHED : bridge;
@@ -1219,6 +1300,55 @@ public final class LuaRuntime {
                 return registryQuery(args, bridge::registeredEntities);
             }
         });
+        // A lista dos mods do loader.
+        //
+        // O gerenciador de mods da plataforma -- o Mod Menu do Fabric, a lista do NeoForge --
+        // enxerga um mod so: o proprio loader. Os mods Lua vivem dentro dele e sao invisiveis la,
+        // entao quem joga nao tem como saber o que esta instalado, em que versao, nem por que algo
+        // parou de funcionar. Esta funcao e o que permite a um mod montar essa lista.
+        //
+        // Devolve o manifesto, e nao o estado interno do runtime: e a mesma informacao que quem
+        // escreveu o mod declarou, e nao um retrato de como o loader a interpretou.
+        serverApi.set("mods", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+
+                LuaTable list = new LuaTable();
+                int index = 1;
+                for (LoadedScript script : scripts.values()) {
+                    ModManifest manifest = script.mod().manifest();
+
+                    LuaTable entry = new LuaTable();
+                    entry.set("id", LuaValue.valueOf(manifest.id));
+                    entry.set("name", LuaValue.valueOf(
+                            manifest.name == null ? manifest.id : manifest.name));
+                    entry.set("version", LuaValue.valueOf(
+                            manifest.version == null ? "" : manifest.version));
+                    entry.set("description", LuaValue.valueOf(
+                            manifest.description == null ? "" : manifest.description));
+                    entry.set("enabled", LuaValue.valueOf(manifest.enabled));
+
+                    entry.set("authors", toLuaList(manifest.authors));
+                    entry.set("permissions", toLuaList(manifest.permissions));
+
+                    // As contagens, e nao as listas: um mod de catalogo ja pode perguntar o resto
+                    // por blocks() e items(), e uma tela precisa de um numero para caber na linha.
+                    entry.set("blocks", LuaValue.valueOf(
+                            manifest.blocks == null ? 0 : manifest.blocks.size()));
+                    entry.set("items", LuaValue.valueOf(
+                            manifest.items == null ? 0 : manifest.items.size()));
+                    entry.set("recipes", LuaValue.valueOf(
+                            manifest.recipes == null ? 0 : manifest.recipes.size()));
+                    entry.set("events", LuaValue.valueOf(
+                            manifest.events == null ? 0 : manifest.events.size()));
+
+                    list.set(index++, entry);
+                }
+                return list;
+            }
+        });
+
         serverApi.set("processes", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -1304,10 +1434,19 @@ public final class LuaRuntime {
                 if (args.narg() < 5) {
                     throw new LuaError("insert_into exige x, y, z, item e quantidade");
                 }
-                return LuaValue.valueOf(bridge.insertInto(
+                // O sexto argumento e o slot, opcional: sem ele o item vai para qualquer lugar
+                // do inventario, que e como a operacao sempre funcionou. Com ele, o script
+                // enderreca o slot que container_at ja numerava e nao dava para alcancar.
+                int slot = args.narg() >= 6 && !args.arg(6).isnil()
+                        ? args.arg(6).checkint()
+                        : -1;
+                if (slot < -1) throw new LuaError("insert_into: slot nao pode ser negativo");
+
+                return LuaValue.valueOf(bridge.insertIntoSlot(
                         (int) requireCoordinate(args.arg(1)),
                         (int) requireCoordinate(args.arg(2)),
                         (int) requireCoordinate(args.arg(3)),
+                        slot,
                         requireIdentifier(args.arg(4).tojstring()),
                         requireCount(args.arg(5))));
             }
@@ -1319,10 +1458,19 @@ public final class LuaRuntime {
                 if (args.narg() < 5) {
                     throw new LuaError("extract_from exige x, y, z, item e quantidade");
                 }
-                return LuaValue.valueOf(bridge.extractFrom(
+                // O sexto argumento e o slot, opcional: sem ele o item vai para qualquer lugar
+                // do inventario, que e como a operacao sempre funcionou. Com ele, o script
+                // enderreca o slot que container_at ja numerava e nao dava para alcancar.
+                int slot = args.narg() >= 6 && !args.arg(6).isnil()
+                        ? args.arg(6).checkint()
+                        : -1;
+                if (slot < -1) throw new LuaError("extract_from: slot nao pode ser negativo");
+
+                return LuaValue.valueOf(bridge.extractFromSlot(
                         (int) requireCoordinate(args.arg(1)),
                         (int) requireCoordinate(args.arg(2)),
                         (int) requireCoordinate(args.arg(3)),
+                        slot,
                         requireIdentifier(args.arg(4).tojstring()),
                         requireCount(args.arg(5))));
             }
@@ -1451,8 +1599,19 @@ public final class LuaRuntime {
                 if (volume < 0 || volume > 10) throw new LuaError("volume deve estar entre 0 e 10");
                 if (pitch < 0.5 || pitch > 2.0) throw new LuaError("pitch deve estar entre 0.5 e 2.0");
 
+                // O setimo argumento e a categoria, opcional: e o que permite ao jogador baixar
+                // o volume dos sons do mod sem silenciar o jogo inteiro.
+                String category = args.narg() >= 7 && !args.arg(7).isnil()
+                        ? args.arg(7).tojstring()
+                        : null;
+                if (category != null
+                        && !dev.lualoader.platform.GameBridge.SOUND_CATEGORIES.contains(category)) {
+                    throw new LuaError("categoria de som desconhecida: " + category
+                            + "; conhecidas: " + dev.lualoader.platform.GameBridge.SOUND_CATEGORIES);
+                }
+
                 bridge.playSound(id, requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
-                        requireCoordinate(args.arg(4)), volume, pitch);
+                        requireCoordinate(args.arg(4)), volume, pitch, category);
                 return LuaValue.NIL;
             }
         });
@@ -1467,8 +1626,13 @@ public final class LuaRuntime {
                 if (count < 1 || count > 512) throw new LuaError("count deve estar entre 1 e 512");
                 if (spread < 0 || spread > 16) throw new LuaError("spread deve estar entre 0 e 16");
 
+                // O setimo argumento e a velocidade, opcional: sem ele a particula so aparece,
+                // que e como a operacao sempre funcionou. Com ele, ela e lancada.
+                double speed = args.narg() >= 7 ? args.arg(7).checkdouble() : 0.0;
+                if (speed < 0 || speed > 4) throw new LuaError("speed deve estar entre 0 e 4");
+
                 bridge.spawnParticles(id, requireCoordinate(args.arg(2)), requireCoordinate(args.arg(3)),
-                        requireCoordinate(args.arg(4)), count, spread);
+                        requireCoordinate(args.arg(4)), count, spread, speed);
                 return LuaValue.NIL;
             }
         });
@@ -1538,8 +1702,14 @@ public final class LuaRuntime {
                 int z = requireCoordinate(args.arg(4));
 
                 try {
+                    // O quinto argumento e o giro, opcional: em quartos de volta, para uma
+                    // masmorra nao nascer sempre virada para o mesmo lado.
+                    int turns = args.narg() >= 5 && !args.arg(5).isnil()
+                            ? args.arg(5).checkint()
+                            : 0;
+
                     StructurePlacer.Placement placement =
-                            new StructurePlacer(bridge).place(structure, x, y, z);
+                            new StructurePlacer(bridge).place(structure, x, y, z, turns);
                     return LuaValue.valueOf(placement.placed());
                 } catch (IllegalArgumentException error) {
                     throw new LuaError(error.getMessage());
@@ -2080,6 +2250,172 @@ public final class LuaRuntime {
         return count;
     }
 
+    /**
+     * A API de instalacao de mods, acoplada ao jogador que disparou a acao.
+     *
+     * <p>Existe para um caso concreto: um mod publicado em pedacos -- um nucleo mais modulos
+     * opcionais -- que quer oferecer dentro do jogo a lista do que existe, para quem joga escolher o
+     * que instalar. Sem ela, escolher um modulo significa sair do jogo, achar o arquivo e reiniciar.
+     *
+     * <p>Tres portas, e todas precisam estar abertas:
+     *
+     * <ul>
+     *   <li>o mod declarou a permissao {@code server.install};</li>
+     *   <li>quem administra o servidor liberou a instalacao pela API;</li>
+     *   <li>quem esta agindo e operador.</li>
+     * </ul>
+     *
+     * <p>A permissao sozinha nao basta de proposito. Um mod declara as proprias permissoes, entao
+     * ela diz "este mod pretende instalar outros" -- e e uma informacao util, que aparece na tela do
+     * gerenciador --, mas nao autoriza nada. Quem autoriza e o servidor, e o operador.
+     */
+    private void installApiFor(ModLoader.LoadedMod mod, PlayerHandle player, LuaTable serverApi) {
+        serverApi.set("install_allowed", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                return LuaValue.valueOf(installer != null
+                        && installPolicy != null
+                        && installPolicy.allowApiInstall()
+                        && player != null
+                        && player.isOperator());
+            }
+        });
+
+        // O interruptor, e quem pode mexer nele. Fica na API para a tela do gerenciador poder
+        // liga-lo sem ninguem sair do jogo -- que e o ponto de ter um instalador dentro do jogo.
+        // Mudar a chave nao exige a permissao server.install: exige ser operador, que e mais forte.
+        serverApi.set("install_api_enabled", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                return LuaValue.valueOf(installPolicy != null && installPolicy.allowApiInstall());
+            }
+        });
+
+        serverApi.set("set_install_api", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue enabled) {
+                if (installPolicy == null) throw new LuaError("este servidor nao instala mods");
+                if (player == null || !player.isOperator()) {
+                    throw new LuaError("so um operador muda essa chave");
+                }
+
+                installPolicy.setAllowApiInstall(enabled.toboolean());
+                logger.info("Instalacao pela API {} por {}",
+                        enabled.toboolean() ? "liberada" : "bloqueada", player.name());
+                return LuaValue.valueOf(installPolicy.allowApiInstall());
+            }
+        });
+
+        serverApi.set("is_operator", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                return LuaValue.valueOf(player != null && player.isOperator());
+            }
+        });
+
+        serverApi.set("install_preview", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue url) {
+                requireInstallAllowed(mod, player);
+                try {
+                    var preview = installer.preview(url.tojstring());
+                    pendingInstalls.put(preview.id(), preview);
+
+                    LuaTable table = new LuaTable();
+                    table.set("id", LuaValue.valueOf(preview.id()));
+                    table.set("name", LuaValue.valueOf(preview.name()));
+                    table.set("version", LuaValue.valueOf(preview.version()));
+                    table.set("description", LuaValue.valueOf(preview.description()));
+                    table.set("authors", toLuaList(preview.authors()));
+                    table.set("permissions", toLuaList(preview.permissions()));
+                    table.set("blocks", LuaValue.valueOf(preview.blocks()));
+                    table.set("items", LuaValue.valueOf(preview.items()));
+                    table.set("replaces", LuaValue.valueOf(preview.replacesExisting()));
+                    // Conteudo declarado so existe no jogo depois de reiniciar: o registro do
+                    // Minecraft fecha na inicializacao. Dizer isto aqui e o que permite a tela
+                    // avisar antes, em vez de quem instalou procurar um bloco que nao aparece.
+                    table.set("needs_restart",
+                            LuaValue.valueOf(preview.blocks() > 0 || preview.items() > 0));
+                    return table;
+                } catch (java.io.IOException error) {
+                    throw new LuaError("nao foi possivel baixar: " + error.getMessage());
+                } catch (dev.lualoader.install.ModInstaller.InstallException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
+
+        serverApi.set("install_confirm", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue modId) {
+                requireInstallAllowed(mod, player);
+
+                String id = modId.tojstring();
+                var preview = pendingInstalls.remove(id);
+                // Sem previa nao ha instalacao: e o que garante que alguem viu as permissoes antes
+                // de o codigo entrar. Confirmar direto por endereco pularia justamente essa leitura.
+                if (preview == null) {
+                    throw new LuaError("nenhuma previa pendente para " + id
+                            + "; chame install_preview antes");
+                }
+
+                try {
+                    java.nio.file.Path directory = installer.install(preview);
+                    logger.info("Mod {} instalado pela API, a pedido de {}", id,
+                            player == null ? "?" : player.name());
+
+                    // O que vive no runtime entra agora; o que precisa do registro do jogo nao tem
+                    // como entrar. Carregar assim mesmo um mod com conteudo e melhor que nao
+                    // carregar: os scripts dele passam a valer, e so os blocos ficam para depois.
+                    boolean active = loadInstalled(directory);
+                    boolean needsRestart = preview.blocks() > 0 || preview.items() > 0;
+
+                    LuaTable result = new LuaTable();
+                    result.set("installed", LuaValue.TRUE);
+                    result.set("active", LuaValue.valueOf(active));
+                    result.set("needs_restart", LuaValue.valueOf(needsRestart));
+                    return result;
+                } catch (java.io.IOException error) {
+                    throw new LuaError("nao foi possivel gravar: " + error.getMessage());
+                }
+            }
+        });
+
+        serverApi.set("uninstall", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue modId) {
+                requireInstallAllowed(mod, player);
+
+                String id = modId.tojstring();
+                // Um mod nao se desinstala: o script sairia do disco no meio da propria execucao, e
+                // o que aconteceria depois disso depende de detalhe de implementacao.
+                if (id.equals(mod.manifest().id)) {
+                    throw new LuaError("um mod nao pode desinstalar a si mesmo");
+                }
+
+                try {
+                    return LuaValue.valueOf(installer.uninstall(id));
+                } catch (java.io.IOException error) {
+                    throw new LuaError("nao foi possivel remover: " + error.getMessage());
+                }
+            }
+        });
+    }
+
+    private void requireInstallAllowed(ModLoader.LoadedMod mod, PlayerHandle player) {
+        requirePermission(mod.manifest(), "server.install");
+
+        if (installer == null || installPolicy == null) {
+            throw new LuaError("este servidor nao instala mods");
+        }
+        if (!installPolicy.allowApiInstall()) {
+            throw new LuaError("a instalacao pela API dos mods esta desligada neste servidor");
+        }
+        if (player == null || !player.isOperator()) {
+            throw new LuaError("so um operador pode instalar mods");
+        }
+    }
+
     private LuaTable context(ModLoader.LoadedMod mod, PlayerHandle player, BlockEventData block) {
         LuaTable context = createLogApi(mod.manifest().id);
         context.set("time", LuaValue.valueOf(System.currentTimeMillis()));
@@ -2087,6 +2423,10 @@ public final class LuaRuntime {
         context.set("state", states.computeIfAbsent(mod.manifest().id, key -> stateStore.load(key)));
 
         LuaTable serverApi = serverApiFor(mod);
+        // As funcoes de instalacao entram aqui, e nao em serverApiFor, porque precisam saber quem
+        // esta agindo: sem jogador nao ha nivel de operador para conferir, e instalar codigo e a
+        // unica operacao do loader que exige isso.
+        installApiFor(mod, player, serverApi);
         context.set("server", serverApi);
 
         if (block != null) {
@@ -2465,6 +2805,18 @@ public final class LuaRuntime {
 
     /** Tarefa agendada por {@code mod.after}. */
     private record ScheduledTask(String modId, long dueTick, LuaFunction callback) {
+    }
+
+    /** Uma lista de textos como tabela Lua indexada a partir de um. */
+    private static LuaTable toLuaList(java.util.List<String> values) {
+        LuaTable table = new LuaTable();
+        if (values == null) return table;
+
+        int index = 1;
+        for (String value : values) {
+            if (value != null) table.set(index++, LuaValue.valueOf(value));
+        }
+        return table;
     }
 
     private record LoadedScript(ModLoader.LoadedMod mod,

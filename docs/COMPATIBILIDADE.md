@@ -50,31 +50,45 @@ núcleo não conhecer Minecraft.
 | Recursos nomeados (`resources` + `"@nome"`) | sim | sim | Vive no núcleo; a forma inline continua válida |
 | Aba criativa | sim | sim | |
 | Resource pack gerado (textura, modelo, nome) | sim | sim | |
-| Receitas | sim | sim | Geradas como datapack pelo núcleo |
+| Receitas de bancada | sim | sim | Geradas como datapack pelo núcleo |
+| Receitas de fornalha, alto-forno, defumador e fogueira | sim | sim | Idem |
+| Tags de bloco e de item | sim | sim | Idem |
 | Tabelas de loot | sim | sim | Idem |
-| Tags | sim | sim | Idem |
 | Estruturas em texto | sim | sim | O posicionador vive no núcleo |
 | Estruturas de arquivo `.nbt` | sim | sim | Lidas na carga; estado e entidades não são aplicados |
 | Modelo declarado (Blockbench) | sim | sim | Recurso do tipo `model` |
 | Comandos de mod | sim | sim | |
+| Instalar mod por link | sim | sim | Motor no núcleo; ver `INSTALACAO.md` |
+| Republicar comandos após instalar | sim | sim | |
+| Nível de operador (`is_operator`) | sim | sim | |
 | Dados por bloco (`block_data`) | sim | sim | |
 | **Inventário de bloco** (`inventory`) | sim | sim | |
 | Variantes visuais (`render.variant_textures`) | sim | sim | |
-| **Estados declarados** (`state.properties`) | sim | **não** | Só muda no Fabric |
+| **Estados declarados** (`state.properties`) | sim | sim | |
 | Formas de colisão (`shape`) | sim | sim | Nomes prontos ou caixas próprias em `shape.boxes` |
-| **Posicionamento** (`placement`: facing, waterlog) | sim | **não** | Só muda no Fabric |
-| **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | **não** | Só muda no Fabric |
+| **Posicionamento** (`placement`: facing, waterlog) | **não** | **não** | Declarado e ignorado nas duas |
+| **Aparência** (`render`: layer, emissive, tint) | **não** | **não** | Declarado e ignorado nas duas |
+| Propriedades de material e física (`material`, `settings`) | sim | sim | Conferidas por GameTest nas duas |
+| Loot de outro bloco (`settings.drops_like`) | sim | sim | |
+| Inflamabilidade (`material.flammability`, `burn_spread`) | sim | sim | |
+| Item do bloco (`block.item`) | sim | sim | |
+| Variante de entidade (`spawn.variant`) | sim | sim | Só cavalo, nas duas |
+| **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | sim | |
 | Modelos não cúbicos | sim | sim | O modelo sai da mesma forma que a colisão, gerada no núcleo |
 
 ## Eventos
 
-| Evento | Fabric | NeoForge |
-|---|---|---|
-| `loader_ready`, `server_started`, `player_joined` | sim | sim |
-| `block_used`, `block_attacked`, `block_placed`, `block_broken` | sim | sim |
-| `item_used`, `item_used_on_block` | sim | sim |
-| Clique em menu | sim | sim |
-| Evento de tela (`click`, `change`, `submit`, `close`) | sim | sim |
+| Evento | Fabric | NeoForge | Observação |
+|---|---|---|---|
+| `loader_ready`, `server_started`, `server_stopped` | sim | sim | |
+| `player_joined`, `player_left` | sim | sim | |
+| `tick`, e o agendador de `mod.after` | sim | sim | |
+| `block_used`, `block_attacked`, `block_placed`, `block_broken` | sim | sim | |
+| `block_random_tick`, `block_neighbor_update` | sim | sim | |
+| `item_used`, `item_used_on_block` | sim | sim | |
+| Clique em menu | sim | sim | |
+| Evento de tela (`click`, `change`, `submit`, `close`) | sim | sim | |
+| `mod_reloaded`, `menu_closed` | **não** | **não** | Aceitos no registro e nunca disparados |
 
 ## Interoperabilidade com mods externos
 

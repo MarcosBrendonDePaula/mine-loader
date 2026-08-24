@@ -5,6 +5,24 @@
   "version": "1.0.0",
   "description": "Exercita as APIs do loader dentro do jogo e reporta o resultado no log.",
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "player.read", "player.modify", "world.read", "world.write", "world.containers", "entity.read", "entity.spawn", "entity.modify", "player.inventory", "server.read", "server.command.register"],
-  "enabled": true
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "player.modify",
+    "world.read",
+    "world.write",
+    "world.containers",
+    "entity.read",
+    "entity.spawn",
+    "entity.modify",
+    "player.inventory",
+    "server.read",
+    "server.command.register"
+  ],
+  "enabled": true,
+  "events": {
+    "loader_ready": "on_loader_ready",
+    "player_joined": "on_player_joined",
+    "tick": "on_tick"
+  }
 }

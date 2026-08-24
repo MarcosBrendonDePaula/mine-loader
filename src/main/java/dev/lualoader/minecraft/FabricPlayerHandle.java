@@ -12,6 +12,15 @@ import net.minecraft.util.Identifier;
 /** Embrulha a entidade de jogador do Fabric na referência neutra usada pelo núcleo. */
 public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHandle {
     @Override
+    public int permissionLevel() {
+        // O jogo guarda o nivel na lista de operadores; quatro e o maximo.
+        for (int level = 4; level >= 1; level--) {
+            if (player.hasPermissionLevel(level)) return level;
+        }
+        return 0;
+    }
+
+    @Override
     public String name() {
         return player.getName().getString();
     }
