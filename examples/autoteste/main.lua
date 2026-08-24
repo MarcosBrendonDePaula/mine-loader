@@ -273,6 +273,250 @@ end
 --
 -- Roda so quando ha alguem no jogo. Pelo console nao ha jogador, e uma verificacao que finge ter um
 -- nao verifica coisa alguma.
+-- A camada de interface, que so existe quando ha um cliente do outro lado.
+--
+-- Os GameTests sobem um servidor headless e o servidor dirigivel tambem: os dois exercitam o
+-- registro, o mundo e os scripts, e nenhum dos dois tem tela. Tudo que sai daqui para o cliente --
+-- tela desenhada, HUD, sobreposicao, tamanho da janela -- e invisivel para eles.
+--
+-- Estes casos so dizem algo rodando dentro do jogo, com alguem logado. Pelo console eles se pulam
+-- em vez de falhar, porque "nao ha cliente" nao e defeito -- e a situacao.
+
+--- Um jogador com cliente do loader, ou nil quando nao da para verificar interface.
+local function jogador_com_tela(ctx)
+    if ctx.player == nil then return nil end
+    if not ctx.player.supports_screens() then return nil end
+    return ctx.player
+end
+
+TESTES.cliente_presente = function(ctx)
+    if ctx.player == nil then
+        ctx.log.info("[AUTOTESTE] cliente_presente: pulado, execucao sem jogador")
+        return
+    end
+
+    -- supports_screens e a pergunta que separa "tem cliente do loader" de "nao tem". Um mod que
+    -- nao pergunta antes promete uma janela que nunca aparece.
+    local tem = ctx.player.supports_screens()
+    exigir(type(tem) == "boolean", "supports_screens deveria devolver booleano, veio " .. type(tem))
+
+    if not tem then
+        ctx.log.warn("[AUTOTESTE] cliente_presente: o cliente nao anunciou suporte a telas")
+        return
+    end
+
+    -- O tamanho vem do cliente pelo canal de rede: se ele chegou, o canal funciona nos dois
+    -- sentidos, que e o que nenhum teste de servidor consegue afirmar.
+    local tela = ctx.player.screen_size()
+    exigir(tela.width > 0 and tela.height > 0,
+        "screen_size deveria vir do cliente, veio " .. tela.width .. "x" .. tela.height)
+    exigir(tela.width <= 1024 and tela.height <= 1024,
+        "screen_size fora da faixa: " .. tela.width .. "x" .. tela.height)
+
+    ctx.log.info("[AUTOTESTE] janela do cliente: " .. tela.width .. "x" .. tela.height)
+end
+
+TESTES.tela_desenhada = function(ctx)
+    local jogador = jogador_com_tela(ctx)
+    if jogador == nil then
+        ctx.log.info("[AUTOTESTE] tela_desenhada: pulado, sem cliente")
+        return
+    end
+
+    local descricao = {
+        title = "Autoteste",
+        width = 200,
+        height = 100,
+        elements = {
+            { type = "panel", x = 0, y = 0, w = 200, h = 100, color = "#101018E0" },
+            { type = "label", x = 10, y = 10, text = "Autoteste", color = "#FFD966" },
+            { type = "item", x = 10, y = 30, item = "minecraft:diamond", count = 3 },
+            { type = "progress", x = 10, y = 52, w = 180, h = 8, progress = 0.5 },
+            { type = "button", id = "fechar", x = 10, y = 68, w = 180, h = 20, text = "Fechar" }
+        }
+    }
+
+    exigir(jogador.open_screen("prova", descricao), "open_screen deveria abrir com cliente presente")
+    exigir(jogador.update_screen(descricao), "update_screen deveria valer com a tela aberta")
+    jogador.close_screen()
+
+    -- Depois de fechada, redesenhar precisa recusar: aceitar em silencio faria um mod acreditar
+    -- que esta desenhando numa tela que ninguem ve.
+    exigir(jogador.update_screen(descricao) == false,
+        "update_screen deveria recusar com a tela fechada")
+end
+
+TESTES.hud_e_sobreposicao = function(ctx)
+    local jogador = jogador_com_tela(ctx)
+    if jogador == nil then
+        ctx.log.info("[AUTOTESTE] hud_e_sobreposicao: pulado, sem cliente")
+        return
+    end
+
+    -- set_hud passou a responder se o HUD chegou, como open_screen e set_overlay ja faziam.
+    -- Era a unica das tres a nao devolver nada, e este teste foi quem mostrou isso.
+    exigir(jogador.set_hud({
+        { type = "panel", x = 2, y = 2, w = 90, h = 14, color = "#00000080" },
+        { type = "label", x = 6, y = 5, text = "Autoteste OK", color = "#FFD966" }
+    }) == true, "set_hud deveria devolver true com cliente presente")
+
+    -- A sobreposicao entra sobre uma tela do jogo, e o alvo vem do vocabulario fechado do nucleo.
+    jogador.set_overlay("marca", {
+        target = "inventory",
+        elements = {
+            { type = "label", x = 4, y = 4, text = "autoteste", color = "#9090A0" }
+        }
+    })
+    jogador.clear_overlay("marca")
+
+    -- Um alvo fora do vocabulario precisa ser recusado no servidor, e nao ignorado no cliente: o
+    -- erro tem que chegar a quem escreveu o mod.
+    local ok = pcall(function()
+        jogador.set_overlay("invalida", { target = "nao_existe", elements = {} })
+    end)
+    exigir(not ok, "um alvo de sobreposicao desconhecido deveria ser recusado")
+
+    jogador.set_hud({})
+end
+
+-- O que esta sessao acrescentou. Cada caso existe porque a capacidade era nova, e nova sem
+-- verificacao e a mesma coisa que ausente com aparencia de presente.
+
+TESTES.inventario_por_slot = function(ctx)
+    local x, y, z = 12, 70, 12
+    ctx.server.set_block("minecraft:chest", x, y, z)
+
+    -- container_at sempre numerou os slots; enderecar o slot que ele nomeia e o que faltava.
+    local vazio = ctx.server.container_at(x, y, z)
+    exigir(#vazio == 0, "o bau novo deveria estar vazio, veio " .. #vazio .. " linha(s)")
+
+    local sobrou = ctx.server.insert_into(x, y, z, "minecraft:diamond", 5, 0)
+    exigir(sobrou == 0, "os 5 diamantes deveriam caber no slot 0, sobraram " .. sobrou)
+
+    local conteudo = ctx.server.container_at(x, y, z)
+    exigir(#conteudo == 1, "o bau deveria ter uma linha, veio " .. #conteudo)
+    exigir(conteudo[1].slot == 0, "o item deveria estar no slot 0, veio " .. conteudo[1].slot)
+    exigir(conteudo[1].count == 5, "deveria haver 5, ha " .. conteudo[1].count)
+
+    -- Pedir do slot certo o item errado nao pode tirar nada: sem essa conferencia, errar o indice
+    -- esvaziaria o slot errado em silencio.
+    local errado = ctx.server.extract_from(x, y, z, "minecraft:emerald", 5, 0)
+    exigir(errado == 0, "pedir esmeralda do slot do diamante deveria tirar 0, tirou " .. errado)
+
+    local tirou = ctx.server.extract_from(x, y, z, "minecraft:diamond", 2, 0)
+    exigir(tirou == 2, "deveria tirar 2, tirou " .. tirou)
+
+    local resto = ctx.server.container_at(x, y, z)
+    exigir(resto[1].count == 3, "deveriam sobrar 3, sobraram " .. resto[1].count)
+
+    ctx.server.set_block("minecraft:air", x, y, z)
+end
+
+TESTES.estrutura_girada = function(ctx)
+    -- A area limpa e exatamente a que o desenho ocupa, e nao uma folga generosa.
+    --
+    -- A bateria inteira roda dentro de um callback so, e o orcamento e de 20 ms para tudo. A
+    -- primeira versao limpava 11 por 11 quatro vezes -- quase quinhentos set_block -- e derrubou o
+    -- caso seguinte por tempo, nao por defeito. Um teste que gasta o orcamento dos outros e um
+    -- teste que quebra os outros.
+    local y = 72
+    -- O desenho e um L: girado, ocupa posicoes diferentes. Um desenho simetrico passaria mesmo
+    -- sem a rotacao implementada, que e o pior tipo de teste.
+    ctx.server.fill("minecraft:air", 20, y, 20, 21, y, 21)
+
+    ctx.server.place_structure("ele", 20, y, 20)
+    local direto = {}
+    for dx = 0, 1 do
+        for dz = 0, 1 do
+            direto[dx .. "," .. dz] = ctx.server.get_block(20 + dx, y, 20 + dz)
+        end
+    end
+
+    ctx.server.fill("minecraft:air", 20, y, 20, 21, y, 21)
+    ctx.server.place_structure("ele", 20, y, 20, 1)
+    local girado = {}
+    for dx = 0, 1 do
+        for dz = 0, 1 do
+            girado[dx .. "," .. dz] = ctx.server.get_block(20 + dx, y, 20 + dz)
+        end
+    end
+
+    local diferente = false
+    for chave, bloco in pairs(direto) do
+        if girado[chave] ~= bloco then diferente = true end
+    end
+    exigir(diferente, "um quarto de volta deveria mudar as posicoes de um desenho assimetrico")
+
+    -- Quatro quartos voltam ao original: e o que pega um erro de sinal, que passaria num giro so.
+    ctx.server.fill("minecraft:air", 20, y, 20, 21, y, 21)
+    ctx.server.place_structure("ele", 20, y, 20, 4)
+    for chave, bloco in pairs(direto) do
+        local dx, dz = string.match(chave, "(%d+),(%d+)")
+        exigir(ctx.server.get_block(20 + tonumber(dx), y, 20 + tonumber(dz)) == bloco,
+            "uma volta inteira deveria devolver o desenho original em " .. chave)
+    end
+
+    ctx.server.fill("minecraft:air", 20, y, 20, 21, y, 21)
+end
+
+TESTES.som_e_particula = function(ctx)
+    -- Categoria e o que permite ao jogador baixar o volume do mod sem baixar o do jogo.
+    ctx.server.play_sound("minecraft:block.note_block.pling", 0, 70, 0, 0.2, 1.0, "blocks")
+    ctx.server.play_sound("minecraft:block.note_block.pling", 0, 70, 0, 0.2, 1.0, "ambient")
+
+    local ok = pcall(function()
+        ctx.server.play_sound("minecraft:block.note_block.pling", 0, 70, 0, 0.2, 1.0, "inventada")
+    end)
+    exigir(not ok, "uma categoria de som desconhecida deveria ser recusada")
+
+    -- Velocidade era zero fixo: dava para fazer fumaca aparecer, nao subir.
+    ctx.server.spawn_particles("minecraft:smoke", 0, 71, 0, 4, 0.2, 0.1)
+
+    local faixa = pcall(function()
+        ctx.server.spawn_particles("minecraft:smoke", 0, 71, 0, 4, 0.2, 99)
+    end)
+    exigir(not faixa, "uma velocidade de particula fora da faixa deveria ser recusada")
+end
+
+TESTES.lista_de_mods = function(ctx)
+    -- O gerenciador da plataforma enxerga um mod so; esta lista e o que torna os mods Lua
+    -- visiveis para quem joga.
+    local mods = ctx.server.mods()
+    exigir(#mods > 0, "a lista de mods nao deveria estar vazia")
+
+    local eu
+    for _, m in ipairs(mods) do
+        if m.id == "autoteste" then eu = m end
+    end
+    exigir(eu ~= nil, "o proprio autoteste deveria aparecer na lista")
+    exigir(eu.version ~= "", "a versao deveria vir do manifesto")
+    exigir(type(eu.permissions) == "table", "as permissoes deveriam vir como lista")
+    exigir(#eu.permissions > 0, "o autoteste declara permissoes e elas deveriam aparecer")
+    exigir(eu.enabled, "o autoteste esta carregado, entao deveria constar como ligado")
+end
+
+TESTES.instalacao_fechada = function(ctx)
+    if ctx.player == nil then
+        ctx.log.info("[AUTOTESTE] instalacao_fechada: pulado, execucao sem jogador")
+        return
+    end
+
+    -- A chave nasce desligada, e este teste existe para ela continuar assim: instalar codigo e a
+    -- operacao mais forte do loader, e um padrao que vira "ligado" sem ninguem notar e um risco.
+    exigir(ctx.server.install_api_enabled() == false,
+        "a instalacao pela API deveria nascer desligada")
+    exigir(ctx.server.install_allowed() == false,
+        "sem a chave ligada, install_allowed deveria ser falso mesmo para operador")
+
+    -- Com a chave desligada, a API precisa recusar com motivo em vez de instalar.
+    local ok = pcall(function()
+        ctx.server.install_preview("https://exemplo.invalido/mod.json")
+    end)
+    exigir(not ok, "install_preview deveria recusar com a chave desligada")
+
+    ctx.log.info("[AUTOTESTE] operador: " .. tostring(ctx.server.is_operator()))
+end
+
 TESTES.jogador = function(ctx)
     if ctx.player == nil then
         ctx.log.info("[AUTOTESTE] jogador: pulado, nao ha jogador nesta execucao")

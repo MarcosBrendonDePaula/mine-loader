@@ -20,7 +20,7 @@ na mesma mudança que o implementa.
 | Jogador — mensagem | `send_message`, `send_action_bar`, `show_title`, `play_sound_to` |
 | Inventário | `count_item`, `give_item`, `take_item`, `clear_inventory` |
 | Janela | `mod.menu`, `open_menu`, `update_menu`, `close_menu`, `open_menu_id` |
-| Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` |
+| Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` — as tres primeiras e `set_hud` dizem se chegaram ao cliente |
 | Tela do jogo | `set_overlay`, `clear_overlay` |
 | Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |

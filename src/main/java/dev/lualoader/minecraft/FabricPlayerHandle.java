@@ -289,11 +289,12 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
-    public void setHud(String descriptionJson) {
-        if (!supportsScreens()) return;
+    public boolean setHud(String descriptionJson) {
+        if (!supportsScreens()) return false;
 
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
                 new dev.lualoader.network.ScreenPayloads.SetHud(descriptionJson));
+        return true;
     }
 
     @Override

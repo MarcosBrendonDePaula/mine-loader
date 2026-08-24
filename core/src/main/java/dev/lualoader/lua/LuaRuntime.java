@@ -2076,11 +2076,13 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.menu");
                 if (!value.istable()) throw new LuaError("set_hud exige uma lista de elementos");
                 try {
-                    player.setHud(ScreenBuilder.hud((LuaTable) value));
+                    // Devolve se o HUD chegou ao cliente, como open_screen e set_overlay ja
+                    // faziam. Antes era a unica das tres a nao responder nada, e um mod nao tinha
+                    // como saber que desenhou para um cliente que nao existe.
+                    return LuaValue.valueOf(player.setHud(ScreenBuilder.hud((LuaTable) value)));
                 } catch (ScreenBuilder.InvalidScreenException error) {
                     throw new LuaError(error.getMessage());
                 }
-                return LuaValue.NIL;
             }
         });
         playerApi.set("screen_size", new ZeroArgFunction() {

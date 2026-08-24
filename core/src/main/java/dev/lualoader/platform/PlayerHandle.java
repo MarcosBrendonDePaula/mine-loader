@@ -117,7 +117,10 @@ public interface PlayerHandle {
      * <p>Diferente de uma tela, o HUD não captura mouse nem pausa o jogo. Uma descrição sem
      * elementos limpa o que estava sendo desenhado.
      */
-    void setHud(String descriptionJson);
+    /**
+     * @return {@code true} se o HUD chegou ao cliente
+     */
+    boolean setHud(String descriptionJson);
 
     /**
      * Desenha sobre uma tela que o próprio jogo abre.

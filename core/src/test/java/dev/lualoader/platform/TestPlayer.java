@@ -157,8 +157,10 @@ public class TestPlayer implements PlayerHandle {
     }
 
     @Override
-    public void setHud(String descriptionJson) {
+    public boolean setHud(String descriptionJson) {
+        if (!screensSupported) return false;
         hudJson = descriptionJson;
+        return true;
     }
 
     /** Sobreposicoes registradas, por identificador. */

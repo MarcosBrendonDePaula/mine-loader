@@ -17,12 +17,30 @@
     "entity.modify",
     "player.inventory",
     "server.read",
-    "server.command.register"
+    "server.command.register",
+    "player.menu"
   ],
   "enabled": true,
   "events": {
     "loader_ready": "on_loader_ready",
     "player_joined": "on_player_joined",
     "tick": "on_tick"
-  }
+  },
+  "structures": [
+    {
+      "id": "ele",
+      "name": "Ele de prova",
+      "origin": "corner",
+      "palette": {
+        "P": "minecraft:polished_andesite",
+        " ": ""
+      },
+      "layers": [
+        [
+          "PP",
+          "P "
+        ]
+      ]
+    }
+  ]
 }

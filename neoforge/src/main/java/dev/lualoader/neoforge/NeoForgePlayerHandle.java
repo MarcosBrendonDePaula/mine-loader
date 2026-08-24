@@ -319,10 +319,11 @@ public class NeoForgePlayerHandle implements PlayerHandle {
     }
 
     @Override
-    public void setHud(String descriptionJson) {
-        if (!supportsScreens()) return;
+    public boolean setHud(String descriptionJson) {
+        if (!supportsScreens()) return false;
 
         NeoForgeScreenNetwork.send(player, new NeoForgeScreenPayloads.SetHud(descriptionJson));
+        return true;
     }
 
     @Override
