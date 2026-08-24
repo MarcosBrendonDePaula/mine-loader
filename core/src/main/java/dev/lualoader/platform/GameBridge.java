@@ -19,6 +19,17 @@ public interface GameBridge {
      */
     java.util.Set<String> CAPABILITIES = java.util.Set.of("items", "fluid", "energy");
 
+    /**
+     * Categorias de som que o jogo conhece, e as unicas que o loader aceita.
+     *
+     * <p>Vocabulario fechado no nucleo pelo mesmo motivo das acoes de tela: as duas plataformas
+     * nomeiam o mesmo conjunto com classes diferentes, e deixar cada adaptador decidir o que aceita
+     * produziria um mod que funciona num lado e recusa no outro.
+     */
+    java.util.Set<String> SOUND_CATEGORIES = java.util.Set.of(
+            "master", "music", "records", "weather", "blocks",
+            "hostile", "neutral", "players", "ambient", "voice");
+
     /** Envia uma mensagem pública a todos os jogadores conectados. */
     void broadcast(String message);
 
@@ -231,6 +242,65 @@ public interface GameBridge {
      * @return quantidade efetivamente retirada, que pode ser menor que a pedida
      */
     int extractFrom(int x, int y, int z, String itemId, int count);
+
+    /**
+     * Coloca itens num slot especifico daquele inventario.
+     *
+     * <p>Existe porque {@code containerAt} sempre devolveu o indice de cada slot -- e ate aqui nao
+     * havia como enderecar o slot que ele nomeava. Um script identificava "o terceiro slot" e so
+     * podia mandar o item para o inventario inteiro, o que faz diferenca real numa maquina com
+     * entrada e saida separadas: inserir sem dizer onde pode encher o slot de saida.
+     *
+     * <p>O padrao delega para a versao sem slot quando o indice e negativo, que e como o Lua diz
+     * "qualquer lugar" -- assim as duas formas passam pelo mesmo caminho na plataforma.
+     *
+     * @return quantidade que nao coube
+     */
+    /**
+     * Particulas lancadas numa direcao, em vez de so aparecerem.
+     *
+     * <p>A versao sem velocidade nasceu assumindo que particula e enfeite parado, e por muito tempo
+     * essa foi a unica forma: um script podia fazer fumaca aparecer, nao subir. Sem direcao nao ha
+     * jato, rastro, nem explosao visual -- os tres usos mais obvios de particula num mod.
+     *
+     * <p>A dispersao continua valendo para os tres eixos, como antes; o que muda e a velocidade
+     * deixar de ser zero fixo.
+     */
+    default void spawnParticles(String particleId, double x, double y, double z,
+                                int count, double spread, double speed) {
+        spawnParticles(particleId, x, y, z, count, spread);
+    }
+
+    /**
+     * Som numa categoria do jogo.
+     *
+     * <p>A categoria nao e detalhe: e o que o jogador usa para baixar o volume de musica sem
+     * silenciar os blocos. Um som tocado sempre na categoria padrao ignora essa escolha, e um mod
+     * barulhento nao tem como ser abaixado sem abaixar o jogo inteiro.
+     */
+    default void playSound(String soundId, int x, int y, int z, float volume, float pitch,
+                           String category) {
+        playSound(soundId, x, y, z, volume, pitch);
+    }
+
+    default int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return insertInto(x, y, z, itemId, count);
+        throw new BridgeException("insert_into com slot nao existe neste adaptador");
+    }
+
+    /**
+     * Retira itens de um slot especifico daquele inventario.
+     *
+     * <p>Diferente da versao sem slot, aqui o item declarado e conferido contra o que esta no slot:
+     * pedir ferro do slot que tem carvao nao retira carvao. Sem essa conferencia, um script que
+     * errasse o indice esvaziaria o slot errado sem perceber.
+     *
+     * @return quantidade efetivamente retirada
+     */
+    default int extractFromSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return extractFrom(x, y, z, itemId, count);
+        throw new BridgeException("extract_from com slot nao existe neste adaptador");
+    }
 
     /** Bridge inerte, usada quando nenhuma plataforma está conectada (testes e validação offline). */
     GameBridge DETACHED = new GameBridge() {

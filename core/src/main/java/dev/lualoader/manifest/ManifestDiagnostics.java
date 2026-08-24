@@ -54,6 +54,12 @@ public final class ManifestDiagnostics {
                     ignored.add(prefix + "behavior.on_break: nome antigo de on_attack, ainda aceito");
                 }
             }
+            if (block.settings != null && block.settings.dropsNothing
+                    && block.settings.dropsLike != null && !block.settings.dropsLike.isBlank()) {
+                // Os dois juntos se contradizem, e o jogo resolve pelo ultimo aplicado -- que e
+                // uma regra invisivel para quem escreveu o manifesto. Melhor dizer.
+                ignored.add(prefix + "settings.drops_like: ignorado porque drops_nothing esta ligado");
+            }
             if (block.placement != null) {
                 ModManifest.PlacementDefinition placement = block.placement;
                 if (placement.canReplace) ignored.add(prefix + "placement.can_replace");

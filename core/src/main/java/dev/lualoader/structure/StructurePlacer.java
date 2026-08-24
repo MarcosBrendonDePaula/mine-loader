@@ -36,6 +36,26 @@ public final class StructurePlacer {
      * @param anchorX ponto de ancoragem, interpretado conforme {@code origin}
      */
     public Placement place(ModManifest.StructureDefinition structure, int anchorX, int anchorY, int anchorZ) {
+        return place(structure, anchorX, anchorY, anchorZ, 0);
+    }
+
+    /**
+     * Coloca a estrutura girada em torno do eixo vertical.
+     *
+     * <p>Sem rotacao uma masmorra nasce sempre virada para o mesmo lado, e um script que queira
+     * variar precisa declarar quatro copias do mesmo desenho. O giro e em quartos de volta porque e
+     * o que o mundo em blocos permite: qualquer outro angulo nao cai na grade.
+     *
+     * <p>O giro acontece nas coordenadas, e nao no bloco: uma escada colocada por aqui continua
+     * apontando para onde apontava. Girar o proprio bloco depende de ler e escrever estado, que o
+     * loader ainda nao faz -- e esta registrado como lacuna em vez de meio implementado.
+     *
+     * @param quarterTurns quartos de volta no sentido horario; qualquer inteiro, inclusive negativo
+     */
+    public Placement place(ModManifest.StructureDefinition structure,
+                           int anchorX, int anchorY, int anchorZ, int quarterTurns) {
+        // Math.floorMod para um giro negativo cair em 0..3 em vez de continuar negativo.
+        int turns = Math.floorMod(quarterTurns, 4);
         Dimensions dimensions = measure(structure);
         if (dimensions.volume() > MAX_VOLUME) {
             throw new IllegalArgumentException(
@@ -45,8 +65,14 @@ public final class StructurePlacer {
         // bottom_center centra o desenho no ponto pedido; corner usa o ponto como canto minimo.
         boolean centered = !"corner".equals(
                 structure.origin == null ? "bottom_center" : structure.origin.trim().toLowerCase(Locale.ROOT));
-        int offsetX = centered ? anchorX - dimensions.width() / 2 : anchorX;
-        int offsetZ = centered ? anchorZ - dimensions.depth() / 2 : anchorZ;
+        // Um giro de um ou tres quartos troca largura e profundidade, e a centralizacao precisa
+        // saber disso: sem isto a estrutura girada nasce deslocada em vez de centrada.
+        boolean swapped = turns == 1 || turns == 3;
+        int spanX = swapped ? dimensions.depth() : dimensions.width();
+        int spanZ = swapped ? dimensions.width() : dimensions.depth();
+
+        int offsetX = centered ? anchorX - spanX / 2 : anchorX;
+        int offsetZ = centered ? anchorZ - spanZ / 2 : anchorZ;
 
         int placed = 0;
         int skipped = 0;
@@ -73,7 +99,20 @@ public final class StructurePlacer {
                         continue;
                     }
 
-                    bridge.setBlock(blockId, offsetX + x, anchorY + y, offsetZ + z);
+                    int rotatedX = switch (turns) {
+                        case 1 -> dimensions.depth() - 1 - z;
+                        case 2 -> dimensions.width() - 1 - x;
+                        case 3 -> z;
+                        default -> x;
+                    };
+                    int rotatedZ = switch (turns) {
+                        case 1 -> x;
+                        case 2 -> dimensions.depth() - 1 - z;
+                        case 3 -> dimensions.width() - 1 - x;
+                        default -> z;
+                    };
+
+                    bridge.setBlock(blockId, offsetX + rotatedX, anchorY + y, offsetZ + rotatedZ);
                     placed++;
                 }
             }

@@ -70,6 +70,7 @@ public final class ResourcePackAssembler {
         // Tags de vários mods podem apontar para a mesma tag vanilla; são acumuladas e
         // escritas uma única vez no fim.
         Map<String, Set<String>> tagEntries = new LinkedHashMap<>();
+        Map<String, Set<String>> itemTagEntries = new LinkedHashMap<>();
 
         for (ModLoader.LoadedMod mod : mods) {
             if (mod.manifest().blocks == null) continue;
@@ -84,6 +85,7 @@ public final class ResourcePackAssembler {
             if (mod.manifest().items == null) continue;
             for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
                 assembleItem(mod, item, generatedRoot);
+                collectTags(mod.manifest().id + ":" + item.id, item.tags, itemTagEntries);
             }
         }
 
@@ -92,7 +94,8 @@ public final class ResourcePackAssembler {
             assembleRecipes(mod, generatedRoot);
         }
 
-        writeTags(tagEntries, generatedRoot);
+        writeTags(tagEntries, generatedRoot, "block");
+        writeTags(itemTagEntries, generatedRoot, "item");
     }
 
     /**
@@ -111,6 +114,13 @@ public final class ResourcePackAssembler {
             String json = switch (type) {
                 case "shapeless" -> shapelessRecipe(recipe);
                 case "shaped" -> shapedRecipe(recipe);
+                // As quatro receitas de queima sao o mesmo formato com outro tipo e outro tempo
+                // padrao: separa-las em metodos daria quatro copias da mesma coisa.
+                case "smelting" -> cookingRecipe(recipe, "minecraft:smelting", 200);
+                case "blasting" -> cookingRecipe(recipe, "minecraft:blasting", 100);
+                case "smoking" -> cookingRecipe(recipe, "minecraft:smoking", 100);
+                case "campfire", "campfire_cooking" ->
+                        cookingRecipe(recipe, "minecraft:campfire_cooking", 600);
                 default -> null;
             };
             if (json == null) {
@@ -154,6 +164,40 @@ public final class ResourcePackAssembler {
                 + "  " + quote("type") + ": " + quote("minecraft:crafting_shapeless") + "," + NEWLINE
                 + groupLine(recipe)
                 + "  " + quote("ingredients") + ": [" + String.join(", ", items) + "]," + NEWLINE
+                + resultLine(recipe) + NEWLINE
+                + "}" + NEWLINE;
+    }
+
+    /**
+     * Uma receita de queima: fornalha, alto-forno, defumador ou fogueira.
+     *
+     * <p>Ate existir, o loader lia receitas de fornalha do jogo por {@code recipes_for} e nao
+     * conseguia declarar uma -- a documentacao dizia que conseguia. Um mod de minerio ficava sem o
+     * passo mais obvio dele: fundir o bruto em lingote.
+     *
+     * <p>O tempo e a experiencia tem padrao por tipo porque sao o que quase ninguem quer declarar,
+     * e errar para mais faz a fornalha parecer travada. Quem precisa, declara.
+     */
+    private String cookingRecipe(ModManifest.RecipeDefinition recipe, String type, int defaultTime) {
+        // O insumo pode vir como ingrediente unico ou pela chave do padrao, porque as duas formas
+        // ja aparecem no manifesto e obrigar uma delas seria uma regra a mais para decorar.
+        String ingredient = null;
+        if (recipe.ingredients != null && !recipe.ingredients.isEmpty()) {
+            ingredient = recipe.ingredients.get(0);
+        } else if (recipe.key != null && !recipe.key.isEmpty()) {
+            ingredient = recipe.key.values().iterator().next();
+        }
+        if (ingredient == null) return null;
+
+        int time = recipe.cookingTime > 0 ? recipe.cookingTime : defaultTime;
+
+        return "{" + NEWLINE
+                + "  " + quote("type") + ": " + quote(type) + "," + NEWLINE
+                + groupLine(recipe)
+                + "  " + quote("ingredient") + ": {" + quote("item") + ": " + quote(ingredient)
+                + "}," + NEWLINE
+                + "  " + quote("experience") + ": " + recipe.experience + "," + NEWLINE
+                + "  " + quote("cookingtime") + ": " + time + "," + NEWLINE
                 + resultLine(recipe) + NEWLINE
                 + "}" + NEWLINE;
     }
@@ -367,23 +411,36 @@ public final class ResourcePackAssembler {
     private void collectBlockTags(ModLoader.LoadedMod mod,
                                   ModManifest.BlockDefinition block,
                                   Map<String, Set<String>> tagEntries) {
-        if (block.tags == null || block.tags.isEmpty()) return;
-        String blockId = mod.manifest().id + ":" + block.id;
+        collectTags(mod.manifest().id + ":" + block.id, block.tags, tagEntries);
+    }
 
-        for (String tag : block.tags) {
+    /**
+     * Acumula as tags de um conteudo declarado, seja bloco ou item.
+     *
+     * <p>O mesmo metodo para os dois porque a validacao e identica -- o que muda e so a pasta em
+     * que o arquivo cai, e isso quem decide e {@link #writeTags}. Enquanto so existia a versao de
+     * bloco, um item declarado nao entrava em nenhuma tag: nem numa do jogo, como
+     * {@code minecraft:planks}, nem numa propria para servir de ingrediente generico numa receita.
+     */
+    private void collectTags(String contentId, List<String> tags,
+                             Map<String, Set<String>> tagEntries) {
+        if (tags == null || tags.isEmpty()) return;
+
+        for (String tag : tags) {
             if (tag == null || tag.isBlank()) continue;
             String normalized = tag.trim();
             int separator = normalized.indexOf(':');
             if (separator <= 0 || separator == normalized.length() - 1) {
-                logger.warn("Tag ignorada em {}: identificador invalido {}", blockId, tag);
+                logger.warn("Tag ignorada em {}: identificador invalido {}", contentId, tag);
                 continue;
             }
-            tagEntries.computeIfAbsent(normalized, key -> new TreeSet<>()).add(blockId);
+            tagEntries.computeIfAbsent(normalized, key -> new TreeSet<>()).add(contentId);
         }
     }
 
-    /** Escreve cada tag de bloco acumulada como um arquivo do data pack. */
-    private void writeTags(Map<String, Set<String>> tagEntries, Path generatedRoot) throws IOException {
+    /** Escreve cada tag acumulada como um arquivo do data pack, na pasta do tipo dela. */
+    private void writeTags(Map<String, Set<String>> tagEntries, Path generatedRoot, String kind)
+            throws IOException {
         for (Map.Entry<String, Set<String>> entry : tagEntries.entrySet()) {
             String tag = entry.getKey();
             int separator = tag.indexOf(':');
@@ -394,7 +451,7 @@ public final class ResourcePackAssembler {
             for (String value : entry.getValue()) quoted.add("\"" + value + "\"");
 
             // "replace": false preserva o conteúdo vanilla da tag.
-            write(generatedRoot.resolve("data").resolve(namespace).resolve("tags/block")
+            write(generatedRoot.resolve("data").resolve(namespace).resolve("tags/" + kind)
                             .resolve(path + ".json"),
                     """
                             {
@@ -404,7 +461,7 @@ public final class ResourcePackAssembler {
                               ]
                             }
                             """.formatted(String.join(",\n    ", quoted)));
-            logger.info("Tag {} recebeu {} bloco(s) do loader", tag, entry.getValue().size());
+            logger.info("Tag {} recebeu {} {}(s) do loader", tag, entry.getValue().size(), kind);
         }
     }
 

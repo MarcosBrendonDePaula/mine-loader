@@ -178,6 +178,63 @@ public abstract class TestBridge implements GameBridge {
         return lines;
     }
 
+    /**
+     * O item que ocupa aquele slot, ou {@code null} se o slot esta vazio.
+     *
+     * <p>O dublê guarda o conteudo por item, e nao por posicao, entao "slot" aqui e a posicao na
+     * ordem de insercao -- exatamente a mesma conta que {@link #containerAt} ja faz para numerar as
+     * linhas. Manter as duas coerentes e o que importa: um teste que le o slot tres por
+     * {@code container_at} e escreve no slot tres precisa acertar o mesmo lugar.
+     */
+    private String itemAtSlot(java.util.Map<String, Integer> content, int slot) {
+        int index = 0;
+        for (var key : content.keySet()) {
+            if (index++ == slot) return key;
+        }
+        return null;
+    }
+
+    @Override
+    public int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return insertInto(x, y, z, itemId, count);
+
+        var content = containers.get(at(x, y, z));
+        if (content == null) throw new BridgeException("nao ha inventario em " + at(x, y, z));
+        if (slot >= 27) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem 27");
+        }
+
+        String present = itemAtSlot(content, slot);
+        // Um slot ocupado por outro item nao aceita nada, que e a regra do jogo.
+        if (present != null && !present.equals(itemId)) return count;
+
+        String key = present == null ? itemId : present;
+        int atual = content.getOrDefault(key, 0);
+        int cabe = Math.max(0, Math.min(count, 64 - atual));
+        if (cabe > 0) content.merge(key, cabe, Integer::sum);
+        return count - cabe;
+    }
+
+    @Override
+    public int extractFromSlot(int x, int y, int z, int slot, String itemId, int count) {
+        if (slot < 0) return extractFrom(x, y, z, itemId, count);
+
+        var content = containers.get(at(x, y, z));
+        if (content == null) throw new BridgeException("nao ha inventario em " + at(x, y, z));
+        if (slot >= 27) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem 27");
+        }
+
+        String present = itemAtSlot(content, slot);
+        if (present == null || !present.equals(itemId)) return 0;
+
+        int available = content.getOrDefault(present, 0);
+        int taken = Math.min(available, count);
+        if (taken >= available) content.remove(present);
+        else content.put(present, available - taken);
+        return taken;
+    }
+
     @Override
     public int insertInto(int x, int y, int z, String itemId, int count) {
         var content = containers.get(at(x, y, z));

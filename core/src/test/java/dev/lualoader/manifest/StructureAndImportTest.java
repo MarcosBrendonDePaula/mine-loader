@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -244,6 +245,52 @@ class StructureAndImportTest {
         } catch (BridgeException expected) {
             assertTrue(expected.getMessage().contains("nenhuma plataforma"));
         }
+    }
+
+    /**
+     * Uma estrutura girada cai nas posicoes giradas, e nao nas originais.
+     *
+     * <p>O desenho e assimetrico de proposito: um em L num quadrado tres por tres. Com uma peca so,
+     * ou com um desenho simetrico, o giro seria indistinguivel de nao girar -- e o teste passaria
+     * mesmo com a rotacao nao implementada, que e o pior resultado possivel.
+     */
+    @Test
+    void aStructureRotatesInQuarterTurns() {
+        ModManifest.StructureDefinition ell = new ModManifest.StructureDefinition();
+        ell.id = "ell";
+        ell.origin = "corner";
+        ell.palette = Map.of("S", "minecraft:stone", " ", "");
+        // Vista de cima: X avanca na string, Z avanca na lista.
+        //   S S
+        //   S
+        ell.layers = List.of(List.of("SS", "S "));
+
+        FakeWorld unrotated = new FakeWorld();
+        new StructurePlacer(unrotated).place(ell, 0, 0, 0);
+        assertEquals("minecraft:stone", unrotated.blocks.get("0,0,0"));
+        assertEquals("minecraft:stone", unrotated.blocks.get("1,0,0"));
+        assertEquals("minecraft:stone", unrotated.blocks.get("0,0,1"));
+        assertNull(unrotated.blocks.get("1,0,1"));
+
+        // Um quarto de volta no sentido horario leva o canto vazio de (1,1) para (0,1).
+        FakeWorld rotated = new FakeWorld();
+        new StructurePlacer(rotated).place(ell, 0, 0, 0, 1);
+        assertEquals(3, rotated.blocks.size(), "o giro nao pode perder nem criar bloco");
+        assertNotEquals(unrotated.blocks.keySet(), rotated.blocks.keySet(),
+                "girar um desenho assimetrico precisa mudar as posicoes");
+
+        // Quatro quartos de volta devolvem o desenho original: e a conferencia que pega um erro
+        // de sinal, que sozinho passaria nos testes de um giro so.
+        FakeWorld fullTurn = new FakeWorld();
+        new StructurePlacer(fullTurn).place(ell, 0, 0, 0, 4);
+        assertEquals(unrotated.blocks, fullTurn.blocks);
+
+        // E um giro negativo e o mesmo que tres positivos.
+        FakeWorld negative = new FakeWorld();
+        new StructurePlacer(negative).place(ell, 0, 0, 0, -1);
+        FakeWorld threeTurns = new FakeWorld();
+        new StructurePlacer(threeTurns).place(ell, 0, 0, 0, 3);
+        assertEquals(threeTurns.blocks, negative.blocks);
     }
 
     // --- Import remoto -------------------------------------------------------------------

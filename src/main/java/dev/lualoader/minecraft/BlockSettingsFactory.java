@@ -3,6 +3,7 @@ package dev.lualoader.minecraft;
 import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.minecraft.DeclarativeBlock;
 import net.minecraft.block.AbstractBlock;
+import net.minecraft.block.Block;
 import net.minecraft.block.MapColor;
 import net.minecraft.block.enums.NoteBlockInstrument;
 import net.minecraft.block.piston.PistonBehavior;
@@ -57,8 +58,27 @@ public final class BlockSettingsFactory {
         if (values.dropsNothing) {
             settings = settings.dropsNothing();
         }
+        // Largar o mesmo que outro bloco e como se declara uma variante decorativa sem repetir a
+        // tabela de loot -- o minerio que larga o mesmo do minerio do jogo, por exemplo. Um alvo
+        // que nao existe e avisado em vez de ignorado: o silencio aqui foi justamente o que fez
+        // este campo passar tanto tempo declarado e sem efeito.
+        Block dropsLike = resolveBlock(values.dropsLike);
+        if (dropsLike != null) {
+            settings = settings.dropsLike(dropsLike);
+        }
 
         return settings;
+    }
+
+    /** O bloco daquele identificador, ou {@code null} quando o nome nao existe no registro. */
+    private static Block resolveBlock(String id) {
+        if (id == null || id.isBlank()) return null;
+
+        net.minecraft.util.Identifier parsed = net.minecraft.util.Identifier.tryParse(id.trim());
+        if (parsed == null || !net.minecraft.registry.Registries.BLOCK.containsId(parsed)) {
+            return null;
+        }
+        return net.minecraft.registry.Registries.BLOCK.get(parsed);
     }
 
     private static int clamp(int value, int min, int max) {

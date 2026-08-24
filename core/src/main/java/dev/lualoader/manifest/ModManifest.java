@@ -34,6 +34,19 @@ public final class ModManifest {
     public Map<String, String> dependencies = new LinkedHashMap<>();
 
     /**
+     * De onde buscar cada dependencia, quando ela nao estiver instalada.
+     *
+     * <p>Campo separado de {@link #dependencies} de proposito. A dependencia diz <em>o que</em> o
+     * mod precisa e continua valendo sem endereco nenhum -- e o contrato. A origem diz apenas
+     * <em>onde achar</em>, e um mod distribuido de outro jeito pode nao ter uma. Juntar os dois num
+     * campo so obrigaria todo mod a declarar um endereco que nem sempre existe.
+     *
+     * <p>Um endereco aqui nao instala nada sozinho: so vale quando quem administra o servidor
+     * ligou a instalacao automatica. Ver {@code InstallPolicy}.
+     */
+    public Map<String, String> dependencySources = new LinkedHashMap<>();
+
+    /**
      * Endereco base para resolver caminhos relativos que nao existam no disco.
      *
      * <p>Permite publicar um mod inteiro na web e instala-lo com um manifesto de poucas linhas: o
@@ -127,7 +140,6 @@ public final class ModManifest {
         public String offset = "none";
         public boolean dropsNothing = false;
         public String dropsLike;
-        public List<String> requiredFeatures = new ArrayList<>();
     }
 
     public static final class StateDefinition {
@@ -278,12 +290,6 @@ public final class ModManifest {
         public String onPlace;
     }
 
-    /** Logica associada a um item. */
-    public static final class ItemBehaviorAdvanced {
-        public String onUse;
-        public String onUseOnBlock;
-    }
-
     /** Item declarado pelo manifesto que nao pertence a um bloco. */
     public static final class ItemEntryDefinition {
         public String id;
@@ -303,6 +309,14 @@ public final class ModManifest {
 
         /** Faz do item uma peca de armadura. Opcional. */
         public ArmorDefinition armor;
+
+        /**
+         * Tags do jogo ou proprias em que o item entra.
+         *
+         * <p>Mesmo campo e mesmo formato do bloco, de proposito: quem escreve o mod ja aprendeu a
+         * sintaxe em um e nao deveria reaprender no outro.
+         */
+        public List<String> tags = new ArrayList<>();
     }
 
     /**
@@ -433,5 +447,16 @@ public final class ModManifest {
         public int count = 1;
         /** Grupo do livro de receitas, opcional. */
         public String group;
+
+        /**
+         * Tiques de queima, para os tipos de fornalha. Zero usa o padrao daquele tipo.
+         *
+         * <p>Fica aqui e nao num bloco proprio porque uma receita e uma so coisa: separar os
+         * campos de queima obrigaria quem escreve a saber de antemao em qual metade o campo mora.
+         */
+        public int cookingTime = 0;
+
+        /** Experiencia dada ao recolher, para os tipos de fornalha. */
+        public double experience = 0.0;
     }
 }
