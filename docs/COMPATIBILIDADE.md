@@ -9,6 +9,11 @@ a lista de trabalho quando um adaptador novo aparece.
 
 Legenda: **sim** funciona · **não** ainda não implementado · **n/a** não se aplica àquela plataforma
 
+**Esta lista compara plataformas.** O que falta em todas elas — estado de bloco, direção do olhar,
+evento de entidade, explosão — vive em `API_GAPS.md`. Uma linha só aparece aqui quando as colunas
+divergem, ou quando divergiram e voltaram a convergir; sem essa divisão, os dois documentos
+acabariam repetindo um ao outro pela metade.
+
 ---
 
 ## Contratos de plataforma

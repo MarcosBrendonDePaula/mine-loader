@@ -42,6 +42,44 @@ textura, modelo, receita, loot e tag.
 
 ## O que ainda não dá
 
+### Operações que faltam metade
+
+Cada uma destas tem o par que a torna útil, e não o outro. São as mais baratas de fechar, e as que
+mais surpreendem quem esbarra nelas.
+
+| Existe | Falta |
+|---|---|
+| `apply_effect`, `clear_effects` no jogador | ler os efeitos ativos |
+| `spawn_entity`, `damage_entity`, `heal_entity` | mover uma entidade |
+| `mod.after`, que dispara uma vez | repetir a cada N tiques, e cancelar |
+| `play_sound_to`, direcionado a um jogador | partícula direcionada |
+| `get_block`, que devolve o identificador | ler o estado do bloco |
+
+### Estado de bloco
+
+`get_block` responde qual bloco está ali, e nada mais. Se a porta está aberta, para onde a escada
+aponta, se o bloco está alagado ou energizado — nada disso é legível nem escrevível.
+
+É a raiz de três lacunas já registradas: `placement.facing` não aplicado, `state.properties` só no
+Fabric, e a estrutura `.nbt` perdendo a orientação de escadas e troncos. Fechar aqui resolve as três.
+
+### O jogador no mundo
+
+**Direção do olhar.** Sem ela não há mira, seleção à distância, nem "o bloco que estou olhando" —
+provavelmente a lacuna mais limitante da API hoje.
+
+**Postura**: agachado, correndo, voando. Um mod que reage a como o jogador se move não tem o que ler.
+
+### Efeitos de mundo
+
+**Explosão** e **raio** não existem. São os dois efeitos que um mod de magia ou combate procura
+primeiro.
+
+**Largar item solto no mundo**, sem passar pelo inventário de alguém, também não.
+
+**Bioma e nível de luz** numa posição não são legíveis. Um mod que gera algo condicionalmente
+precisa perguntar isso antes de decidir.
+
 ### Conteúdo que o loader não registra
 
 **Entidade nova.** Dá para criar e configurar as do jogo, não declarar uma espécie própria. Um mob
