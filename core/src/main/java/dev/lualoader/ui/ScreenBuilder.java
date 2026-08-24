@@ -180,6 +180,19 @@ public final class ScreenBuilder {
 
         // Elementos com group sao desenhados dentro do viewport de mesmo id, recortados e
         // deslocados pela rolagem. E o que permite uma lista maior que a janela.
+        //
+        // Botao e campo de texto sao a excecao, e recusam em vez de aceitar em silencio: os dois
+        // viram widgets de verdade do jogo, posicionados uma vez e desenhados pelo proprio jogo --
+        // eles nao passam pelo recorte nem pela rolagem. Uma tela que os colocasse dentro de um
+        // viewport mostraria todos de uma vez, parados, por cima do resto. Aceitar e desenhar
+        // errado e pior que recusar: quem escreve o mod descobre no jogo, e nao na mensagem.
+        String group = source.get("group").isnil() ? "" : source.get("group").tojstring();
+        if (!group.isBlank()
+                && (type.equals("button") || type.equals("input"))) {
+            throw new InvalidScreenException("elemento " + index + ": " + type
+                    + " nao pode ficar dentro de um viewport; ele nao rola com o conteudo."
+                    + " Use paginacao, ou deixe o clique numa grid");
+        }
         copyText(source, json, "group");
         copyText(source, json, "text");
         copyText(source, json, "value");

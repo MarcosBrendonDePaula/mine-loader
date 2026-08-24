@@ -114,6 +114,17 @@ ctx.player.play_sound_to("minecraft:block.note_block.bell", 1.0, 1.5)
 `play_sound_to` toca so para aquele jogador, ao contrario de `ctx.server.play_sound`, que toca no
 mundo e e ouvido por todos em volta. Um retorno de interface pertence a quem agiu.
 
+```lua
+if ctx.server.is_operator() then ... end   -- nivel 2 ou mais, para quem disparou
+```
+
+**Repare que e `ctx.server`, e nao `ctx.player`.** A pergunta e sobre a autoridade de quem agiu
+naquele servidor, e nao um atributo do corpo do jogador como vida ou posicao; agrupa-la com estes
+sugeriria que ela viaja junto com o jogador, e ela nao viaja.
+
+Um mod que abre um painel de administracao deve perguntar, e nao presumir: o comando `/mod` esta ao
+alcance de qualquer jogador.
+
 A escrita exige a permissao `player.modify`, separada de `player.read` e de `player.inventory`:
 mudar vida ou modo de jogo altera as regras sob os pes de quem joga.
 
@@ -216,9 +227,10 @@ sem efeito no item.
 **A inclinação é recortada** a noventa graus para cada lado, que é o que o jogo aceita. Deixar
 passar produziria uma cabeça torcida ao contrário.
 
-**`variant` só funciona no Fabric por ora.** O método que define a cor do cavalo é privado no
-NeoForge, e não há caminho público equivalente. O campo é lido e validado nos dois — um mod que o
-declare não falha —, mas só tem efeito num deles. Está na lista de `docs/COMPATIBILIDADE.md`.
+**`variant` cobre o cavalo, e só ele.** Cada espécie nomeia a própria variante de um jeito, e não há
+contrato do jogo que sirva a todas; um mapeamento inventado acertaria uma espécie e mentiria nas
+outras. Um nome que a espécie não conhece é ignorado, como qualquer campo que não se aplica. As duas
+plataformas fazem o mesmo.
 
 **Por que não é NBT.** O formato interno de item virou componentes na 1.20.5, e um mod que tivesse
 escrito a forma anterior pararia de funcionar sem ter mudado uma linha. O vocabulário aqui é uma
@@ -246,8 +258,10 @@ declarar a permissão dela é erro em tempo de execução.
 | `player.menu` | Abrir, atualizar e fechar janelas |
 | `world.read` | Ler blocos e dados, tocar som, emitir partículas |
 | `world.write` | Alterar blocos, preencher, posicionar estrutura, gravar dados |
-| `server.read` | Jogadores conectados, hora do dia, dimensão |
+| `world.containers` | Ler, inserir e extrair do inventário de um bloco |
+| `server.read` | Jogadores conectados, hora do dia, dimensão, mods carregados |
 | `server.command.register` | Registrar comandos |
+| `server.install` | Instalar e desinstalar mods por link — veja `INSTALACAO.md` |
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
 
 ## Guardar informação

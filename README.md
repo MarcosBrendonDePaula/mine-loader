@@ -21,7 +21,9 @@
 
 Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
 
-O núcleo não conhece plataforma: existem dois adaptadores, **Fabric** e **NeoForge**, e o mesmo mod em Lua roda nos dois sem mudança. O Fabric é o completo; o NeoForge cobre o caminho central e recusa com mensagem clara o que ainda não implementa.
+O núcleo não conhece plataforma: existem dois adaptadores, **Fabric** e **NeoForge**, e o mesmo mod em Lua roda nos dois sem mudança. **As duas plataformas estão em paridade** — nenhuma operação da API e nenhum campo do manifesto responde diferente entre elas. O que falta, falta nas duas, e está em [`docs/API_GAPS.md`](docs/API_GAPS.md).
+
+Isso não é afirmação de quem escreveu o adaptador: os GameTests rodam nas duas plataformas no CI, e o mod `autoteste` exercita as APIs contra o jogo de verdade com o mesmo script dos dois lados — uma plataforma que faz diferente reporta FALHOU onde a outra reporta OK.
 
 ## Requisitos
 
@@ -98,9 +100,14 @@ diferente do loader.
 | `inspetor` | Lê e abastece o inventário de qualquer bloco, inclusive de mods de terceiros |
 | `autoteste` | Exercita as APIs dentro do jogo e reporta OK ou FALHOU por verificação |
 | `ferraria` | Ferramentas e armaduras declaradas no manifesto, sem uma linha de Java |
+| `gerenciador` | Lista os mods do loader numa tela e instala novos por link |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
+
+O `gerenciador` existe porque a lista de mods do Fabric e do NeoForge não enxerga os mods deste
+loader — para elas há um mod só, o próprio loader. Quem joga precisa de algum lugar onde ver o que
+está instalado e acrescentar um mod novo, e esse lugar é um mod em Lua como qualquer outro.
 
 ## Manifesto mínimo
 
@@ -131,6 +138,10 @@ serve como referência de como as peças se combinam.
   }]
 }
 ```
+
+O campo opcional `"side"` diz se quem entra no servidor precisa ter o mod instalado também:
+`"both"` para quem registra bloco ou item, `"server"` para o resto. Ausente, é deduzido do próprio
+manifesto — veja [`docs/MOD_FORMAT_SPEC.md`](docs/MOD_FORMAT_SPEC.md).
 
 ## Lua
 
@@ -172,11 +183,17 @@ O sistema de IA será adicionado sobre este contrato: a IA produzirá um pacote 
 ## Testes
 
 ```bash
-./gradlew test
+./gradlew :core:test                  # nucleo, sem Minecraft -- segundos
+./gradlew runGametest                 # GameTests no Fabric, num servidor de verdade
+./gradlew :neoforge:runGameTestServer # os mesmos, no NeoForge
 ./gradlew build
 ```
 
-Os testes do repositorio rodam contra um dublê, e por isso nao alcancam o que so aparece com o jogo
+Os GameTests rodam nas duas plataformas, e o CI executa as duas em todo push. Antes disso a coluna
+do NeoForge na matriz de compatibilidade era afirmacao de quem escreveu o adaptador, e nao resultado
+de execucao.
+
+Os testes do nucleo rodam contra um dublê, e por isso nao alcancam o que so aparece com o jogo
 de verdade: um registro com mil e trezentos itens, uma tabela de loot com entradas condicionais, o
 inventario de um bloco de outro mod. Para isso ha o servidor dirigivel e o mod `autoteste`:
 

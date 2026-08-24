@@ -156,6 +156,30 @@ public final class NeoForgeScreenPayloads {
         }
     }
 
+    /**
+     * Fato do jogo relatado pelo cliente: o jogador abriu ou fechou uma tela do proprio jogo.
+     *
+     * <p>Separado de {@link ScreenEvent} porque fala de outra coisa. Aquele descreve o que o
+     * jogador fez numa tela que o mod desenhou; este avisa que uma tela do jogo apareceu.
+     */
+    public record ClientEvent(int version, String event, String target)
+            implements CustomPacketPayload {
+        public static final Type<ClientEvent> TYPE =
+                new Type<>(channel(ScreenProtocol.CHANNEL_CLIENT_EVENT));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, ClientEvent> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, ClientEvent::version,
+                        ByteBufCodecs.STRING_UTF8, ClientEvent::event,
+                        ByteBufCodecs.STRING_UTF8, ClientEvent::target,
+                        ClientEvent::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Evento vindo do cliente: o que o jogador fez em qual elemento. */
     public record ScreenEvent(int version, String screenId, String elementId,
                               String action, String value) implements CustomPacketPayload {

@@ -54,6 +54,24 @@ public final class ModManifest {
      * isso, um pedaco importado por URL nao conseguiria referenciar os proprios scripts e
      * texturas, porque os caminhos declarados nele apontam para a pasta do mod de origem.
      */
+    /**
+     * Quem precisa ter este mod instalado: {@code server} ou {@code both}.
+     *
+     * <p>Existe por causa de quem entra num servidor. O Lua roda so no servidor, e a tela vai como
+     * dados -- entao um mod de comando, evento, menu ou tela funciona para quem entrou sem ter
+     * baixado nada. Ja um bloco declarado precisa estar registrado nos dois lados, ou a
+     * sincronizacao de registro do jogo recusa a conexao.
+     *
+     * <p><b>Nao existe {@code client}</b>, e a ausencia e deliberada: nenhum script roda no
+     * cliente hoje, entao o valor nao teria efeito nenhum. Um campo aceito e ignorado e pior que um
+     * campo ausente -- o ausente da erro, o ignorado da silencio.
+     *
+     * <p>Vazio significa "deduza": um mod que registra bloco ou item e {@code both}, e o resto e
+     * {@code server}. Deduzir e o padrao porque a resposta ja esta no manifesto, e pedi-la de novo
+     * so criaria a chance de as duas discordarem.
+     */
+    public String side;
+
     public String remoteBase;
     public boolean enabled = true;
 
@@ -258,6 +276,25 @@ public final class ModManifest {
          * referencia ainda pode declarar o seu, e nesse caso o dele vale.
          */
         public String fallback;
+    }
+
+    /** Se quem entra num servidor precisa ter este mod instalado tambem. */
+    public boolean requiresClient() {
+        return "both".equals(effectiveSide());
+    }
+
+    /**
+     * O lado declarado, ou o deduzido quando o manifesto nao diz.
+     *
+     * <p>Registrar conteudo e o que obriga o cliente a ter o mod; o resto atravessa a rede como
+     * dados.
+     */
+    public String effectiveSide() {
+        if (side != null && !side.isBlank()) return side.trim().toLowerCase(java.util.Locale.ROOT);
+
+        boolean hasContent = (blocks != null && !blocks.isEmpty())
+                || (items != null && !items.isEmpty());
+        return hasContent ? "both" : "server";
     }
 
     public static final class LootDefinition {

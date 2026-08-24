@@ -91,8 +91,11 @@ local function desenhar_lista(ctx)
         }
         elementos[#elementos + 1] = {
             type = "label", x = 16, y = y + 13, color = COR_FRACO,
-            text = encurtar("v" .. m.version .. "  ·  " .. m.blocks .. " bloco(s), "
-                            .. m.items .. " item(ns)", 40)
+            -- O lado importa mais que a contagem para quem administra: diz se quem entrar no
+            -- servidor precisa ter este mod instalado tambem.
+            text = encurtar("v" .. m.version .. "  ·  "
+                            .. (m.requires_client and "cliente+servidor" or "so servidor")
+                            .. "  ·  " .. m.blocks .. " bloco(s), " .. m.items .. " item(ns)", 44)
         }
         y = y + ALTURA_LINHA + 2
     end

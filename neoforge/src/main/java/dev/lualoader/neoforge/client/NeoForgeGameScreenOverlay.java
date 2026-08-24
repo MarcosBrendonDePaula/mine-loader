@@ -104,7 +104,40 @@ public final class NeoForgeGameScreenOverlay {
      * recebe a tela no evento e decide se aquela sobreposição se aplica. Dá no mesmo, e dispensa
      * reassinar tudo a cada abertura.
      */
+    /**
+     * O nome que o loader da a esta tela do jogo, ou vazio quando nao e nenhuma das conhecidas.
+     *
+     * <p>Percorre do mais especifico para o mais generico: um bau e {@code chest} e tambem
+     * {@code container}, e relatar o generico faria o mod perder a informacao que tinha.
+     * {@code any} nunca e relatado -- ele existe para casar com tudo numa sobreposicao.
+     */
+    private static String nameOf(Screen screen) {
+        for (String target : List.of("inventory", "creative", "crafting", "furnace", "chest",
+                "anvil", "pause", "death", "title", "container")) {
+            if (matches(target, screen)) return target;
+        }
+        return "";
+    }
+
+    /** Avisa o servidor de que uma tela do jogo apareceu ou sumiu. */
+    private static void report(String event, String target) {
+        if (target.isBlank()) return;
+        var connection = net.minecraft.client.Minecraft.getInstance().getConnection();
+        if (connection == null) return;
+
+        connection.send(new net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket(
+                new dev.lualoader.neoforge.network.NeoForgeScreenPayloads.ClientEvent(
+                        dev.lualoader.ui.ScreenProtocol.VERSION, event, target)));
+    }
+
     public static void register() {
+        // O relato acontece para toda tela conhecida, e nao so para as que tem sobreposicao: o mod
+        // precisa saber que o inventario abriu justamente quando ainda nao desenhou nada nele.
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) ->
+                report("client_screen_opened", nameOf(event.getScreen())));
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.Closing event) ->
+                report("client_screen_closed", nameOf(event.getScreen())));
+
         NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> {
             List<Overlay> applicable = forScreen(event.getScreen());
             if (applicable.isEmpty()) return;

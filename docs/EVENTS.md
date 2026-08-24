@@ -42,6 +42,33 @@ do mod não é chamado para aquele bloco.
 | `item_used_on_block` | Item usado sobre um bloco | `ctx.item` com `target_block` e posição, `ctx.player` |
 | `menu_click` | Slot clicado em uma janela do mod | `ctx.menu` com `id`, `slot`, `button` e `item`, `ctx.player` |
 
+### Do cliente
+
+O lado que faltava. Até acoplá-lo, todo evento nascia no servidor — ciclo de vida, tique, bloco,
+item — e o cliente era só um renderizador: recebia descrição de tela e devolvia clique. Um mod não
+tinha como saber que o jogador abriu o inventário, mesmo o loader já desenhando sobreposições
+justamente sobre aquela tela.
+
+| Evento | Quando |
+|---|---|
+| `client_screen_opened` | o jogador abriu uma tela do jogo |
+| `client_screen_closed` | fechou aquela tela |
+
+O callback recebe `ctx.client.screen` com o nome da tela, e o nome vem de `ScreenProtocol.TARGETS`
+— o **mesmo** conjunto que a sobreposição usa. Reusar é o que impede um mod de aprender dois
+vocabulários para falar da mesma tela. Do mais específico para o mais genérico: um baú chega como
+`chest`, e não como `container`.
+
+**O código continua sem atravessar a rede.** O cliente não passa a rodar script: ele relata um fato
+de um vocabulário fechado, e quem reage continua no servidor. A regra de `UI_SPEC.md` — o cliente
+interpreta dados, nunca código — fica de pé.
+
+O nome do evento e o da tela são conferidos contra os conjuntos fechados **antes de qualquer script
+ver o valor**: o que chega pela rede vem da máquina de quem joga, e um script não deveria precisar
+desconfiar do próprio contexto. Um nome fora da lista é descartado em silêncio, e não vira erro —
+um cliente mais novo que o servidor relataria fatos que este ainda não conhece, e derrubar a
+conexão por isso seria transformar diferença de versão em falha.
+
 ### Por objeto (bloco)
 
 | `behavior` | Evento correspondente |

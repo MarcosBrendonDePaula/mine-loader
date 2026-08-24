@@ -109,6 +109,24 @@ public final class NeoForgeScreenNetwork {
                 NeoForgeScreenPayloads.ClientInfo.CODEC,
                 (payload, context) -> context.enqueueWork(
                         () -> handleClientInfo(payload, (ServerPlayer) context.player())));
+
+        registrar.playToServer(NeoForgeScreenPayloads.ClientEvent.TYPE,
+                NeoForgeScreenPayloads.ClientEvent.CODEC,
+                (payload, context) -> context.enqueueWork(
+                        () -> handleClientEvent(payload, (ServerPlayer) context.player())));
+    }
+
+    private static void handleClientEvent(NeoForgeScreenPayloads.ClientEvent payload,
+                                          ServerPlayer player) {
+        if (payload.version() != ScreenProtocol.VERSION) return;
+
+        var runtime = NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null) return;
+
+        // O runtime confere o nome do evento e o da tela contra os conjuntos fechados: o que chega
+        // aqui vem da maquina de quem joga, e nao vale mais que um pedido.
+        runtime.triggerClientEvent(payload.event(), payload.target(),
+                new NeoForgePlayerHandle(player));
     }
 
     /** Guarda o tamanho de tela informado, para o mod poder montar uma tela que caiba. */

@@ -510,6 +510,55 @@ public final class LuaRuntime {
         return scripts.values().stream().anyMatch(script -> script.callbacks().containsKey(event));
     }
 
+    /**
+     * Entrega aos mods um fato que nasceu no cliente.
+     *
+     * <p>O nome do evento e o da tela sao conferidos contra os conjuntos fechados do nucleo antes
+     * de qualquer script ver o valor: o que chega pela rede vem da maquina de quem joga, e um
+     * script nao deveria precisar desconfiar do proprio contexto.
+     *
+     * <p>Um nome fora da lista e descartado em silencio, e nao vira erro. Um cliente mais novo que
+     * o servidor relataria fatos que este ainda nao conhece, e derrubar a conexao por isso seria
+     * transformar diferenca de versao em falha.
+     */
+    public void triggerClientEvent(String event, String target, PlayerHandle player) {
+        if (!dev.lualoader.manifest.LoaderEvents.CLIENT.contains(event)) {
+            logger.warn("Evento de cliente desconhecido ignorado: {}", event);
+            return;
+        }
+        String screen = target == null ? "" : target;
+        if (!screen.isBlank() && !ScreenProtocol.TARGETS.contains(screen)) {
+            logger.warn("Tela desconhecida em {} ignorada: {}", event, screen);
+            return;
+        }
+
+        for (LoadedScript script : scripts.values()) {
+            LuaFunction callback = script.callbacks().get(event);
+            if (callback == null) continue;
+
+            try {
+                script.budget().start();
+                LuaTable context = context(script.mod(), player, null);
+
+                LuaTable client = new LuaTable();
+                client.set("screen", LuaValue.valueOf(screen));
+                context.set("client", client);
+
+                callback.call(context);
+            } catch (LuaError error) {
+                logger.error("Erro Lua em {} do mod {}: {}", event, script.mod().manifest().id,
+                        error.getMessage());
+            } catch (BridgeException error) {
+                logger.error("Erro de plataforma em {} do mod {}: {}", event,
+                        script.mod().manifest().id, error.getMessage());
+            } catch (RuntimeException error) {
+                logger.error("Erro Java em {} do mod {}", event, script.mod().manifest().id, error);
+            } finally {
+                script.budget().stop();
+            }
+        }
+    }
+
     public void triggerAll(String event, PlayerHandle player) {
         trigger(event, player, null);
     }
@@ -1328,6 +1377,11 @@ public final class LuaRuntime {
                     entry.set("description", LuaValue.valueOf(
                             manifest.description == null ? "" : manifest.description));
                     entry.set("enabled", LuaValue.valueOf(manifest.enabled));
+                    // Quem precisa ter o mod: "server" atravessa a rede como dados e funciona para
+                    // quem entrou sem baixar nada; "both" registra conteudo e exige instalacao dos
+                    // dois lados.
+                    entry.set("side", LuaValue.valueOf(manifest.effectiveSide()));
+                    entry.set("requires_client", LuaValue.valueOf(manifest.requiresClient()));
 
                     entry.set("authors", toLuaList(manifest.authors));
                     entry.set("permissions", toLuaList(manifest.permissions));
@@ -2034,6 +2088,38 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(player.supportsScreens());
             }
         });
+        // O diagnostico de uma tela: onde cada elemento vai parar, e o que esta errado com isso.
+        //
+        // Existe porque o log responde a pergunta errada quando uma tela sai torta -- ele diz que a
+        // descricao foi enviada, e foi. A conta que vira posicao e o que ninguem ve, e e la que os
+        // defeitos moram. Reproduz a matematica do cliente usando o mesmo codigo do nucleo, entao
+        // nao ha copia para divergir.
+        playerApi.set("dump_screen", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (!value.istable()) throw new LuaError("dump_screen exige uma tabela de tela");
+
+                int[] size = player.screenSize();
+                int width = size != null && size.length == 2 && size[0] > 0 ? size[0] : 427;
+                int height = size != null && size.length == 2 && size[1] > 0 ? size[1] : 240;
+
+                try {
+                    String relatorio = dev.lualoader.ui.ScreenDump.of(
+                            ScreenBuilder.screen((LuaTable) value), width, height);
+
+                    // Vai para o log e volta como texto: o log serve para ler depois, e o retorno
+                    // permite ao mod mostrar na propria tela.
+                    for (String line : relatorio.split(java.util.regex.Pattern.quote(System.lineSeparator()) + "|\n")) {
+                        logger.info("[{}] {}", mod.manifest().id, line);
+                    }
+                    return LuaValue.valueOf(relatorio);
+                } catch (ScreenBuilder.InvalidScreenException error) {
+                    throw new LuaError(error.getMessage());
+                }
+            }
+        });
+
         playerApi.set("open_screen", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {

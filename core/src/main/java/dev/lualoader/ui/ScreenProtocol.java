@@ -43,6 +43,18 @@ public final class ScreenProtocol {
     public static final String CHANNEL_CLIENT_INFO = "client_info";
 
     /**
+     * Canal pelo qual o cliente relata um fato ao servidor.
+     *
+     * <p>Diferente de {@code screen_event}, que fala de uma tela desenhada pelo mod, este fala do
+     * jogo: o jogador abriu o inventario, fechou o bau. O loader ja desenhava sobre essas telas e
+     * nao tinha como avisar o mod de que elas existiam.
+     *
+     * <p>O que trafega e o nome do fato e o nome da tela, os dois de conjuntos fechados. Nao ha
+     * texto livre e nao ha codigo: o cliente relata, o servidor decide.
+     */
+    public static final String CHANNEL_CLIENT_EVENT = "client_event";
+
+    /**
      * Ações que o cliente pode reportar.
      *
      * <p>O vocabulário é fechado para que o script não precise interpretar texto livre vindo do

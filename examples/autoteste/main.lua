@@ -384,6 +384,10 @@ end
 
 TESTES.inventario_por_slot = function(ctx)
     local x, y, z = 12, 70, 12
+    -- Limpa antes de colocar. Um teste que supoe o mundo limpo falha na segunda execucao, e a
+    -- mensagem acusa o proprio teste em vez do defeito -- foi o que aconteceu quando uma execucao
+    -- anterior foi interrompida no meio e deixou o bau com itens dentro.
+    ctx.server.set_block("minecraft:air", x, y, z)
     ctx.server.set_block("minecraft:chest", x, y, z)
 
     -- container_at sempre numerou os slots; enderecar o slot que ele nomeia e o que faltava.
@@ -493,6 +497,21 @@ TESTES.lista_de_mods = function(ctx)
     exigir(type(eu.permissions) == "table", "as permissoes deveriam vir como lista")
     exigir(#eu.permissions > 0, "o autoteste declara permissoes e elas deveriam aparecer")
     exigir(eu.enabled, "o autoteste esta carregado, entao deveria constar como ligado")
+
+    -- O autoteste nao registra bloco nem item, entao quem entra num servidor com ele nao precisa
+    -- te-lo instalado: o Lua roda no servidor e a tela vai como dados.
+    exigir(eu.side == "server", "o autoteste deveria ser so de servidor, veio " .. tostring(eu.side))
+    exigir(eu.requires_client == false, "o autoteste nao deveria exigir instalacao no cliente")
+
+    -- Ja um mod com conteudo declarado exige os dois lados.
+    local com_bloco
+    for _, m in ipairs(mods) do
+        if m.blocks > 0 then com_bloco = m end
+    end
+    if com_bloco then
+        exigir(com_bloco.requires_client,
+            com_bloco.id .. " registra bloco, entao deveria exigir o cliente")
+    end
 end
 
 TESTES.instalacao_fechada = function(ctx)
@@ -515,6 +534,136 @@ TESTES.instalacao_fechada = function(ctx)
     exigir(not ok, "install_preview deveria recusar com a chave desligada")
 
     ctx.log.info("[AUTOTESTE] operador: " .. tostring(ctx.server.is_operator()))
+end
+
+TESTES.eventos_de_cliente = function(ctx)
+    -- O lado que faltava. Ate acoplar o cliente, todo evento nascia no servidor: ciclo de vida,
+    -- tique, bloco, item. O jogador abrir o inventario era invisivel para o mod -- mesmo o loader
+    -- ja desenhando sobreposicoes justamente sobre aquela tela.
+    exigir(ctx.state.telas_vistas ~= nil,
+        "o mod deveria ter registrado o mapa de telas na carga")
+
+    if ctx.player == nil then
+        ctx.log.info("[AUTOTESTE] eventos_de_cliente: sem jogador; so o registro foi conferido")
+        return
+    end
+
+    -- Nao da para forcar o jogador a abrir uma tela daqui, entao o que se confere e o caminho:
+    -- o evento esta no vocabulario e o callback esta ligado. Se alguem abriu alguma tela nesta
+    -- sessao, o mapa mostra qual.
+    local vistas = {}
+    for nome in pairs(ctx.state.telas_vistas) do vistas[#vistas + 1] = nome end
+    table.sort(vistas)
+
+    ctx.log.info("[AUTOTESTE] telas do jogo vistas ate agora: "
+                 .. (#vistas == 0 and "nenhuma" or table.concat(vistas, ", ")))
+end
+
+TESTES.bloco_declarativo = function(ctx)
+    -- O bloco vem de outro mod de exemplo: e o caso realista, porque um mod raramente e o dono de
+    -- tudo que toca.
+    local x, y, z = 14, 70, 14
+    ctx.server.set_block("minecraft:air", x, y, z)
+    ctx.server.set_block("hello_lua:ruby_block", x, y, z)
+    exigir(ctx.server.get_block(x, y, z) == "hello_lua:ruby_block",
+        "o bloco declarado deveria estar ali, veio " .. ctx.server.get_block(x, y, z))
+
+    ctx.server.set_block_variant("hello_lua:ruby_block", x, y, z, 1)
+    ctx.server.set_block_luminance("hello_lua:ruby_block", x, y, z, 12)
+
+    -- A luminancia mora no estado da posicao, e nao no bloco: acender um altar nao pode acender
+    -- todos os outros do mesmo tipo no mundo.
+    local outro_x = x + 3
+    ctx.server.set_block("hello_lua:ruby_block", outro_x, y, z)
+    exigir(ctx.server.get_block(outro_x, y, z) == "hello_lua:ruby_block",
+        "o segundo exemplar deveria existir")
+
+    -- Ja a propriedade fisica vale para o bloco todo: e caracteristica do material.
+    ctx.server.set_block_property("hello_lua:ruby_block", "hardness", 3.0)
+    ctx.server.set_block_property("hello_lua:ruby_block", "hardness", 5.0)
+
+    local ok = pcall(function()
+        ctx.server.set_block_property("hello_lua:ruby_block", "inventada", 1.0)
+    end)
+    exigir(not ok, "uma propriedade fisica desconhecida deveria ser recusada")
+
+    ctx.server.set_block("minecraft:air", x, y, z)
+    ctx.server.set_block("minecraft:air", outro_x, y, z)
+end
+
+TESTES.dados_por_bloco = function(ctx)
+    local x, y, z = 16, 70, 16
+    ctx.server.set_block("minecraft:air", x, y, z)
+    ctx.server.set_block("crystal_world:cofre", x, y, z)
+
+    -- Uma posicao sem dados responde vazio, e nao erro: o mod le antes de escrever pela primeira
+    -- vez, e um erro ali obrigaria todo mod a envolver a primeira leitura em pcall.
+    local inicial = ctx.server.get_block_data(x, y, z)
+    exigir(inicial == nil or inicial == "" or type(inicial) == "table",
+        "dados de uma posicao nova deveriam vir vazios, veio " .. type(inicial))
+
+    ctx.server.set_block_data(x, y, z, { dono = "autoteste", cargas = 3 })
+    local lido = ctx.server.get_block_data(x, y, z)
+    exigir(type(lido) == "table", "os dados deveriam voltar como tabela, veio " .. type(lido))
+    exigir(lido.dono == "autoteste", "o dono deveria ter sido guardado, veio " .. tostring(lido.dono))
+    exigir(lido.cargas == 3, "as cargas deveriam ser 3, vieram " .. tostring(lido.cargas))
+
+    ctx.server.set_block("minecraft:air", x, y, z)
+end
+
+TESTES.limites = function(ctx)
+    -- Os tetos existem para um mod nao travar a thread do servidor, e um teto que nao recusa e
+    -- decoracao. Cada um destes ja teve motivo concreto para existir.
+    local grande = pcall(function()
+        ctx.server.fill("minecraft:stone", 0, 60, 0, 200, 100, 200)
+    end)
+    exigir(not grande, "um fill acima do teto de volume deveria ser recusado")
+
+    local longe = pcall(function()
+        ctx.server.set_block("minecraft:stone", 999999999, 70, 0)
+    end)
+    exigir(not longe, "uma coordenada absurda deveria ser recusada")
+
+    local desconhecido = pcall(function()
+        ctx.server.set_block("minecraft:bloco_que_nao_existe", 0, 70, 0)
+    end)
+    exigir(not desconhecido, "um bloco desconhecido deveria ser recusado")
+
+    local muitos = pcall(function()
+        ctx.server.items({ limit = 99999 })
+    end)
+    exigir(not muitos, "um limite de consulta fora da faixa deveria ser recusado")
+end
+
+TESTES.sandbox = function(ctx)
+    -- O sandbox e a fronteira do projeto inteiro: se uma destas voltar, um mod passa a alcancar o
+    -- disco e a rede da maquina de quem hospeda.
+    for _, proibido in ipairs({ "io", "os", "package", "debug", "luajava" }) do
+        exigir(_G[proibido] == nil, "a biblioteca " .. proibido .. " deveria estar fora do sandbox")
+    end
+    for _, proibido in ipairs({ "require", "dofile", "loadfile", "load", "loadstring" }) do
+        exigir(_G[proibido] == nil, "a funcao " .. proibido .. " deveria estar fora do sandbox")
+    end
+
+    -- O que fica disponivel tambem precisa continuar disponivel: cortar demais quebra os mods.
+    exigir(type(string) == "table", "string deveria estar disponivel")
+    exigir(type(table) == "table", "table deveria estar disponivel")
+    exigir(type(math) == "table", "math deveria estar disponivel")
+    exigir(type(pcall) == "function", "pcall deveria estar disponivel")
+end
+
+TESTES.estado_do_mod = function(ctx)
+    -- ctx.state e por mod, e nao por jogador: e a armadilha mais facil de cair, porque com um
+    -- jogador so no servidor os dois se parecem.
+    ctx.state.contador = (ctx.state.contador or 0) + 1
+    exigir(ctx.state.contador >= 1, "o contador deveria ter subido")
+
+    ctx.state.aninhado = { a = 1, b = { c = 2 } }
+    exigir(ctx.state.aninhado.b.c == 2, "o estado deveria aceitar tabela aninhada")
+
+    ctx.state.temporario = "some"
+    ctx.state.temporario = nil
+    exigir(ctx.state.temporario == nil, "apagar uma chave do estado deveria valer")
 end
 
 TESTES.jogador = function(ctx)
@@ -595,6 +744,9 @@ end
 
 local function on_loader_ready(ctx)
     ctx.state.loader_ready = true
+    -- O mapa nasce na carga, e nao na primeira tela: assim o teste distingue "ninguem abriu nada"
+    -- de "o evento nao esta ligado", que sao coisas diferentes.
+    ctx.state.telas_vistas = ctx.state.telas_vistas or {}
     -- Uma tarefa agendada na carga prova o relogio interno: se o agendador nao avanca, ela nunca
     -- vence, e a marca abaixo nunca aparece.
     mod.after(20, function(depois)
@@ -604,6 +756,18 @@ end
 
 local function on_player_joined(ctx)
     ctx.state.player_joined = true
+end
+
+--- O jogador abriu uma tela do jogo. O nome vem do vocabulario fechado do nucleo.
+local function on_client_screen_opened(ctx)
+    ctx.state.telas_vistas = ctx.state.telas_vistas or {}
+    local tela = ctx.client.screen
+    ctx.state.telas_vistas[tela] = (ctx.state.telas_vistas[tela] or 0) + 1
+    ctx.log.info("Tela do jogo aberta: " .. tela)
+end
+
+local function on_client_screen_closed(ctx)
+    ctx.log.info("Tela do jogo fechada: " .. ctx.client.screen)
 end
 
 local function on_tick(ctx)
@@ -625,20 +789,206 @@ TESTES.agendador = function(ctx)
            "mod.after agendado na carga nunca executou; o agendador nao avanca nesta plataforma")
 end
 
-mod.command("autoteste", function(ctx)
-    resultados = {}
-    local so = ctx.subcommand
+-- ---------------------------------------------------------------------------------------------
+-- Painel do autoteste
+--
+-- A bateria sempre escreveu no log, e ler log e o unico jeito de saber o que passou. Uma tela
+-- responde a mesma pergunta de relance, e -- mais util -- serve de carga pesada para a propria
+-- camada de interface: dezenas de elementos, rolagem, cor por estado e redesenho a cada passo.
+--
+-- Ela roda em pedacos, e nao de uma vez. O orcamento e de 20 ms por callback, e a bateria inteira
+-- chega perto disso; um clique que estourasse o limite abortaria o callback e a tela nao mudaria,
+-- que e o pior resultado -- parece travada sem dizer por que.
+--
+-- Um agendamento resolveria isso melhor, mas uma tarefa de mod.after recebe contexto sem jogador:
+-- ela nao tem a quem redesenhar. Fica registrado como lacuna em vez de contornado por dentro.
 
+--- Corta o texto para caber na linha, com reticencias.
+-- Um texto que estoura a largura e desenhado por cima do que estiver ao lado, e um motivo de falha
+-- ilegivel nao ajuda mais que motivo nenhum.
+local function encurtar(texto, limite)
+    if texto == nil or texto == "" then return "" end
+    if #texto <= limite then return texto end
+    return string.sub(texto, 1, limite - 1) .. "…"
+end
+
+local LARGURA_P = 300
+local ALTURA_P = 232
+local POR_CLIQUE = 8
+local ALTURA_ITEM = 20
+
+local COR_P = {
+    fundo = "#101018E0",
+    titulo = "#FFD966",
+    texto = "#E0E0E0",
+    fraco = "#8A8A98",
+    linha = "#FFFFFF14",
+    ok = "#7BC96F",
+    falhou = "#E06C6C",
+    pulado = "#7A7A88",
+}
+
+--- Os nomes dos casos, sempre na mesma ordem.
+local function nomes_dos_testes()
     local nomes = {}
     for nome in pairs(TESTES) do nomes[#nomes + 1] = nome end
     table.sort(nomes)
+    return nomes
+end
 
+--- O quadro do painel para este jogador.
+local function painel(ctx)
+    local uuid = ctx.player and ctx.player.uuid or "console"
+    ctx.state.paineis = ctx.state.paineis or {}
+    ctx.state.paineis[uuid] = ctx.state.paineis[uuid] or { status = {}, proximo = 1 }
+    return ctx.state.paineis[uuid]
+end
+
+--- Roda um caso e guarda o que aconteceu, sem deixar o erro subir.
+local function rodar_um(ctx, nome, quadro)
+    local ok, erro = pcall(function() TESTES[nome](ctx) end)
+    quadro.status[nome] = {
+        estado = ok and "ok" or "falhou",
+        motivo = ok and "" or tostring(erro)
+    }
+end
+
+local function marca_de(estado)
+    if estado == "ok" then return "[x]", COR_P.ok end
+    if estado == "falhou" then return "[!]", COR_P.falhou end
+    if estado == "pulado" then return "[-]", COR_P.pulado end
+    return "[ ]", COR_P.fraco
+end
+
+local function desenhar_painel(ctx)
+    local quadro = painel(ctx)
+    local nomes = nomes_dos_testes()
+
+    local passaram, falharam, rodados = 0, 0, 0
     for _, nome in ipairs(nomes) do
-        if so == "" or so == nil or so == nome then
-            verificar(nome, function() TESTES[nome](ctx) end)
+        local r = quadro.status[nome]
+        if r then
+            rodados = rodados + 1
+            if r.estado == "ok" then passaram = passaram + 1 end
+            if r.estado == "falhou" then falharam = falharam + 1 end
         end
     end
 
+    local topo_lista = 62
+    local rodape = ALTURA_P - 28
+    local altura_lista = rodape - 8 - topo_lista
+
+    local elementos = {
+        { type = "panel", x = 0, y = 0, w = LARGURA_P, h = ALTURA_P, color = COR_P.fundo },
+        { type = "label", x = 12, y = 10, text = "Autoteste do Lua Loader", color = COR_P.titulo },
+        { type = "label", x = 12, y = 24, color = COR_P.fraco,
+          text = rodados .. "/" .. #nomes .. " rodados  ·  " .. passaram .. " passaram  ·  "
+                 .. falharam .. " falharam" },
+
+        -- A barra e o resumo que se le sem contar: cheia e verde quer dizer bateria limpa.
+        { type = "progress", x = 12, y = 40, w = LARGURA_P - 24, h = 6,
+          progress = #nomes > 0 and (rodados / #nomes) or 0,
+          color = falharam > 0 and COR_P.falhou or COR_P.ok },
+
+        { type = "panel", x = 10, y = 54, w = LARGURA_P - 20, h = 1, color = COR_P.linha },
+
+        -- O viewport recorta e rola; tudo que aponta para ele pelo group anda junto.
+        { type = "viewport", id = "area", x = 10, y = topo_lista,
+          w = LARGURA_P - 20, h = altura_lista,
+          content = #nomes * ALTURA_ITEM },
+    }
+
+    local y = 0
+    for _, nome in ipairs(nomes) do
+        local r = quadro.status[nome]
+        local marca, cor = marca_de(r and r.estado or nil)
+
+        -- Sem botao aqui dentro, e nao por gosto: botao vira widget de verdade do jogo, e widget
+        -- nao passa pelo recorte nem pela rolagem do viewport. Uma linha clicavel por caso
+        -- mostraria todos os botoes de uma vez, parados, por cima do resto -- que foi exatamente o
+        -- que aconteceu na primeira versao desta tela. O nucleo passou a recusar isso.
+        --
+        -- O clique por caso continua existindo pelo comando: /mod autoteste <nome>.
+        elementos[#elementos + 1] = { type = "panel", group = "area", style = "slot",
+                                      x = 0, y = y, w = LARGURA_P - 26, h = ALTURA_ITEM - 2 }
+        elementos[#elementos + 1] = { type = "label", group = "area", x = 6, y = y + 2,
+                                      text = marca, color = cor }
+        elementos[#elementos + 1] = { type = "label", group = "area", x = 30, y = y + 2,
+                                      text = nome, color = COR_P.texto }
+
+        if r and r.estado == "falhou" and r.motivo ~= "" then
+            elementos[#elementos + 1] = { type = "label", group = "area", x = 30, y = y + 11,
+                                          text = encurtar(r.motivo, 40), color = COR_P.falhou }
+        end
+        y = y + ALTURA_ITEM
+    end
+
+    local restam = #nomes - (quadro.proximo - 1)
+    local texto_rodar = restam <= 0 and "Rodar tudo"
+                        or (quadro.proximo > 1 and ("Continuar (" .. restam .. ")") or "Rodar tudo")
+
+    elementos[#elementos + 1] = { type = "panel", x = 10, y = rodape - 6,
+                                  w = LARGURA_P - 20, h = 1, color = COR_P.linha }
+    elementos[#elementos + 1] = { type = "button", id = "rodar_tudo", x = 10, y = rodape,
+                                  w = 110, h = 20, text = texto_rodar }
+    elementos[#elementos + 1] = { type = "button", id = "limpar", x = 126, y = rodape,
+                                  w = 60, h = 20, text = "Limpar" }
+    elementos[#elementos + 1] = { type = "button", id = "dump", x = 192, y = rodape,
+                                  w = 44, h = 20, text = "Dump" }
+    elementos[#elementos + 1] = { type = "button", id = "fechar", x = LARGURA_P - 66, y = rodape,
+                                  w = 56, h = 20, text = "Fechar" }
+
+    return {
+        title = "Autoteste",
+        width = LARGURA_P,
+        height = ALTURA_P,
+        blur = true,
+        dim = true,
+        elements = elementos
+    }
+end
+
+mod.screen("painel", function(ctx)
+    if ctx.player == nil then return end
+
+    local quadro = painel(ctx)
+    local acao = ctx.ui.action
+    local elemento = ctx.ui.element or ""
+
+    if acao == "close" then return end
+    if acao ~= "click" then return end
+
+    if elemento == "fechar" then
+        ctx.player.close_screen()
+        return
+    elseif elemento == "limpar" then
+        quadro.status = {}
+        quadro.proximo = 1
+    elseif elemento == "rodar_tudo" then
+        local nomes = nomes_dos_testes()
+        if quadro.proximo > #nomes then
+            quadro.status = {}
+            quadro.proximo = 1
+        end
+
+        -- Um pedaco por clique: e o que mantem cada callback dentro do orcamento.
+        local fim = math.min(quadro.proximo + POR_CLIQUE - 1, #nomes)
+        for i = quadro.proximo, fim do
+            rodar_um(ctx, nomes[i], quadro)
+        end
+        quadro.proximo = fim + 1
+    elseif elemento == "dump" then
+        -- Escreve no log onde cada elemento desta tela vai parar, e o que esta errado com isso.
+        -- E o caminho para investigar um desenho torto sem precisar de captura de tela.
+        ctx.player.dump_screen(desenhar_painel(ctx))
+        ctx.player.send_message("Dump da tela escrito no log.")
+    end
+
+    ctx.player.update_screen(desenhar_painel(ctx))
+end)
+
+--- Escreve no log o que a bateria acumulou, e devolve quantos passaram.
+local function relatar(ctx)
     local passaram = 0
     for _, resultado in ipairs(resultados) do
         if resultado.ok then
@@ -651,13 +1001,69 @@ mod.command("autoteste", function(ctx)
 
     local resumo = "AUTOTESTE " .. passaram .. "/" .. #resultados .. " passaram"
     ctx.log.info(resumo)
-
-    -- Pelo console nao ha jogador para avisar; o log ja disse tudo.
     if ctx.player then ctx.player.send_message(resumo) end
+    return passaram
+end
+
+--- Roda um pedaco da bateria e agenda o proximo, se sobrar.
+-- Cada tique traz um callback novo, e com ele um orcamento novo.
+local function agendar_pedaco(ctx, nomes, inicio)
+    local fim = math.min(inicio + POR_CLIQUE - 1, #nomes)
+
+    for i = inicio, fim do
+        local nome = nomes[i]
+        verificar(nome, function() TESTES[nome](ctx) end)
+    end
+
+    if fim < #nomes then
+        mod.after(1, function(depois)
+            agendar_pedaco(depois, nomes, fim + 1)
+        end)
+    else
+        relatar(ctx)
+    end
+end
+
+mod.command("autoteste", function(ctx)
+    -- Com jogador e sem argumento, o painel: ele responde de relance o que o log responde lendo.
+    -- Com um nome depois do comando, a bateria antiga -- e o caminho que o servidor dirigivel usa,
+    -- onde nao ha tela nenhuma.
+    if ctx.player ~= nil and (ctx.subcommand == "" or ctx.subcommand == nil)
+            and ctx.player.supports_screens() then
+        ctx.player.open_screen("painel", desenhar_painel(ctx))
+        return
+    end
+
+    local so = ctx.subcommand
+    local nomes = nomes_dos_testes()
+
+    -- Um nome depois do comando roda so aquele caso, e cabe folgado num callback.
+    if so ~= nil and so ~= "" then
+        resultados = {}
+        verificar(so, function()
+            if TESTES[so] == nil then error("caso desconhecido: " .. so, 0) end
+            TESTES[so](ctx)
+        end)
+        relatar(ctx)
+        return
+    end
+
+    -- A bateria inteira nao cabe.
+    --
+    -- O orcamento e de 20 ms por callback, e ele conta para o callback, nao para o teste: com a
+    -- lista crescendo, um caso qualquer passou a ser interrompido no meio -- e o que falhava era o
+    -- da vez, nao o culpado. Um relatorio que acusa o inocente e pior que um teste a menos.
+    --
+    -- Entao a bateria e fatiada, um pedaco por tique. Cada callback agendado ganha o proprio
+    -- orcamento, e a lista pode crescer a vontade.
+    resultados = {}
+    agendar_pedaco(ctx, nomes, 1)
 end)
 
 return {
     on_loader_ready = on_loader_ready,
     on_player_joined = on_player_joined,
     on_tick = on_tick,
+    on_client_screen_opened = on_client_screen_opened,
+    on_client_screen_closed = on_client_screen_closed,
 }

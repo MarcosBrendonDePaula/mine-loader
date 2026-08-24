@@ -24,7 +24,9 @@
   "events": {
     "loader_ready": "on_loader_ready",
     "player_joined": "on_player_joined",
-    "tick": "on_tick"
+    "tick": "on_tick",
+    "client_screen_opened": "on_client_screen_opened",
+    "client_screen_closed": "on_client_screen_closed"
   },
   "structures": [
     {

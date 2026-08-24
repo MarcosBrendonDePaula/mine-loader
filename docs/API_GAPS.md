@@ -14,7 +14,7 @@ na mesma mudança que o implementa.
 | Bloco declarativo | `set_block_variant`, `set_block_property`, `set_block_luminance` |
 | Dados por bloco | `get_block_data`, `set_block_data` |
 | Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
-| Feedback | `play_sound`, `spawn_particles` |
+| Feedback | `play_sound` com categoria, `spawn_particles` com velocidade |
 | Jogador — leitura | `name`, `uuid`, `position`, `health`, `food`, `experience`, `game_mode`, `dimension`, `held_item`, `inventory`, `screen_size` |
 | Jogador — escrita | `teleport`, `set_health`, `set_food`, `give_experience`, `set_game_mode`, `apply_effect`, `clear_effects` |
 | Jogador — mensagem | `send_message`, `send_action_bar`, `show_title`, `play_sound_to` |
@@ -22,12 +22,14 @@ na mesma mudança que o implementa.
 | Janela | `mod.menu`, `open_menu`, `update_menu`, `close_menu`, `open_menu_id` |
 | Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` — as tres primeiras e `set_hud` dizem se chegaram ao cliente |
 | Tela do jogo | `set_overlay`, `clear_overlay` |
+| Diagnóstico de tela | `dump_screen` — devolve onde cada elemento foi parar, e vai para o log |
 | Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
 | Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
 | Agendamento | `mod.after` |
 | Comandos | `mod.command`, publicado em `/mod <nome>` |
+| Cliente | `client_screen_opened`, `client_screen_closed`, com `ctx.client.screen` |
 | Estado | `mod.state`, por mod, persistido em disco |
 | Entre mods | `mod.require`, com `dependencies` |
 | Instalação | `mods`, `install_preview`, `install_confirm`, `uninstall`, `install_allowed`, `install_api_enabled`, `set_install_api`, `is_operator` — veja `INSTALACAO.md` |
@@ -62,8 +64,12 @@ mais surpreendem quem esbarra nelas.
 `get_block` responde qual bloco está ali, e nada mais. Se a porta está aberta, para onde a escada
 aponta, se o bloco está alagado ou energizado — nada disso é legível nem escrevível.
 
-É a raiz de três lacunas já registradas: `placement.facing` não aplicado, `state.properties` só no
-Fabric, e a estrutura `.nbt` perdendo a orientação de escadas e troncos. Fechar aqui resolve as três.
+É a raiz de duas lacunas já registradas: `placement.facing` não aplicado, e a estrutura `.nbt`
+perdendo a orientação de escadas e troncos. Fechar aqui resolve as duas.
+
+`state.properties` deixou de ser uma diferença entre plataformas — as duas registram os estados
+declarados —, mas continua meio caminho: o bloco **tem** os estados, e o Lua não os lê nem escreve.
+Hoje só `set_block_variant` alcança a aparência, e é o vocabulário do loader, não o do jogo.
 
 ### O jogador no mundo
 
@@ -112,6 +118,11 @@ processamento com regras próprias.
 desenhada mostra itens, mas não recebe um item arrastado. Uma máquina com entrada e saída separadas
 precisa disso.
 
+**Botão e campo de texto dentro de uma área rolável.** Os dois viram widgets do jogo, posicionados
+uma vez, e não passam pelo recorte nem pela rolagem. A descrição é **recusada** em vez de aceita e
+desenhada errado — mas a lista clicável e rolável, que é o que se queria, ainda depende de montar o
+clique sobre uma `grid`.
+
 ### Aparência
 
 **Orientação de bloco.** `placement.facing` não é aplicado: um bloco declarado fica sempre na mesma
@@ -124,9 +135,12 @@ orientação de escadas e troncos.
 
 ## Diferenças entre plataformas
 
-O adaptador NeoForge ainda não aplica `state.properties`, `placement`, ferramentas/armaduras nem
-`variant` de entidade. A lista completa e atualizada está em `COMPATIBILIDADE.md`, que é onde essa
-comparação vive.
+**Nenhuma operação da API responde diferente entre Fabric e NeoForge hoje.** O que falta, falta nas
+duas — e é o que este documento lista. `placement` e `render` (layer, emissive, tint) são declarados
+e ignorados dos dois lados, e por isso aparecem aqui, e não como diferença.
+
+A comparação por plataforma vive em `COMPATIBILIDADE.md`, e continua existindo mesmo com as colunas
+iguais: é ali que a próxima plataforma encontra a lista de trabalho.
 
 ## Permissões
 
@@ -146,6 +160,7 @@ comparação vive.
 | `entity.modify` | ferir, curar, remover, aplicar dados |
 | `server.read` | jogadores online, registro do jogo |
 | `server.command.register` | registrar comando |
+| `server.install` | prever, instalar e desinstalar mods por link |
 
 `player.modify` é separada de `player.read` e de `player.inventory` de propósito: escrever vida ou
 modo de jogo muda as regras sob os pés de quem joga, e um mod que só quer contar itens não deveria

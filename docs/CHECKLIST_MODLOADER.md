@@ -45,6 +45,7 @@ registrada na seção "O que a auditoria encontrou".
 - [ ] Versionamento de API com aviso de depreciação para quem escreve o mod
 - [ ] Migração de dados salvos quando o mod muda de versão
 - [ ] Conflito de ID entre dois mods detectado antes de subir
+- [x] Lado declarado (`side`), deduzido quando ausente
 - [ ] Ordem de carregamento explícita além de dependência (`before` / `after`)
 
 ## 2. Segurança e limites
@@ -234,6 +235,10 @@ lugar nenhum.
 - [x] HUD
 - [x] Sobreposição de tela do jogo — onze alvos
 - [x] Vocabulário fechado de ações, elementos, âncoras e alvos
+- [x] Eventos do cliente: tela do jogo aberta e fechada
+- [x] Diagnóstico de tela (`dump_screen`) — posições resolvidas e colisões
+- [ ] Botão e campo de texto dentro de um viewport — hoje recusado: widget não rola
+- [ ] Evento de tecla, com atalho declarado no manifesto
 - [x] Geometria e ancoragem no núcleo, compartilhadas entre as plataformas
 - [x] Recusa explícita quando a plataforma não suporta (`supports_screens`)
 - [x] O cliente interpreta dados, nunca código
@@ -255,7 +260,7 @@ geometria terem ido para o núcleo.
 - [x] Servidor decide, cliente renderiza
 - [x] Cliente informa o tamanho da tela ao servidor
 - [x] Sincronização de recursos na conexão
-- [ ] Mensagem customizada mod→cliente e cliente→mod
+- [~] Mensagem cliente→mod — fatos de vocabulário fechado; texto livre não
 - [ ] Comportamento definido quando o cliente não tem o loader
 
 ## 11. Plataformas

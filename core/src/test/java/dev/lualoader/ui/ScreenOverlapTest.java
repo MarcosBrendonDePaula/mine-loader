@@ -41,7 +41,8 @@ class ScreenOverlapTest {
     private static final int POR_PAGINA = 6;
 
     /** Um elemento posicionado, do jeito que a descrição o entrega. */
-    private record Box(String type, String id, String text, int x, int y, int w, int h) {
+    private record Box(String type, String id, String text, String group,
+                       int x, int y, int w, int h) {
         boolean intersects(Box other) {
             return x < other.x + other.w && other.x < x + w
                     && y < other.y + other.h && other.y < y + h;
@@ -91,6 +92,38 @@ class ScreenOverlapTest {
 
         assertNoOverlap(player.screenJson, "detalhe");
         assertInsideBounds(player.screenJson, "detalhe");
+    }
+
+    /**
+     * O painel do autoteste, que e a tela mais densa do repositorio.
+     *
+     * <p>Uma linha por caso, com marca, nome e o motivo da falha quando ha uma -- e a lista cresce
+     * a cada teste novo. E justamente a tela em que uma colisao tem mais chance de aparecer sem
+     * ninguem notar, porque ninguem reconta os elementos ao acrescentar um caso.
+     */
+    @Test
+    void oPainelDoAutotesteRespeitaOsLimites(@TempDir Path root) throws IOException {
+        Path origin = Path.of("..", "examples", "autoteste");
+        Path target = root.resolve("autoteste");
+        Files.createDirectories(target);
+        for (Path file : List.of(Path.of("mod.json"), Path.of("main.lua"))) {
+            Files.copy(origin.resolve(file), target.resolve(file));
+        }
+
+        var bridge = new TestBridge() {
+        };
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(new ModLoader(LoggerFactory.getLogger("test")).discover(root).get(0));
+
+        TestPlayer player = new TestPlayer();
+        runtime.runCommand("autoteste", player, "");
+
+        assertNotNull(player.screenJson, "o autoteste precisa abrir o painel para um jogador");
+        assertNoOverlap(player.screenJson, "painel");
+
+        // O conteudo do viewport passa da altura da janela de proposito -- e o que rola. Conferir
+        // limites aqui reprovaria a rolagem, entao a checagem e so a de sobreposicao.
     }
 
     // --- apoio ---------------------------------------------------------------------------
@@ -152,6 +185,7 @@ class ScreenOverlapTest {
                     object.has("type") ? object.get("type").getAsString() : "",
                     object.has("id") ? object.get("id").getAsString() : "",
                     object.has("text") ? object.get("text").getAsString() : "",
+                    object.has("group") ? object.get("group").getAsString() : "",
                     object.has("x") ? object.get("x").getAsInt() : 0,
                     object.has("y") ? object.get("y").getAsInt() : 0,
                     object.has("w") ? object.get("w").getAsInt() : 0,
@@ -173,12 +207,20 @@ class ScreenOverlapTest {
         for (Box label : boxes) {
             if (!label.type().equals("label")) continue;
 
+            // Um elemento com group vive dentro de um viewport: as coordenadas dele sao relativas
+            // aquele recorte, e o cliente nao desenha nada que caia fora. Compara-lo com o que
+            // esta fora do viewport seria comparar dois sistemas de coordenadas diferentes -- foi
+            // o que esta linha passou a evitar, depois de o teste reprovar uma tela correta.
+            if (!label.group().isEmpty()) continue;
+
             // Altura de uma linha de texto do jogo. A largura nao entra na conta: o rotulo comeca
             // a esquerda, e o que importa e a faixa vertical em que ele cai.
-            Box linha = new Box(label.type(), label.id(), label.text(), label.x(), label.y(), 1, 9);
+            Box linha = new Box(label.type(), label.id(), label.text(), label.group(),
+                    label.x(), label.y(), 1, 9);
 
             for (Box button : boxes) {
                 if (!button.type().equals("button")) continue;
+                if (!button.group().isEmpty()) continue;
 
                 // Um botao sem texto e uma superficie de clique, e nao um botao desenhado: a lista
                 // usa um por linha justamente para clicar em qualquer ponto dela abrir o detalhe.
@@ -199,6 +241,7 @@ class ScreenOverlapTest {
         int height = screen.has("height") ? screen.get("height").getAsInt() : 166;
 
         for (Box box : boxesOf(json)) {
+            if (!box.group().isEmpty()) continue;
             assertTrue(box.x() + box.w() <= width,
                     "na tela " + tela + ", " + box.describe() + " passa da largura " + width);
             assertTrue(box.y() + box.h() <= height,

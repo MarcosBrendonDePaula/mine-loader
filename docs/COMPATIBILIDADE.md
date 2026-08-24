@@ -30,10 +30,11 @@ núcleo não conhecer Minecraft.
 | Menus | abrir, atualizar, fechar, id aberto | sim | sim |
 | Telas desenhadas | abrir, atualizar, fechar, tamanho do cliente | sim | sim |
 | HUD e sobreposições | definir, limpar | sim | sim |
-| Som e partículas | tocar, emitir | sim | sim |
+| Diagnóstico de tela | `dump_screen` | sim | sim |
+| Som e partículas | tocar, emitir, com categoria e velocidade | sim | sim |
+| Nível de permissão | nível bruto e `is_operator` sobre ele | sim | sim |
 | Entidades | criar, remover, ferir, curar, listar, ler dados, aplicar dados | sim | sim |
-| Dados declarados | entidade (nome, natureza, corpo, equipamento, efeitos, estado, rotação) e item (aparência, durabilidade, encantamento, atributos) | sim | sim |
-| **Variante visual de entidade** (`variant`) | sim | **não** | O método é privado no NeoForge; o campo é lido e ignorado |
+| Dados declarados | entidade (nome, natureza, corpo, equipamento, efeitos, estado, rotação, variante) e item (aparência, durabilidade, encantamento, atributos) | sim | sim |
 | Dados por bloco | ler, gravar | sim | sim |
 | Inventário de bloco | capacidades, ler, inserir, extrair | sim | sim |
 | Registro do jogo | listar itens, blocos e entidades, receitas, drops | sim | sim |
@@ -75,6 +76,7 @@ núcleo não conhecer Minecraft.
 | Variante de entidade (`spawn.variant`) | sim | sim | Só cavalo, nas duas |
 | **Ferramentas e armaduras** (`item.tool` / `item.armor`) | sim | sim | |
 | Modelos não cúbicos | sim | sim | O modelo sai da mesma forma que a colisão, gerada no núcleo |
+| Lado do mod (`side`) | sim | sim | Validado no núcleo; deduzido quando ausente |
 
 ## Eventos
 
@@ -86,9 +88,28 @@ núcleo não conhecer Minecraft.
 | `block_used`, `block_attacked`, `block_placed`, `block_broken` | sim | sim | |
 | `block_random_tick`, `block_neighbor_update` | sim | sim | |
 | `item_used`, `item_used_on_block` | sim | sim | |
+| `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |
 | Evento de tela (`click`, `change`, `submit`, `close`) | sim | sim | |
 | `mod_reloaded`, `menu_closed` | **não** | **não** | Aceitos no registro e nunca disparados |
+
+## Como cada linha é conferida
+
+Uma matriz escrita à mão envelhece em silêncio, e é pior que nenhuma porque alguém confia nela. Por
+isso as colunas têm quem as verifique:
+
+| Ferramenta | Alcança | Roda nas duas |
+|---|---|---|
+| `./gradlew :core:test` | o que é agnóstico: manifesto, validação, geometria de tela, runtime Lua | n/a — é o núcleo |
+| `./gradlew runGametest` e `:neoforge:runGameTestServer` | registro, propriedades de bloco, entidade de bloco, NBT, num servidor de verdade | sim, e ambos no CI |
+| `/mod autoteste` | as APIs contra o jogo real, 26 casos | sim, pelo mesmo Lua |
+
+O `autoteste` é o que mais pega divergência, porque é o **mesmo script** rodando dos dois lados: uma
+plataforma que faz diferente reporta FALHOU onde a outra reporta OK. Foi assim que se descobriu que
+`extract_from` respeitava `allow_extract` no NeoForge e não no Fabric.
+
+Os GameTests do NeoForge existem por um motivo parecido: até eles, a coluna do NeoForge nesta tabela
+era afirmação de quem escreveu o adaptador, e não resultado de execução.
 
 ## Interoperabilidade com mods externos
 

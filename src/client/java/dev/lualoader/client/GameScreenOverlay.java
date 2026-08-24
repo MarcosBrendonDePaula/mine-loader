@@ -98,7 +98,41 @@ public final class GameScreenOverlay {
         }
     }
 
+    /**
+     * O nome que o loader da a esta tela do jogo, ou vazio quando nao e nenhuma das conhecidas.
+     *
+     * <p>Percorre do mais especifico para o mais generico: um bau e {@code chest} e tambem
+     * {@code container}, e relatar o generico faria o mod perder a informacao que tinha.
+     * {@code any} nunca e relatado -- ele existe para casar com tudo numa sobreposicao, e como fato
+     * nao diria nada.
+     */
+    private static String nameOf(Screen screen) {
+        for (String target : List.of("inventory", "creative", "crafting", "furnace", "chest",
+                "anvil", "pause", "death", "title", "container")) {
+            if (matches(target, screen)) return target;
+        }
+        return "";
+    }
+
+    /** Avisa o servidor de que uma tela do jogo apareceu ou sumiu. */
+    private static void report(String event, String target) {
+        if (target.isBlank()) return;
+        if (!ClientPlayNetworking.canSend(ScreenPayloads.ClientEvent.ID)) return;
+
+        ClientPlayNetworking.send(new ScreenPayloads.ClientEvent(
+                dev.lualoader.ui.ScreenProtocol.VERSION, event, target));
+    }
+
     public static void register() {
+        // O relato acontece para toda tela conhecida, e nao so para as que tem sobreposicao: o mod
+        // precisa saber que o inventario abriu justamente quando ainda nao desenhou nada nele.
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            String nome = nameOf(screen);
+            report("client_screen_opened", nome);
+            ScreenEvents.remove(screen).register(
+                    fechada -> report("client_screen_closed", nome));
+        });
+
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             List<Overlay> applicable = forScreen(screen);
             if (applicable.isEmpty()) return;

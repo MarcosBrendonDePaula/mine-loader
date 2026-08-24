@@ -236,7 +236,7 @@ O projeto terá uma matriz explícita de compatibilidade entre versão do Minecr
 
 O primeiro alvo oficial será Minecraft 1.21.1 com Java 21. Mudanças internas entre versões ficarão atrás de adaptadores. A API do mod não deverá depender diretamente de nomes Yarn ou classes Fabric.
 
-Compatibilidade com mods Fabric e NeoForge será um projeto separado. Inicialmente, o Mine Loader suporta mods no formato próprio e usa Fabric somente como bootstrap de desenvolvimento.
+Compatibilidade com mods Fabric e NeoForge — carregar um mod escrito para *elas* — será um projeto separado. O Mine Loader suporta mods no formato próprio, e usa as duas apenas como hospedeiras: há um adaptador para cada, em paridade, e o núcleo não conhece nenhuma das duas.
 
 ## 15. Ferramentas de desenvolvimento
 

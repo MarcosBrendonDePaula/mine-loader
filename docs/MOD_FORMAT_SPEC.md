@@ -48,6 +48,25 @@ O `id` deve usar o formato de identificador do Minecraft, com namespace em minú
 
 O campo `enabled` permite desabilitar o pacote sem removê-lo. Um mod desabilitado não pode registrar conteúdo nem iniciar scripts.
 
+### 2.1 Lado do mod (`side`)
+
+`"side"` aceita `"server"` ou `"both"`, e diz se quem entra num servidor precisa ter o mod instalado
+também.
+
+A distinção existe porque o Lua roda só no servidor e a tela viaja como dados: um mod de comando,
+evento, menu ou tela funciona para quem entrou sem ter baixado nada. Já um bloco declarado precisa
+estar registrado nos dois lados, ou a sincronização de registro do jogo recusa a conexão — e por
+isso `"server"` é **recusado** num mod que declara bloco ou item, em vez de produzir uma
+desconexão que ninguém liga ao manifesto.
+
+**`"client"` não existe**, e a ausência é deliberada: nenhum script roda no cliente hoje, então o
+valor não teria efeito. Um campo aceito e ignorado é pior que um campo ausente — o ausente dá erro,
+o ignorado dá silêncio.
+
+**Ausente significa "deduza":** um mod que registra bloco ou item é `both`, e o resto é `server`. O
+padrão é deduzir porque a resposta já está no manifesto, e pedi-la de novo só criaria a chance de as
+duas discordarem.
+
 ## 3. Blocos
 
 A declaração de bloco é composta por identidade, material, configurações, estados, renderização, item, drops, tags e comportamento.
@@ -438,8 +457,9 @@ Nesta versao, os campos avisados sao `type` diferente de `generic`, `base`, os n
 `model` que nao seja um nome conhecido nem uma referencia, `render_layer`, `translucent`, `cutout`,
 `emissive` e `tint`.
 
-O adaptador NeoForge ainda nao aplica `state.properties`, `placement` nem `item.tool`/`item.armor`;
-`docs/COMPATIBILIDADE.md` mantem a lista por plataforma.
+Os campos avisados valem para **as duas plataformas**: nao ha hoje campo do manifesto que o Fabric
+aplique e o NeoForge ignore, nem o contrario. `docs/COMPATIBILIDADE.md` mantem a comparacao, e
+continua sendo onde a proxima plataforma encontra a lista de trabalho.
 
 ## Estruturas declaradas
 

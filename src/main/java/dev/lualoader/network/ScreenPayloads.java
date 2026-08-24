@@ -145,6 +145,29 @@ public final class ScreenPayloads {
         }
     }
 
+    /**
+     * Fato do jogo relatado pelo cliente: o jogador abriu ou fechou uma tela do proprio jogo.
+     *
+     * <p>Separado de {@link ScreenEvent} porque fala de outra coisa. Aquele descreve o que o
+     * jogador fez numa tela que o mod desenhou; este avisa que uma tela do jogo apareceu. Juntar os
+     * dois faria o script conferir de qual dos dois mundos veio cada mensagem.
+     */
+    public record ClientEvent(int version, String event, String target) implements CustomPayload {
+        public static final CustomPayload.Id<ClientEvent> ID =
+                new CustomPayload.Id<>(channel(ScreenProtocol.CHANNEL_CLIENT_EVENT));
+
+        public static final PacketCodec<RegistryByteBuf, ClientEvent> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, ClientEvent::version,
+                PacketCodecs.STRING, ClientEvent::event,
+                PacketCodecs.STRING, ClientEvent::target,
+                ClientEvent::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
     /** Evento vindo do cliente: o que o jogador fez em qual elemento. */
     public record ScreenEvent(int version, String screenId, String elementId,
                               String action, String value) implements CustomPayload {

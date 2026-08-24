@@ -110,6 +110,22 @@ public final class ModLoader {
         if (manifest.entrypoint != null && !manifest.entrypoint.isBlank()) {
             require(LUA_FILE.matcher(manifest.entrypoint).matches(), "entrypoint Lua inválido");
         }
+        if (manifest.side != null && !manifest.side.isBlank()) {
+            String side = manifest.side.trim().toLowerCase(java.util.Locale.ROOT);
+            require(side.equals("server") || side.equals("both"),
+                    "side deve ser 'server' ou 'both'; 'client' nao existe porque nenhum script"
+                            + " roda no cliente");
+
+            // Declarar "server" tendo conteudo e uma promessa que quebra na hora de alguem entrar:
+            // o bloco nao estaria registrado no cliente, e a conexao seria recusada por
+            // divergencia de registro -- um erro que nao se parece nem um pouco com a causa.
+            boolean hasContent = (manifest.blocks != null && !manifest.blocks.isEmpty())
+                    || (manifest.items != null && !manifest.items.isEmpty());
+            require(!(side.equals("server") && hasContent),
+                    "side 'server' nao vale para um mod que registra bloco ou item:"
+                            + " quem entrar precisa te-lo instalado");
+        }
+
         require(directory.getFileName().toString().equals(manifest.id), "o nome da pasta deve ser igual ao id");
         require(!ids.contains(manifest.id), "id duplicado: " + manifest.id);
 

@@ -36,6 +36,8 @@ public final class ScreenNetwork {
                 ScreenPayloads.ScreenEvent.ID, ScreenPayloads.ScreenEvent.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ClientInfo.ID, ScreenPayloads.ClientInfo.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                ScreenPayloads.ClientEvent.ID, ScreenPayloads.ClientEvent.CODEC);
     }
 
     /** Passa a receber os eventos que o cliente envia. */
@@ -86,6 +88,26 @@ public final class ScreenNetwork {
         ServerPlayNetworking.registerGlobalReceiver(ScreenPayloads.ClientInfo.ID,
                 (payload, context) ->
                         context.server().execute(() -> handleClientInfo(payload, context.player())));
+    }
+
+    /** Passa a receber os fatos do jogo que o cliente relata. */
+    public static void registerClientEventReceiver() {
+        ServerPlayNetworking.registerGlobalReceiver(ScreenPayloads.ClientEvent.ID,
+                (payload, context) ->
+                        context.server().execute(() -> handleClientEvent(payload, context.player())));
+    }
+
+    private static void handleClientEvent(ScreenPayloads.ClientEvent payload,
+                                          ServerPlayerEntity player) {
+        if (payload.version() != ScreenProtocol.VERSION) return;
+
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) return;
+
+        // O runtime confere o nome do evento e o da tela contra os conjuntos fechados: o que chega
+        // aqui vem da maquina de quem joga, e nao vale mais que um pedido.
+        runtime.triggerClientEvent(payload.event(), payload.target(),
+                new FabricPlayerHandle(player));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

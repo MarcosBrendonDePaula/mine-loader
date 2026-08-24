@@ -237,6 +237,15 @@ ir. O cliente nao mede sozinho porque parte do conteudo pode nem estar na descri
 `content`, ou com ele menor que a altura do viewport, nao ha o que rolar -- e o erro mais provavel
 ao montar a primeira lista.
 
+**`button` e `input` dentro de um grupo sao recusados.** Os dois viram widgets de verdade do jogo,
+posicionados uma vez e desenhados pelo proprio jogo -- eles nao passam pelo recorte nem pela
+rolagem. Uma tela que os colocasse dentro de um viewport mostraria todos de uma vez, parados, por
+cima do resto. Aceitar e desenhar errado seria pior que recusar: quem escreve o mod descobriria no
+jogo, e nao na mensagem.
+
+Uma lista rolavel e clicavel monta-se com uma `grid` no grupo: as celulas rolam com o recorte, e o
+clique volta identificando a celula.
+
 ## Onde cada peça vive
 
 Rede é específica de cada plataforma: Fabric, NeoForge e Paper têm APIs de pacote diferentes e
@@ -268,7 +277,7 @@ boolean updateScreen(String descriptionJson);
 void closeScreen();
 
 /** Define os elementos fixos na tela do jogador. Lista vazia limpa. */
-void setHud(String descriptionJson);
+boolean setHud(String descriptionJson);
 
 /** Desenha sobre uma tela que o proprio jogo abre. */
 boolean setOverlay(String overlayId, String descriptionJson);
@@ -280,8 +289,9 @@ boolean clearOverlay(String overlayId);
 A descrição trafega como texto JSON porque é o formato que o manifesto já usa, o que permite a um mod
 declarar uma tela no próprio `mod.json` e o núcleo repassá-la sem conhecer nenhum tipo de pacote.
 
-Um adaptador NeoForge implementaria os mesmos métodos com a rede dele, e nenhum mod
-precisaria mudar.
+O adaptador NeoForge implementa os mesmos métodos com a rede dele, e nenhum mod precisou mudar — era
+a aposta desta separação, e ela se pagou: as duas plataformas concordam sobre onde cada elemento
+fica, e discordam só sobre como pintá-lo.
 
 ## O padrao de comunicacao
 
@@ -340,7 +350,7 @@ strings livres vindas do cliente:
 
 Uma acao desconhecida e descartada pelo servidor: o cliente nao dita o vocabulario.
 
-## Protocolo, no adaptador Fabric
+## Protocolo, nos dois adaptadores
 
 Dois sentidos, ambos com carga limitada.
 
@@ -479,6 +489,10 @@ ctx.player.set_hud({
 Um HUD por mod, para que dois mods não briguem pelo mesmo canto sem que ninguém perceba: cada um
 desenha o seu, e o loader os empilha em ordem de carga.
 
+`set_hud` devolve se o HUD chegou ao cliente, como `open_screen` e `set_overlay`. Era a única das
+três a não responder nada, e um mod não tinha como saber que desenhou para um cliente que não tem o
+loader — o desenho simplesmente não aparecia, sem nada no log.
+
 ### O HUD não se atualiza sozinho
 
 O que foi enviado fica na tela até ser substituído. Um HUD montado a partir de um valor que muda —
@@ -612,6 +626,27 @@ Como qualquer superfície que aceita dados de terceiros, precisa de teto:
 O renderizador ignora elemento desconhecido em vez de falhar: um cliente com loader antigo abre a
 tela sem os elementos que não entende, e não uma tela quebrada.
 
+## Descobrir por que a tela saiu torta
+
+O log responde a pergunta errada quando uma tela sai errada: ele diz que a descricao foi enviada, e
+foi. A conta que transforma `x`, `y` e `anchor` em posicao na tela e o que ninguem ve, e e onde os
+defeitos moram.
+
+`dump_screen` refaz essa conta e mostra o resultado -- onde cada elemento foi parar, e o que esta
+errado com isso. Vai para o log e volta como texto, entao serve tanto para ler depois quanto para o
+mod mostrar na propria tela:
+
+```lua
+local relatorio = ctx.player.dump_screen(minha_tela)
+```
+
+**Usa o mesmo codigo do nucleo que o cliente usa**, e nao uma reimplementacao: um diagnostico com
+aritmetica propria divergiria do desenho real, e mentiria justamente no caso que se foi investigar.
+Quando nao ha cliente, assume 427 por 240 -- o tamanho de uma janela padrao.
+
+O teste `ScreenOverlapTest`, no nucleo, cobre a mesma matematica: sobreposicao e elemento fora da
+tela deixaram de ser algo que so se ve no jogo.
+
 ## Estado da implementacao
 
 | Peca | Situacao |
@@ -619,8 +654,9 @@ tela sem os elementos que não entende, e não uma tela quebrada.
 | Vocabulario do protocolo, no nucleo | pronto |
 | Validacao da descricao, no nucleo | pronto |
 | Contrato no `PlayerHandle` | pronto |
-| Transporte no adaptador Fabric | pronto |
-| Cliente com tela generica | pronto |
+| Transporte nos adaptadores Fabric e NeoForge | pronto |
+| Cliente com tela generica, nos dois | pronto |
+| `dump_screen` e `ScreenOverlapTest` | pronto |
 | `panel`, `label`, `progress`, `item`, `image`, `button`, `input` | pronto |
 | HUD | pronto |
 | Deteccao de cliente sem loader | pronto |

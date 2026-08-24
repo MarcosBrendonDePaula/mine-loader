@@ -111,6 +111,7 @@ public final class LuaLoaderMod implements ModInitializer {
         dev.lualoader.network.ScreenNetwork.registerPayloads();
         dev.lualoader.network.ScreenNetwork.registerServerReceiver();
         dev.lualoader.network.ScreenNetwork.registerClientInfoReceiver();
+        dev.lualoader.network.ScreenNetwork.registerClientEventReceiver();
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 LuaLoaderCommands.register(dispatcher));
