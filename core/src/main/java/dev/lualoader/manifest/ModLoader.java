@@ -65,6 +65,98 @@ public final class ModLoader {
         this.importCache = importCache;
     }
 
+    /**
+     * Tudo que existe na pasta de mods, inclusive o que a carga descarta.
+     *
+     * <p>{@link #discover} devolve só o que vai rodar: um mod desativado é pulado, e um mod com
+     * manifesto quebrado também. Isso é certo para carregar e <b>errado para uma lista</b> — uma
+     * tela que mostrasse só o que carregou nunca deixaria alguém reativar o que desativou, nem
+     * descobrir por que aquele mod sumiu.
+     *
+     * <p>Não valida além de conseguir ler o manifesto: o objetivo aqui é enxergar, e recusar um mod
+     * torto na tela apagaria justamente a linha que explica o problema de quem está procurando.
+     */
+    public List<CatalogEntry> catalog(Path root) throws IOException {
+        Files.createDirectories(root);
+        List<CatalogEntry> entries = new ArrayList<>();
+
+        try (var directories = Files.list(root)) {
+            for (Path directory : directories.filter(Files::isDirectory).sorted().toList()) {
+                Path manifestPath = directory.resolve("mod.json");
+                if (!Files.isRegularFile(manifestPath)) continue;
+
+                try {
+                    ModManifest manifest = readManifest(manifestPath, directory);
+                    entries.add(new CatalogEntry(directory, manifest,
+                            manifest.enabled ? State.ENABLED : State.DISABLED, null));
+                } catch (IOException | RuntimeException error) {
+                    // A pasta entra na lista mesmo sem manifesto legivel: e o unico jeito de quem
+                    // esta olhando descobrir que aquele mod existe e esta quebrado, em vez de
+                    // concluir que ele nunca foi copiado.
+                    entries.add(new CatalogEntry(directory, null, State.BROKEN,
+                            error.getMessage() == null
+                                    ? error.getClass().getSimpleName()
+                                    : error.getMessage()));
+                }
+            }
+        }
+        return List.copyOf(entries);
+    }
+
+    /** Em que pé está um mod da pasta. */
+    public enum State {
+        /** Vai carregar. */
+        ENABLED,
+        /** Declara {@code "enabled": false} e é pulado de propósito. */
+        DISABLED,
+        /** Tem pasta e não tem manifesto legível. */
+        BROKEN
+    }
+
+    /**
+     * Um mod visto de fora.
+     *
+     * @param manifest {@code null} quando não deu para ler
+     * @param reason   por que está quebrado, ou {@code null}
+     */
+    public record CatalogEntry(Path directory, ModManifest manifest, State state, String reason) {
+        /** O id, mesmo quando não há manifesto: aí o nome da pasta é o melhor que se tem. */
+        public String id() {
+            return manifest != null && manifest.id != null
+                    ? manifest.id
+                    : directory.getFileName().toString();
+        }
+    }
+
+    /**
+     * Liga ou desliga um mod, escrevendo {@code enabled} no manifesto dele.
+     *
+     * <p>Reescreve a árvore JSON inteira em vez de costurar texto: uma substituição por linha
+     * quebraria em um manifesto que já traz {@code "enabled"} dentro de outro objeto, ou que não o
+     * traz. O resto do conteúdo sobrevive — inclusive {@code $import}, porque o arquivo é lido cru,
+     * antes de qualquer resolução.
+     *
+     * <p>A formatação, essa, é refeita. É o preço de não interpretar texto à mão.
+     *
+     * @return se o arquivo foi escrito
+     */
+    public boolean setEnabled(Path modDirectory, boolean enabled) throws IOException {
+        Path manifestPath = modDirectory.resolve("mod.json");
+        if (!Files.isRegularFile(manifestPath)) return false;
+
+        String source = Files.readString(manifestPath, StandardCharsets.UTF_8);
+        com.google.gson.JsonElement root = com.google.gson.JsonParser.parseString(source);
+        if (!root.isJsonObject()) return false;
+
+        root.getAsJsonObject().addProperty("enabled", enabled);
+        Files.writeString(manifestPath,
+                new GsonBuilder().setPrettyPrinting().create().toJson(root) + System.lineSeparator(),
+                StandardCharsets.UTF_8);
+        logger.info("Mod {} agora esta {}", modDirectory.getFileName(),
+                enabled ? "ligado" : "desligado");
+        return true;
+    }
+
     public List<LoadedMod> discover(Path root) throws IOException {
         Files.createDirectories(root);
         List<LoadedMod> result = new ArrayList<>();

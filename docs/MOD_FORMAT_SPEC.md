@@ -681,6 +681,24 @@ simplesmente nao nasce. Para conferir uma posicao, `ctx.server.biome_at(x, y, z)
 
 O ovo entra na aba criativa do mod junto dos blocos e itens.
 
+## Icone do mod
+
+`icon` na raiz do manifesto aponta a imagem que a lista de mods mostra ao lado do nome. Aceita as
+tres origens de sempre: um recurso declarado (`"@icone"`), um caminho dentro do mod, ou uma URL.
+
+```json
+{
+  "id": "crystal_world",
+  "icon": "assets/crystal_world/textures/item/crystal_shard.png"
+}
+```
+
+Ausente nao e erro: a lista desenha um lugar vazio, que e melhor que um icone generico repetido em
+toda linha.
+
+Fica na raiz, e nao dentro de `resources`, porque nao e conteudo do jogo: nenhum bloco ou item a
+usa, e ela existe so para quem esta olhando a lista de mods.
+
 ## Aba do inventario criativo
 
 Sem `creative_tab`, o conteudo do mod nao aparece no inventario criativo e so pode ser obtido por comando. A aba recebe os blocos e itens do mod, na ordem em que foram declarados.

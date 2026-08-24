@@ -38,6 +38,15 @@ public final class LuaLoaderMod implements ModInitializer {
     /** As especies declaradas. Publico para o cliente conferir a cobertura. */
     private static EntityRegistrar entityRegistrar;
     private static dev.lualoader.install.ModInstaller modInstaller;
+
+    /**
+     * Onde os mods moram.
+     *
+     * <p>Guardado porque a tela do menu principal precisa ler a pasta inteira -- inclusive o que a
+     * carga descartou. Recalcular o caminho la daria duas fontes para a mesma resposta, e elas
+     * divergiriam no dia em que a pasta mudasse de nome.
+     */
+    private static Path modsDirectory;
     private static dev.lualoader.install.InstallPolicy installPolicy;
 
     /** Servidor no ar, necessario para republicar a arvore de comandos apos uma instalacao. */
@@ -46,7 +55,7 @@ public final class LuaLoaderMod implements ModInitializer {
     @Override
     public void onInitialize() {
         Path gameDirectory = FabricLoader.getInstance().getGameDir();
-        Path modsDirectory = gameDirectory.resolve("mods-lua");
+        modsDirectory = gameDirectory.resolve("mods-lua");
         Path generatedPack = gameDirectory.resolve("lua-loader/generated-pack");
         Path resourceCache = gameDirectory.resolve("lua-loader/cache");
         ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"));
@@ -226,6 +235,10 @@ public final class LuaLoaderMod implements ModInitializer {
     }
 
     /** O instalador de mods, usado pelos comandos. */
+    public static Path modsDirectory() {
+        return modsDirectory;
+    }
+
     public static dev.lualoader.install.ModInstaller modInstaller() {
         return modInstaller;
     }

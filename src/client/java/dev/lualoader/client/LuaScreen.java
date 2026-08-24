@@ -41,10 +41,32 @@ public class LuaScreen extends Screen {
     /** Recorte, rolagem e clique de celula, compartilhados com a sobreposicao. */
     private final ScreenSurface surface = new ScreenSurface();
 
+    /**
+     * Para onde vão os cliques desta tela.
+     *
+     * <p>Quase sempre é a rede: o mod vive no servidor, e é ele quem decide o que um clique faz.
+     * Mas o menu principal não tem servidor, e uma tela aberta ali precisa resolver o clique aqui
+     * mesmo. Um destino trocável é o que permite as duas coisas sem duas telas.
+     *
+     * <p>Continua sendo <b>dados</b>: o que muda é quem interpreta a ação, e não o cliente passar a
+     * executar código que veio de fora. A regra do {@code UI_SPEC.md} fica de pé.
+     */
+    public interface EventSink {
+        void accept(String screenId, String elementId, String action, String value);
+    }
+
+    /** Nulo significa "manda pela rede", que é o caso de toda tela vinda de um mod. */
+    private final EventSink sink;
+
     public LuaScreen(String screenId, ScreenModel model) {
+        this(screenId, model, null);
+    }
+
+    public LuaScreen(String screenId, ScreenModel model, EventSink sink) {
         super(Text.literal(model.title()));
         this.screenId = screenId;
         this.model = model;
+        this.sink = sink;
     }
 
     public String screenId() {
@@ -201,6 +223,11 @@ public class LuaScreen extends Screen {
     }
 
     private void send(String elementId, String action, String value) {
+        if (sink != null) {
+            sink.accept(screenId, elementId, action, value);
+            return;
+        }
+
         LuaLoaderClient.LOGGER.info("Enviando evento: tela={} elemento={} acao={}",
                 screenId, elementId, action);
         ClientPlayNetworking.send(new ScreenPayloads.ScreenEvent(

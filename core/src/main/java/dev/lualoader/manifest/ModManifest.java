@@ -89,6 +89,18 @@ public final class ModManifest {
     public String remoteBase;
     public boolean enabled = true;
 
+    /**
+     * Imagem do mod, para uma lista poder mostrar de que ele e a cara.
+     *
+     * <p>Um recurso declarado ({@code "@icone"}), um caminho no mod ou uma URL -- as mesmas tres
+     * origens de qualquer imagem daqui. Ausente nao e erro: a lista desenha um lugar vazio, que e
+     * melhor que um icone generico repetido em toda linha.
+     *
+     * <p>Fica na raiz do manifesto, e nao dentro de {@code resources}, porque nao e conteudo do
+     * jogo: nenhum bloco ou item a usa, e ela existe so para quem esta olhando a lista de mods.
+     */
+    public String icon;
+
     public static final class BlockDefinition {
         public String id;
         public String name;

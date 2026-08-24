@@ -78,6 +78,8 @@ núcleo não conhecer Minecraft.
 | Item do bloco (`block.item`) | sim | sim | |
 | Espécie declarada (`entities`) | sim | sim | Deriva de uma base do jogo; GameTest nas duas confere a vida declarada |
 | Ovo de criação (`entities[].spawn_egg`) | sim | sim | Entra na aba criativa do mod |
+| Ícone do mod (`icon`) | sim | sim | Só a lista de mods usa; não é conteúdo do jogo |
+| **Tela de mods no menu principal** | sim | **não** | Botão, lista com filtro e página, ligar/desligar e instalar por link. Só o cliente Fabric por ora |
 | Saque da espécie (`entities[].loot`) | sim | sim | Datapack gerado no núcleo; herda a tabela da base por referência |
 | Herança entre mods (`base` apontando outra espécie declarada) | sim | sim | Ordenação e detecção de ciclo no núcleo; GameTest nas duas |
 | Fase de registro por script (`registration`) | sim | sim | Fabric na inicialização, NeoForge no `RegisterEvent`; GameTest nas duas |

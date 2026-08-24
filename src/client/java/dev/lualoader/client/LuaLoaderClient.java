@@ -47,9 +47,38 @@ public class LuaLoaderClient implements ClientModInitializer {
         // bastante para nao se perder no meio do log de carga.
         EntityRenderers.register();
 
+        addModsButton();
+
         HudOverlay.register();
         GameScreenOverlay.register();
         reportScreenSize();
+    }
+
+    /**
+     * Acrescenta o botão "Mods Lua" ao menu principal.
+     *
+     * <p>A lista de mods do Fabric e do NeoForge enxerga um mod só, o próprio loader: para quem
+     * joga, os mods em Lua são invisíveis fora do jogo. Sem este botão, a única forma de ver o que
+     * está instalado é entrar num mundo primeiro — e entrar num mundo para conferir um mod é o
+     * caminho mais torto possível.
+     *
+     * <p><b>Fica no canto, e não na coluna do meio.</b> A primeira versão o colocou abaixo dos
+     * botões do jogo e ele caiu em cima de Options e Quit Game: a coluna central já está ocupada, e
+     * as posições variam com a altura da janela. O canto é o único lugar que não briga — nem com o
+     * menu, nem com outro mod que acrescente o próprio botão à coluna.
+     */
+    private static void addModsButton() {
+        net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register(
+                (client, screen, width, height) -> {
+                    if (!(screen instanceof net.minecraft.client.gui.screen.TitleScreen)) return;
+
+                    net.fabricmc.fabric.api.client.screen.v1.Screens.getButtons(screen).add(
+                            net.minecraft.client.gui.widget.ButtonWidget.builder(
+                                            net.minecraft.text.Text.literal("Mods Lua"),
+                                            button -> ModsMenuScreen.open(screen))
+                                    .dimensions(6, height - 26, 80, 20)
+                                    .build());
+                });
     }
 
     /**

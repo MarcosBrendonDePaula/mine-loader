@@ -110,6 +110,20 @@ O `gerenciador` existe porque a lista de mods do Fabric e do NeoForge não enxer
 loader — para elas há um mod só, o próprio loader. Quem joga precisa de algum lugar onde ver o que
 está instalado e acrescentar um mod novo, e esse lugar é um mod em Lua como qualquer outro.
 
+## Mods no menu principal
+
+O botão **Mods Lua**, no canto do menu principal, abre uma lista sem precisar entrar num mundo: o
+que está instalado, com filtro e páginas, um botão para ligar ou desligar cada um, e um campo para
+instalar por link.
+
+Ela lê o **catálogo**, e não a lista de mods carregados — um mod desligado é pulado na carga, e
+mostrar só o que carregou nunca deixaria alguém reativá-lo. Um mod com manifesto quebrado também
+aparece, com o motivo, em vez de sumir como se nunca tivesse sido copiado.
+
+**Tudo ali vale a partir do próximo início do jogo**, e a tela diz isso em todas as telas. Os
+registros do Minecraft congelam na inicialização: ligar um mod agora não faz aparecer o bloco que
+ele registraria, e desligar não desfaz o que ele já registrou.
+
 ## Manifesto mínimo
 
 ```json

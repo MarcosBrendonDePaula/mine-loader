@@ -17,6 +17,7 @@
     "entity.read",
     "entity.spawn"
   ],
+  "icon": "assets/crystal_world/textures/item/crystal_shard.png",
   "creative_tab": {
     "register": true,
     "id": "main",
