@@ -31,6 +31,15 @@ neoForge {
             server()
             gameDirectory = file('run')
         }
+
+        // Os GameTests: um servidor sem cliente que roda a bateria e sai com o codigo do
+        // resultado. Ate ele existir, as sete verificacoes que precisam de um servidor de verdade
+        // rodavam so contra o Fabric -- e foi por isso que seis divergencias entre as plataformas
+        // puderam se acumular sem quebrar nada.
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = file('build/gametest')
+        }
     }
 
     mods {
@@ -122,4 +131,19 @@ tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
     it.options.encoding = 'UTF-8'
+}
+
+/*
+ * Leva os mods de exemplo para o mundo do GameTest, como o adaptador Fabric ja faz.
+ *
+ * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
+ * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio.
+ */
+tasks.register('sincronizaExemplosDoGametest', Copy) {
+    from rootProject.file('examples')
+    into layout.buildDirectory.dir('gametest/mods-lua')
+}
+
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    dependsOn 'sincronizaExemplosDoGametest'
 }

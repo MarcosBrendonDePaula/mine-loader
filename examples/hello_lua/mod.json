@@ -39,6 +39,9 @@
   "blocks": [
     {
       "$import": "parts/blocks/ruby_block.json"
+    },
+    {
+      "$import": "parts/blocks/bloco_de_prova.json"
     }
   ],
   "enabled": true,

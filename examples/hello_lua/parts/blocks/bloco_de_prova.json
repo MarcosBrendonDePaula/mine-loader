@@ -1,0 +1,25 @@
+{
+  "_comentario": "Existe para a verificacao ter o que comparar. Todo campo aqui declara um valor DIFERENTE do padrao do jogo -- e por isso que o teste que confere manifesto contra bloco registrado consegue falhar. Enquanto os exemplos so declaravam os padroes, aquele teste passava mesmo com o adaptador ignorando o manifesto inteiro.",
+  "id": "bloco_de_prova",
+  "name": "Bloco de Prova",
+  "material": {
+    "map_color": "blue",
+    "sound": "glass"
+  },
+  "settings": {
+    "hardness": 0.5,
+    "resistance": 0.5,
+    "random_ticks": true,
+    "slipperiness": 0.98,
+    "velocity_multiplier": 0.4,
+    "jump_velocity_multiplier": 0.5,
+    "luminance": 7
+  },
+  "render": {
+    "model": "cube_all",
+    "texture": "@bloco_rubi"
+  },
+  "loot": {
+    "mode": "self"
+  }
+}

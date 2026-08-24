@@ -54,8 +54,19 @@ jobs:
           cp -r examples/hello_lua build/gametest/mods-lua/
           cp -r examples/crystal_world build/gametest/mods-lua/
 
-      - name: Rodar os GameTests
+      - name: Rodar os GameTests do Fabric
         run: ./gradlew runGametest --stacktrace
+
+      - name: Aceitar o EULA para os GameTests do NeoForge
+        run: |
+          mkdir -p neoforge/build/gametest
+          echo "eula=true" > neoforge/build/gametest/eula.txt
+
+      - name: Rodar os GameTests do NeoForge
+        # As duas plataformas, e nao so uma: enquanto isto nao rodava aqui, seis divergencias
+        # entre os adaptadores se acumularam sem quebrar nenhum teste -- eventos que nunca
+        # disparavam, receitas que nao chegavam ao servidor, ferramentas que viravam item comum.
+        run: ./gradlew :neoforge:runGameTestServer --stacktrace
 
       - name: Guardar os relatorios quando algo falha
         if: failure()

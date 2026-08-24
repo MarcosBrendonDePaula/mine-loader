@@ -8,10 +8,16 @@ mudar uma linha — `docs/COMPATIBILIDADE.md` é onde essa promessa é conferida
 ## Comandos
 
 ```bash
-./gradlew build          # compila tudo e roda os testes das duas plataformas
-./gradlew :core:test     # só os testes do núcleo — rápidos, sem Minecraft
-./gradlew runGametest    # servidor headless com os @GameTest
+./gradlew build                       # compila tudo e roda os testes das duas plataformas
+./gradlew :core:test                  # só os testes do núcleo — rápidos, sem Minecraft
+./gradlew runGametest                 # servidor headless com os @GameTest — Fabric
+./gradlew :neoforge:runGameTestServer # o mesmo, no NeoForge
 ```
+
+**Os GameTests rodam nas duas plataformas, e é de propósito.** Enquanto rodavam só no Fabric, seis
+divergências entre os adaptadores se acumularam sem quebrar nada: eventos globais que nunca
+disparavam, receitas que não chegavam ao servidor, ferramentas declaradas que viravam item comum.
+Ao acrescentar um recurso, verifique nos dois.
 
 ```bash
 # Fabric                                  # NeoForge
@@ -120,7 +126,7 @@ sucesso sem ter executado nada — o pior resultado possível, porque parece ver
 | Nível | Alcança | Custo |
 |---|---|---|
 | `./gradlew :core:test` | manifesto, validação, geometria de tela, runtime Lua | segundos |
-| `./gradlew runGametest` | registro, entidade de bloco, NBT — num servidor de verdade | ~20 s |
+| `./gradlew runGametest` e `:neoforge:runGameTestServer` | registro, entidade de bloco, NBT — num servidor de verdade, **nas duas plataformas** | ~20 s cada |
 | `/mod autoteste` no servidor | as APIs contra o jogo real: registro com milhares de itens, loot de datapack, inventário de outro mod | minuto |
 | `runClient` | **só aqui se vê se um pixel está no lugar** | manual |
 
