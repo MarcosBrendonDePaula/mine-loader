@@ -47,6 +47,11 @@ public class NeoForgeLuaLoader {
         // fontes, e e por ele que o conteudo declarado ganha textura, modelo e nome traduzido.
         modBus.addListener(NeoForgeLuaLoader::onAddPackFinders);
 
+        // O canal de telas precisa existir antes de qualquer jogador entrar: e por ele que o
+        // cliente se anuncia, e e a presenca dele que supports_screens responde.
+        modBus.addListener((net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) ->
+                dev.lualoader.neoforge.network.NeoForgeScreenNetwork.register(event, LOGGER));
+
         // A carga acontece em ServerAboutToStart, e nao em ServerStarted: a arvore de comandos e
         // montada entre os dois, e um mod carregado depois dela teria o comando declarado e nao
         // publicado -- que foi o que aconteceu na primeira tentativa.

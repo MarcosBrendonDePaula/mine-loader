@@ -1,5 +1,7 @@
 package dev.lualoader.client;
 
+import dev.lualoader.ui.ScreenLayout;
+import dev.lualoader.ui.ScreenModel;
 import dev.lualoader.client.mixin.HandledScreenAccessor;
 import dev.lualoader.network.ScreenPayloads;
 import dev.lualoader.ui.ScreenProtocol;
@@ -164,18 +166,18 @@ public final class GameScreenOverlay {
      * inteira: num alvo como o menu de pausa, {@code gui_top_left} então equivale a
      * {@code top_left}, em vez de posicionar o elemento contra um retângulo que não existe.
      */
-    private static ScreenRenderer.Bounds guiBounds(Screen screen) {
+    private static ScreenLayout.Bounds guiBounds(Screen screen) {
         if (screen instanceof HandledScreen<?> && screen instanceof HandledScreenAccessor accessor) {
-            return new ScreenRenderer.Bounds(
+            return new ScreenLayout.Bounds(
                     accessor.lua_loader$x(), accessor.lua_loader$y(),
                     accessor.lua_loader$backgroundWidth(), accessor.lua_loader$backgroundHeight());
         }
-        return new ScreenRenderer.Bounds(0, 0, screen.width, screen.height);
+        return new ScreenLayout.Bounds(0, 0, screen.width, screen.height);
     }
 
     private static void addButtons(Screen screen, Overlay overlay) {
-        ScreenRenderer.Bounds surface = new ScreenRenderer.Bounds(0, 0, screen.width, screen.height);
-        ScreenRenderer.Bounds gui = guiBounds(screen);
+        ScreenLayout.Bounds surface = new ScreenLayout.Bounds(0, 0, screen.width, screen.height);
+        ScreenLayout.Bounds gui = guiBounds(screen);
 
         for (ScreenModel.Element element : overlay.model().elements()) {
             if (!element.type().equals("button")) continue;
@@ -195,8 +197,8 @@ public final class GameScreenOverlay {
         if (applicable.isEmpty()) return;
 
         var textRenderer = MinecraftClient.getInstance().textRenderer;
-        ScreenRenderer.Bounds surface = surfaceBounds(screen);
-        ScreenRenderer.Bounds gui = guiBounds(screen);
+        ScreenLayout.Bounds surface = surfaceBounds(screen);
+        ScreenLayout.Bounds gui = guiBounds(screen);
 
         String tooltip = null;
         for (Overlay overlay : applicable) {
@@ -235,8 +237,8 @@ public final class GameScreenOverlay {
         return false;
     }
 
-    private static ScreenRenderer.Bounds surfaceBounds(Screen screen) {
-        return new ScreenRenderer.Bounds(0, 0, screen.width, screen.height);
+    private static ScreenLayout.Bounds surfaceBounds(Screen screen) {
+        return new ScreenLayout.Bounds(0, 0, screen.width, screen.height);
     }
 
     private static void send(String overlayId, String elementId, String action, String value) {

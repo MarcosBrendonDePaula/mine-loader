@@ -1,5 +1,7 @@
 package dev.lualoader.client;
 
+import dev.lualoader.ui.ScreenLayout;
+import dev.lualoader.ui.ScreenModel;
 import dev.lualoader.network.ScreenPayloads;
 import dev.lualoader.ui.ScreenProtocol;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -99,12 +101,12 @@ public class LuaScreen extends Screen {
      * posicionados a partir do canto dela. Com âncora, a origem passa a ser um ponto dessa mesma
      * janela, o que mantém o elemento preso à borda dela em qualquer resolução.
      */
-    private ScreenRenderer.Bounds bounds() {
-        return new ScreenRenderer.Bounds(originX(), originY(), model.width(), model.height());
+    private ScreenLayout.Bounds bounds() {
+        return new ScreenLayout.Bounds(originX(), originY(), model.width(), model.height());
     }
 
     private int[] resolve(ScreenModel.Element element) {
-        ScreenRenderer.Bounds window = bounds();
+        ScreenLayout.Bounds window = bounds();
         // Numa tela propria nao ha tela do jogo por baixo, entao as ancoras gui_ caem na janela do
         // mod: e a unica leitura util delas aqui, e evita um elemento sumir sem explicacao.
         return ScreenRenderer.resolve(element, window, window);
@@ -160,7 +162,7 @@ public class LuaScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
 
-        ScreenRenderer.Bounds window = bounds();
+        ScreenLayout.Bounds window = bounds();
         String tooltip = surface.draw(context, textRenderer, model.elements(),
                 window, window, mouseX, mouseY, true);
 

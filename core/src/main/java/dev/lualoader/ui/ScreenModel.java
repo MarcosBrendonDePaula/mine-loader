@@ -1,4 +1,4 @@
-package dev.lualoader.client;
+package dev.lualoader.ui;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;

@@ -1,5 +1,7 @@
 package dev.lualoader.client;
 
+import dev.lualoader.ui.ScreenLayout;
+import dev.lualoader.ui.ScreenModel;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
@@ -24,7 +26,7 @@ public final class ScreenSurface {
     private final Map<String, Integer> offsets = new HashMap<>();
 
     /** Área de cada viewport na última vez que foi desenhado. */
-    private final Map<String, ScreenRenderer.Bounds> viewports = new LinkedHashMap<>();
+    private final Map<String, ScreenLayout.Bounds> viewports = new LinkedHashMap<>();
 
     /** Descarta o que rolou. Usado quando a descrição muda de forma. */
     public void reset() {
@@ -40,12 +42,12 @@ public final class ScreenSurface {
      * coordenada nenhuma.
      */
     private int[] positionOf(ScreenModel.Element element, List<ScreenModel.Element> elements,
-                             ScreenRenderer.Bounds surface, ScreenRenderer.Bounds gui) {
+                             ScreenLayout.Bounds surface, ScreenLayout.Bounds gui) {
         if (element.group().isBlank()) {
             return ScreenRenderer.resolve(element, surface, gui);
         }
 
-        ScreenRenderer.Bounds area = viewportBounds(element.group(), elements, surface, gui);
+        ScreenLayout.Bounds area = viewportBounds(element.group(), elements, surface, gui);
         if (area == null) return ScreenRenderer.resolve(element, surface, gui);
 
         return new int[]{
@@ -53,14 +55,14 @@ public final class ScreenSurface {
                 area.y() + element.y() - offsets.getOrDefault(element.group(), 0)};
     }
 
-    private ScreenRenderer.Bounds viewportBounds(String id, List<ScreenModel.Element> elements,
-                                                 ScreenRenderer.Bounds surface,
-                                                 ScreenRenderer.Bounds gui) {
+    private ScreenLayout.Bounds viewportBounds(String id, List<ScreenModel.Element> elements,
+                                                 ScreenLayout.Bounds surface,
+                                                 ScreenLayout.Bounds gui) {
         for (ScreenModel.Element element : elements) {
             if (!element.type().equals("viewport") || !element.id().equals(id)) continue;
 
             int[] position = ScreenRenderer.resolve(element, surface, gui);
-            return new ScreenRenderer.Bounds(position[0], position[1], element.w(), element.h());
+            return new ScreenLayout.Bounds(position[0], position[1], element.w(), element.h());
         }
         return null;
     }
@@ -73,14 +75,14 @@ public final class ScreenSurface {
      */
     public String draw(DrawContext context, TextRenderer textRenderer,
                        List<ScreenModel.Element> elements,
-                       ScreenRenderer.Bounds surface, ScreenRenderer.Bounds gui,
+                       ScreenLayout.Bounds surface, ScreenLayout.Bounds gui,
                        int mouseX, int mouseY, boolean skipWidgets) {
         viewports.clear();
         for (ScreenModel.Element element : elements) {
             if (!element.type().equals("viewport") || element.id().isBlank()) continue;
             int[] position = ScreenRenderer.resolve(element, surface, gui);
             viewports.put(element.id(),
-                    new ScreenRenderer.Bounds(position[0], position[1], element.w(), element.h()));
+                    new ScreenLayout.Bounds(position[0], position[1], element.w(), element.h()));
         }
 
         String tooltip = null;
@@ -91,7 +93,7 @@ public final class ScreenSurface {
             }
 
             int[] position = positionOf(element, elements, surface, gui);
-            ScreenRenderer.Bounds clip = viewports.get(element.group());
+            ScreenLayout.Bounds clip = viewports.get(element.group());
 
             if (clip != null) {
                 // Fora do recorte o elemento nem e desenhado: o scissor ja cortaria o desenho, mas
@@ -122,7 +124,7 @@ public final class ScreenSurface {
      */
     public void drawButtonIcons(DrawContext context, TextRenderer textRenderer,
                                 List<ScreenModel.Element> elements,
-                                ScreenRenderer.Bounds surface, ScreenRenderer.Bounds gui) {
+                                ScreenLayout.Bounds surface, ScreenLayout.Bounds gui) {
         for (ScreenModel.Element element : elements) {
             if (!element.type().equals("button") || element.item().isBlank()) continue;
 
@@ -143,15 +145,15 @@ public final class ScreenSurface {
      *
      * @return array com o id da grade e o índice da célula, a partir de 1
      */
-    public Object[] clickedCell(List<ScreenModel.Element> elements, ScreenRenderer.Bounds surface,
-                                ScreenRenderer.Bounds gui, int mouseX, int mouseY) {
+    public Object[] clickedCell(List<ScreenModel.Element> elements, ScreenLayout.Bounds surface,
+                                ScreenLayout.Bounds gui, int mouseX, int mouseY) {
         // De trás para a frente: o último declarado é o que está por cima, e é o que o jogador
         // entende ter clicado.
         for (int index = elements.size() - 1; index >= 0; index--) {
             ScreenModel.Element element = elements.get(index);
             if (!element.type().equals("grid")) continue;
 
-            ScreenRenderer.Bounds clip = viewports.get(element.group());
+            ScreenLayout.Bounds clip = viewports.get(element.group());
             if (clip != null && !inside(clip, mouseX, mouseY)) continue;
 
             int[] position = positionOf(element, elements, surface, gui);
@@ -169,14 +171,14 @@ public final class ScreenSurface {
      *
      * @return {@code true} quando algo rolou, para o chamador consumir o evento
      */
-    public boolean scroll(List<ScreenModel.Element> elements, ScreenRenderer.Bounds surface,
-                          ScreenRenderer.Bounds gui, int mouseX, int mouseY, double amount) {
+    public boolean scroll(List<ScreenModel.Element> elements, ScreenLayout.Bounds surface,
+                          ScreenLayout.Bounds gui, int mouseX, int mouseY, double amount) {
         for (ScreenModel.Element element : elements) {
             if (!element.type().equals("viewport") || element.id().isBlank()) continue;
 
             int[] position = ScreenRenderer.resolve(element, surface, gui);
-            ScreenRenderer.Bounds area =
-                    new ScreenRenderer.Bounds(position[0], position[1], element.w(), element.h());
+            ScreenLayout.Bounds area =
+                    new ScreenLayout.Bounds(position[0], position[1], element.w(), element.h());
             if (!inside(area, mouseX, mouseY)) continue;
 
             int maximum = Math.max(0, element.content() - element.h());
@@ -194,7 +196,7 @@ public final class ScreenSurface {
         return false;
     }
 
-    private static boolean inside(ScreenRenderer.Bounds area, int x, int y) {
+    private static boolean inside(ScreenLayout.Bounds area, int x, int y) {
         return x >= area.x() && x < area.x() + area.w()
                 && y >= area.y() && y < area.y() + area.h();
     }

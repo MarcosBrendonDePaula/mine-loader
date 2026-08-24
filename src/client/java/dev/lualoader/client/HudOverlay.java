@@ -1,5 +1,7 @@
 package dev.lualoader.client;
 
+import dev.lualoader.ui.ScreenLayout;
+import dev.lualoader.ui.ScreenModel;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 
@@ -33,7 +35,7 @@ public final class HudOverlay {
 
             // A superfície é a tela inteira, e sem âncora a origem é o canto superior esquerdo: é o
             // canto natural para um elemento fixo, e o que alguém espera ao escrever x = 4, y = 4.
-            ScreenRenderer.Bounds surface = new ScreenRenderer.Bounds(0, 0,
+            ScreenLayout.Bounds surface = new ScreenLayout.Bounds(0, 0,
                     client.getWindow().getScaledWidth(), client.getWindow().getScaledHeight());
 
             for (ScreenModel.Element element : model.elements()) {

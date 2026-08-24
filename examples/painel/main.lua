@@ -63,7 +63,14 @@ end
 --- Redesenha o HUD a partir do estado.
 -- O HUD nao se atualiza sozinho: quem muda o estado precisa reenvia-lo. Sem isso ele congela
 -- no valor que tinha quando foi definido, que e o erro mais facil de cometer aqui.
+-- @return true se o HUD foi mesmo desenhado
 local function atualizar_hud(ctx)
+    -- Um cliente sem o loader -- ou uma plataforma cujo adaptador ainda nao desenha -- ignora o
+    -- HUD em silencio. Perguntar antes e o que evita o mod prometer um contador que ninguem ve.
+    if not ctx.player.supports_screens() then
+        return false
+    end
+
     -- O contador nao passa da meta: mostrar 11/10 confundiria mais do que informaria.
     local contador = math.min(META, ctx.state.contador or 0)
     local progresso = contador / META
@@ -73,6 +80,7 @@ local function atualizar_hud(ctx)
         { type = "label", x = 6, y = 6, text = "Painel: " .. contador .. "/" .. META, color = COR_TITULO },
         { type = "progress", x = 6, y = 20, w = 88, h = 5, progress = progresso, color = COR_BARRA }
     })
+    return true
 end
 
 -- A logica da tela e registrada uma vez e vale para qualquer jogador que a abrir.
@@ -133,17 +141,24 @@ mod.command("painel", function(ctx)
     end
 
     if ctx.subcommand == "hudon" or ctx.argv[2] == "on" then
-        atualizar_hud(ctx)
-        ctx.player.send_message("HUD ligado.")
+        if atualizar_hud(ctx) then
+            ctx.player.send_message("HUD ligado.")
+        else
+            ctx.player.send_message("Este cliente nao desenha HUD; o contador vai pelo chat.")
+        end
         return
     end
 
     -- Testar o HUD sem depender da tela: /mod painel somar
     if ctx.subcommand == "somar" then
         ctx.state.contador = math.min(META, (ctx.state.contador or 0) + 1)
-        atualizar_hud(ctx)
-        ctx.player.send_message("Contador: " .. ctx.state.contador .. "/" .. META
-            .. " (veja o HUD no canto)")
+        local resumo = "Contador: " .. ctx.state.contador .. "/" .. META
+
+        -- So aponta para o canto da tela se houver mesmo algo desenhado la.
+        if atualizar_hud(ctx) then
+            resumo = resumo .. " (veja o HUD no canto)"
+        end
+        ctx.player.send_message(resumo)
         return
     end
 

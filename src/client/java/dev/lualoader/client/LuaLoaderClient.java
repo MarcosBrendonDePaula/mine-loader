@@ -1,5 +1,6 @@
 package dev.lualoader.client;
 
+import dev.lualoader.ui.ScreenModel;
 import dev.lualoader.network.ScreenPayloads;
 import dev.lualoader.ui.ScreenProtocol;
 import net.fabricmc.api.ClientModInitializer;
