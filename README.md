@@ -107,6 +107,16 @@ diferente do loader.
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
 
+O `logistica` existe por outro motivo: é um **teste de esforço**. Ele porta a ideia central de um mod
+de verdade — o [Logistic Pipes](https://github.com/rs485/logisticspipes) — e serve para descobrir o
+que falta na API antes que quem escreve um mod descubra. As quatro lacunas que ele encontrou estão
+em [`API_GAPS.md`](docs/API_GAPS.md).
+
+A versão que vive aqui usa texturas próprias e é MIT como o resto do repositório. Há também um
+[**porte autônomo**](https://github.com/MarcosBrendonDePaula/logistic-pipes-lua), que reusa a arte do
+mod original e por isso é MMPL — a licença do Logistic Pipes exige que qualquer derivado a mantenha,
+e é justamente por isso que ele mora fora daqui.
+
 O `gerenciador` existe porque a lista de mods do Fabric e do NeoForge não enxerga os mods deste
 loader — para elas há um mod só, o próprio loader. Quem joga precisa de algum lugar onde ver o que
 está instalado e acrescentar um mod novo, e esse lugar é um mod em Lua como qualquer outro.
