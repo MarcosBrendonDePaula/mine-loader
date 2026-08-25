@@ -87,6 +87,36 @@ public class DeclarativeBlock extends Block {
         return property.parse(rawValue).map(value -> state.with(property, value)).orElse(state);
     }
 
+    /**
+     * Escolhe a direcao no momento em que o bloco e colocado.
+     *
+     * <p>{@code player} encara quem colocou -- e o que uma fornalha faz; {@code horizontal} e
+     * {@code all} seguem o lado em que o jogador clicou, como um observador. A diferenca entre os
+     * dois primeiros nao esta nos valores possiveis, e sim nesta escolha.
+     *
+     * <p>Sem isto, a propriedade existiria no blockstate e nunca mudaria: o bloco ficaria sempre
+     * apontando para o norte, e o campo declarado no manifesto pareceria ignorado -- que foi
+     * exatamente o estado anterior.
+     */
+    @Override
+    public BlockState getPlacementState(net.minecraft.item.ItemPlacementContext context) {
+        BlockState state = super.getPlacementState(context);
+        if (state == null) return null;
+
+        if (declaredProperties.get("facing") == net.minecraft.state.property.Properties.FACING) {
+            return state.with(net.minecraft.state.property.Properties.FACING,
+                    context.getSide().getOpposite());
+        }
+        if (declaredProperties.get("facing")
+                == net.minecraft.state.property.Properties.HORIZONTAL_FACING) {
+            // Oposto de para onde o jogador olha: colocar um bloco de frente e o gesto de virar
+            // ele para si, e nao de empurra-lo para longe.
+            return state.with(net.minecraft.state.property.Properties.HORIZONTAL_FACING,
+                    context.getHorizontalPlayerFacing().getOpposite());
+        }
+        return state;
+    }
+
     /** Propriedades declaradas no manifesto, por nome. */
     public Map<String, Property<?>> declaredProperties() {
         return Map.copyOf(declaredProperties);

@@ -209,9 +209,13 @@ clique sobre uma `grid`.
 
 ### Aparência
 
-**Orientação de bloco.** `placement.facing` não é aplicado: um bloco declarado fica sempre na mesma
-direção, independente de como foi colocado. É a mesma lacuna que faz uma estrutura `.nbt` perder a
-orientação de escadas e troncos.
+**Orientação de bloco existe** (`placement.facing`): `horizontal` e `all` seguem o lado clicado,
+`player` encara quem colocou. O blockstate gerado ganha uma variante por direção, com o mesmo modelo
+girado — e não seis modelos para manter em sincronia.
+
+O que ainda falta é a orientação **numa estrutura `.nbt`**: escadas e troncos colocados por
+`place_structure` continuam perdendo a direção, porque quem a aplica é a colocação, e ali o bloco
+chega pronto.
 
 **Som e música próprios.** O mod pode tocar sons do jogo, não distribuir os seus.
 

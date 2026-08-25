@@ -70,7 +70,8 @@ núcleo não conhecer Minecraft.
 | Variantes visuais (`render.variant_textures`) | sim | sim | |
 | **Estados declarados** (`state.properties`) | sim | sim | |
 | Formas de colisão (`shape`) | sim | sim | Nomes prontos ou caixas próprias em `shape.boxes` |
-| **Posicionamento** (`placement`: facing, waterlog) | **não** | **não** | Declarado e ignorado nas duas |
+| Orientação (`placement.facing`) | sim | sim | `horizontal`, `all` ou `player`; blockstate com uma variante por direção |
+| **Alagável** (`placement.waterloggable`) | **não** | **não** | Declarado e ignorado nas duas |
 | **Aparência** (`render`: layer, emissive, tint) | **não** | **não** | Declarado e ignorado nas duas |
 | Propriedades de material e física (`material`, `settings`) | sim | sim | Conferidas por GameTest nas duas |
 | Loot de outro bloco (`settings.drops_like`) | sim | sim | |

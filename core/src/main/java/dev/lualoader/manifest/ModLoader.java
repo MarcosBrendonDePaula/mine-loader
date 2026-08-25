@@ -34,6 +34,15 @@ public final class ModLoader {
      * condição de nascimento, e um valor escrito errado viraria uma espécie que simplesmente
      * nunca aparece — o tipo de defeito que não deixa rastro no log.
      */
+    /**
+     * Como um bloco declarado escolhe a direcao ao ser colocado.
+     *
+     * <p>Conjunto fechado porque cada valor vira uma propriedade de estado diferente, e um nome
+     * errado daria um bloco que nunca gira -- sem erro, e parecendo que o loader ignora o campo.
+     * Que foi exatamente o que aconteceu enquanto o campo era aceito e descartado.
+     */
+    private static final Set<String> FACINGS = Set.of("none", "horizontal", "all", "player");
+
     private static final Set<String> ENTITY_CATEGORIES = Set.of(
             "monster", "creature", "ambient", "axolotls", "underground_water_creature",
             "water_creature", "water_ambient", "misc");
@@ -213,7 +222,18 @@ public final class ModLoader {
         require(manifest.name != null && !manifest.name.isBlank(), "name é obrigatório");
         require(manifest.version != null && !manifest.version.isBlank(), "version é obrigatória");
         // O entrypoint deixou de ser obrigatorio: um mod pode declarar apenas scripts por bloco.
-        if (manifest.entrypoint != null && !manifest.entrypoint.isBlank()) {
+        //
+        // Mas quem mapeia eventos precisa dele. O mapeamento aponta para funcoes do entrypoint, e
+        // sem entrypoint essas funcoes nao existem em lugar nenhum: o loader registrava os blocos,
+        // nao executava script algum, e nada reclamava. O sintoma era um mod que carrega e nao faz
+        // nada -- o modo de falhar mais caro, porque parece que o loader esta quebrado, e nao que
+        // o manifesto esta incompleto.
+        boolean hasEntrypoint = manifest.entrypoint != null && !manifest.entrypoint.isBlank();
+        require(hasEntrypoint || manifest.events == null || manifest.events.isEmpty(),
+                "o manifesto mapeia evento e nao declara entrypoint;"
+                        + " o mapeamento aponta para funcoes de um script que nao existe");
+
+        if (hasEntrypoint) {
             require(LUA_FILE.matcher(manifest.entrypoint).matches(), "entrypoint Lua inválido");
         }
         if (manifest.side != null && !manifest.side.isBlank()) {
@@ -286,6 +306,11 @@ public final class ModLoader {
                 require(block.name != null && !block.name.isBlank(), "name de bloco é obrigatório");
                 require(blockIds.add(block.id), "bloco duplicado no mod: " + block.id);
                 validateBlock(block);
+                require(block.placement == null || block.placement.facing == null
+                                || FACINGS.contains(
+                                        block.placement.facing.toLowerCase(Locale.ROOT)),
+                        "placement.facing desconhecido em " + block.id + ": "
+                                + block.placement.facing + " (use um de " + FACINGS + ")");
                 manifestRemoteBase = manifest.remoteBase;
                 validateBehaviorScripts(block, directory);
             }

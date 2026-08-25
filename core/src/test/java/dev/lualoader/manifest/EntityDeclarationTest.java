@@ -534,4 +534,49 @@ class EntityDeclarationTest {
         // decide se a criatura anda.
         assertNull(discover(dir).get(0).manifest().entities.get(0).ai);
     }
+    // ------------------------------------------------------------------ manifesto incompleto
+
+    @Test
+    void mapearEventoSemEntrypointERecusado(@TempDir Path dir) throws IOException {
+        Path mod = dir.resolve("mudo");
+        Files.createDirectories(mod);
+        Files.writeString(mod.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "mudo",
+                  "name": "Mudo",
+                  "version": "0.1.0",
+                  "events": { "loader_ready": "on_loader_ready" }
+                }
+                """, StandardCharsets.UTF_8);
+
+        // Este caso nasceu de perder tempo com ele. Sem entrypoint, o mapeamento aponta para uma
+        // funcao que nao existe em lugar nenhum: o loader registrava os blocos, nao executava
+        // script algum, e nada reclamava. O mod carregava e nao fazia nada -- e o sintoma nao
+        // parece "manifesto incompleto", parece "o loader esta quebrado".
+        assertTrue(refusalFor(dir).stream().anyMatch(e -> e.contains("entrypoint")),
+                "a recusa deveria citar o entrypoint");
+    }
+
+    @Test
+    void modSemEventoNaoPrecisaDeEntrypoint(@TempDir Path dir) throws IOException {
+        Path mod = dir.resolve("so_conteudo");
+        Files.createDirectories(mod);
+        Files.writeString(mod.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "so_conteudo",
+                  "name": "So Conteudo",
+                  "version": "0.1.0",
+                  "entities": [
+                    { "id": "guardiao", "name": "Guardiao", "base": "minecraft:iron_golem" }
+                  ]
+                }
+                """, StandardCharsets.UTF_8);
+
+        // Um mod que so declara conteudo continua valendo sem entrypoint. A exigencia e sobre
+        // mapear evento, e nao sobre existir script -- apertar mais que isso quebraria o
+        // crystal_world, que declara tudo em JSON e logica por bloco.
+        assertEquals(1, discover(dir).size());
+    }
 }

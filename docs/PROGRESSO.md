@@ -32,6 +32,14 @@ migrado rodando.
 - [x] Leitura de **bioma e luz** (`biome_at`, `light_at`).
 - [x] Quatro **eventos de criatura** e **mover/empurrar** entidade.
 
+### Limites removidos
+
+- [x] **`events` sem `entrypoint` era aceito em silêncio.** Agora é recusado na carga, dizendo que
+      o mapeamento aponta para funções de um script que não existe. Custou tempo real nesta sessão:
+      o mod carregava, não fazia nada, e nenhuma linha de log explicava.
+- [x] **`placement.facing` era declarado e ignorado.** Agora vale nas duas plataformas, com uma
+      variante de blockstate por direção e o mesmo modelo girado.
+
 ### Interface
 
 - [x] **Tela de mods no menu principal**: lista com filtro e páginas, ligar/desligar, instalar por
@@ -77,9 +85,7 @@ Estão em `API_GAPS.md`, em ordem de quanto doem:
    reproduzir os filtros dos módulos de chassi.
 4. **Evento de bloco quebrado com o inventário íntegro.** A rede só se refaz quando alguém abre a
    tela.
-5. **`events` sem `entrypoint` é aceito em silêncio.** O loader registra os blocos, não executa
-   script nenhum, e o mapeamento aponta para funções que não podem existir. Barato de fechar, e o
-   modo de falhar mais caro que existe — parece que o loader está quebrado.
+5. ~~**`events` sem `entrypoint` é aceito em silêncio.**~~ **Fechado.**
 
 ### Nível 7 do checklist, o que sobrou
 

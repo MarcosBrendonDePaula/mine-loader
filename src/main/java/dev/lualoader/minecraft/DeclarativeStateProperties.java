@@ -41,10 +41,33 @@ public final class DeclarativeStateProperties {
                 if (created != null) built.put(property.name, created);
             }
         }
+        // A direcao entra como propriedade tambem, e nao como caso a parte: o bloco ja sabe montar
+        // o estado a partir deste mapa, e um caminho paralelo so para facing daria duas formas de
+        // registrar a mesma coisa.
+        Property<?> facing = facingProperty(definition);
+        if (facing != null) built.put("facing", facing);
+
         if (definition.state != null && definition.state.defaults != null) {
             defaults.putAll(definition.state.defaults);
         }
         return new DeclarativeStateProperties(built, defaults);
+    }
+
+    /**
+     * A propriedade de direcao, quando o bloco declara que gira.
+     *
+     * <p>{@code horizontal} e {@code player} usam os quatro lados -- a diferenca entre eles esta em
+     * *como* a direcao e escolhida na hora de colocar, e nao em quais valores existem. {@code all}
+     * inclui cima e baixo, como o observador do jogo.
+     */
+    private static Property<?> facingProperty(ModManifest.BlockDefinition definition) {
+        if (definition.placement == null || definition.placement.facing == null) return null;
+
+        return switch (definition.placement.facing.trim().toLowerCase(Locale.ROOT)) {
+            case "horizontal", "player" -> net.minecraft.state.property.Properties.HORIZONTAL_FACING;
+            case "all" -> net.minecraft.state.property.Properties.FACING;
+            default -> null;
+        };
     }
 
     private static Property<?> create(ModManifest.StatePropertyDefinition property) {

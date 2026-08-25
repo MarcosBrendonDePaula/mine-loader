@@ -48,7 +48,33 @@ public final class NeoForgeStateProperties {
         if (definition.state != null && definition.state.defaults != null) {
             defaults.putAll(definition.state.defaults);
         }
+
+        // A direcao entra como propriedade tambem, e nao como caso a parte: o bloco ja sabe montar
+        // o estado a partir deste mapa.
+        Property<?> facing = facingProperty(definition);
+        if (facing != null) {
+            built.put("facing", facing);
+        }
         return new NeoForgeStateProperties(built, defaults);
+    }
+
+    /**
+     * A propriedade de direcao, quando o bloco declara que gira.
+     *
+     * <p>{@code horizontal} e {@code player} usam os quatro lados; a diferenca entre eles esta em
+     * como a direcao e escolhida ao colocar, e nao em quais valores existem.
+     */
+    private static Property<?> facingProperty(ModManifest.BlockDefinition definition) {
+        if (definition.placement == null || definition.placement.facing == null) return null;
+
+        return switch (definition.placement.facing.trim().toLowerCase(Locale.ROOT)) {
+            case "horizontal", "player" ->
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties
+                            .HORIZONTAL_FACING;
+            case "all" ->
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING;
+            default -> null;
+        };
     }
 
     private static Property<?> create(ModManifest.StatePropertyDefinition property) {

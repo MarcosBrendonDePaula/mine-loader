@@ -681,6 +681,27 @@ simplesmente nao nasce. Para conferir uma posicao, `ctx.server.biome_at(x, y, z)
 
 O ovo entra na aba criativa do mod junto dos blocos e itens.
 
+## Orientacao do bloco
+
+`placement.facing` faz o bloco lembrar para onde foi virado:
+
+```json
+"placement": { "facing": "player" }
+```
+
+| Valor | O que faz |
+|---|---|
+| `none` | padrao; o bloco nao gira |
+| `horizontal` | quatro lados, seguindo a face clicada |
+| `all` | seis lados, como o observador do jogo |
+| `player` | quatro lados, encarando quem colocou -- e o gesto de uma fornalha |
+
+O pacote gerado escreve uma variante por direcao, **girando o mesmo modelo**. Desenhar um modelo por
+lado daria seis arquivos para manter em sincronia, e o primeiro ajuste esqueceria um deles.
+
+`player` e `horizontal` tem os mesmos quatro valores; a diferenca esta em *como* a direcao e
+escolhida na hora de colocar.
+
 ## Icone do mod
 
 `icon` na raiz do manifesto aponta a imagem que a lista de mods mostra ao lado do nome. Aceita as

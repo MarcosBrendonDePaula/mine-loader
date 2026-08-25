@@ -190,6 +190,34 @@ public class NeoForgeDeclarativeBlock extends Block {
         }
     }
 
+    /**
+     * Escolhe a direcao no momento em que o bloco e colocado.
+     *
+     * <p>Sem isto, a propriedade existiria no blockstate e nunca mudaria: o bloco ficaria sempre
+     * apontando para o norte, e o campo declarado no manifesto pareceria ignorado.
+     */
+    @Override
+    public BlockState getStateForPlacement(net.minecraft.world.item.context.BlockPlaceContext ctx) {
+        BlockState state = super.getStateForPlacement(ctx);
+        if (state == null) return null;
+
+        var declared = declaredProperties.get("facing");
+        if (declared == net.minecraft.world.level.block.state.properties
+                .BlockStateProperties.FACING) {
+            return state.setValue(net.minecraft.world.level.block.state.properties
+                    .BlockStateProperties.FACING, ctx.getClickedFace().getOpposite());
+        }
+        if (declared == net.minecraft.world.level.block.state.properties
+                .BlockStateProperties.HORIZONTAL_FACING) {
+            // Oposto de para onde o jogador olha: colocar um bloco de frente e o gesto de virar
+            // ele para si, e nao de empurra-lo para longe.
+            return state.setValue(net.minecraft.world.level.block.state.properties
+                            .BlockStateProperties.HORIZONTAL_FACING,
+                    ctx.getHorizontalDirection().getOpposite());
+        }
+        return state;
+    }
+
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(VARIANT, LUMINANCE);

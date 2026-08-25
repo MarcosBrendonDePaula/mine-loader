@@ -178,6 +178,9 @@
             16
           ]
         ]
+      },
+      "placement": {
+        "facing": "player"
       }
     }
   ],

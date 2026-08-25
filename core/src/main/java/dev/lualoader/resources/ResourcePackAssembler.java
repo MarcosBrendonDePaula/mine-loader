@@ -941,16 +941,69 @@ public final class ResourcePackAssembler {
      * mod -- terminam aqui. Enquanto cada um escrevia o seu, a chance de divergirem num ajuste
      * futuro era so questao de tempo.
      */
+    /**
+     * As direcoes que o blockstate precisa cobrir.
+     *
+     * <p>{@code null} quando o bloco nao gira. A diferenca entre uma entrada com a propriedade e
+     * uma sem ela nao e cosmetica: escrever {@code facing} num bloco que nao tem essa propriedade
+     * faz o jogo nao achar variante nenhuma, e o resultado e o cubo roxo e preto de modelo ausente.
+     */
+    private static java.util.List<String> facingsOf(ModManifest.BlockDefinition block) {
+        String declared = block.placement == null || block.placement.facing == null
+                ? "none"
+                : block.placement.facing.trim().toLowerCase(java.util.Locale.ROOT);
+
+        return switch (declared) {
+            case "horizontal", "player" -> java.util.List.of("north", "south", "west", "east");
+            case "all" -> java.util.List.of("north", "south", "west", "east", "up", "down");
+            default -> java.util.Collections.singletonList(null);
+        };
+    }
+
+    /**
+     * Gira o modelo para a direcao da variante.
+     *
+     * <p>Um modelo so, girado. Desenhar seis daria seis arquivos para manter em sincronia, e o
+     * primeiro ajuste esqueceria um deles. Norte e a referencia do formato do jogo, entao nao leva
+     * rotacao nenhuma.
+     */
+    private static void appendRotation(StringBuilder out, String facing) {
+        if (facing == null) return;
+
+        switch (facing) {
+            case "south" -> out.append(", \"y\": 180");
+            case "west" -> out.append(", \"y\": 270");
+            case "east" -> out.append(", \"y\": 90");
+            case "up" -> out.append(", \"x\": 270");
+            case "down" -> out.append(", \"x\": 90");
+            default -> {
+            }
+        }
+    }
+
     private void writeBlockstate(Path generatedRoot, String namespace, String blockId,
                                  ModManifest.BlockDefinition block,
                                  Map<Integer, String> models) throws IOException {
         String fallbackModel = models.getOrDefault(0, models.values().iterator().next());
 
+        // As direcoes que o bloco assume, ou uma so quando ele nao gira. Cada combinacao de
+        // variante visual e direcao vira uma entrada: o modelo e o mesmo, girado.
+        java.util.List<String> facings = facingsOf(block);
+
         StringBuilder blockstate = new StringBuilder("{\n  \"variants\": {\n");
+        boolean primeira = true;
         for (int variant = 0; variant <= 15; variant++) {
-            if (variant > 0) blockstate.append(",\n");
-            blockstate.append("    \"lua_variant=").append(variant).append("\": {\"model\": \"")
-                    .append(models.getOrDefault(variant, fallbackModel)).append("\"}");
+            for (String facing : facings) {
+                if (!primeira) blockstate.append(",\n");
+                primeira = false;
+
+                blockstate.append("    \"lua_variant=").append(variant);
+                if (facing != null) blockstate.append(",facing=").append(facing);
+                blockstate.append("\": {\"model\": \"")
+                        .append(models.getOrDefault(variant, fallbackModel)).append("\"");
+                appendRotation(blockstate, facing);
+                blockstate.append("}");
+            }
         }
         blockstate.append("\n  }\n}\n");
         write(generatedRoot.resolve("assets").resolve(namespace)
