@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,6 +82,48 @@ class LoaderCoreTest {
         assertEquals(16, resolved.height());
         assertEquals(64, resolved.sha256().length());
         assertTrue(Files.isRegularFile(resolved.path()));
+    }
+
+    /**
+     * O cache responde sem abrir conexão, quando o manifesto declara o hash.
+     *
+     * <p>A URL aponta para um host que não existe: se houvesse download, o teste falharia. É a única
+     * forma honesta de provar ausência de rede — contar downloads exigiria um servidor de mentira, e
+     * um servidor de mentira que responde rápido esconderia exatamente o custo que se quer evitar.
+     *
+     * <p>Até aqui o recurso era baixado <b>sempre</b>: o cache era indexado pelo hash do conteúdo, e
+     * o conteúdo só se conhecia depois de baixar. Ele economizava disco e não economizava rede.
+     */
+    @Test
+    void cacheRespondeSemBaixarQuandoOHashEDeclarado() throws Exception {
+        Path mod = Files.createDirectories(temp.resolve("demo_mod"));
+        Path cache = temp.resolve("cache");
+        var manager = new RemoteResourceManager(cache);
+
+        byte[] conteudo = "modelo de mentira".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String hash = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(conteudo));
+
+        Files.createDirectories(cache);
+        Files.write(cache.resolve(hash + ".img"), conteudo);
+
+        var resource = new ModManifest.ResourceDefinition();
+        resource.from = "https://host.que.nao.existe.invalid/modelo.json";
+        resource.sha256 = hash;
+
+        assertArrayEquals(conteudo, manager.resolveBytes(mod, resource, null));
+    }
+
+    /** Sem o hash declarado não há como consultar o cache antes: a chave é o próprio conteúdo. */
+    @Test
+    void semHashDeclaradoOCacheNaoTemComoResponderAntes() throws Exception {
+        Path mod = Files.createDirectories(temp.resolve("demo_mod"));
+        var manager = new RemoteResourceManager(temp.resolve("cache"));
+
+        var resource = new ModManifest.ResourceDefinition();
+        resource.from = "https://host.que.nao.existe.invalid/modelo.json";
+
+        assertThrows(IOException.class, () -> manager.resolveBytes(mod, resource, null));
     }
 
     @Test

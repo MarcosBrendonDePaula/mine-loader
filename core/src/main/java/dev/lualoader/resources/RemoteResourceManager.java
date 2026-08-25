@@ -108,6 +108,24 @@ public final class RemoteResourceManager {
         return new ResolvedTexture(file, sha256(bytes), image.width(), image.height(), false);
     }
 
+    /**
+     * O arquivo em cache daquele hash, ou {@code null} quando ainda nao foi baixado.
+     *
+     * <p>O cache e indexado <b>pelo conteudo</b>, e nao pela URL: dois mods que apontam para a
+     * mesma imagem em servidores diferentes compartilham o arquivo, e uma URL que passa a servir
+     * outra coisa nao envenena o que ja estava certo.
+     *
+     * <p>A consequencia e que so da para consultar antes de baixar quando o manifesto <b>declara</b>
+     * o {@code sha256} -- e e por isso que declarar vale a pena: sem ele o recurso e baixado a cada
+     * partida para so entao descobrir que ja estava em disco.
+     */
+    private Path cached(String sha256) {
+        if (sha256 == null || sha256.isBlank()) return null;
+
+        Path file = cacheDirectory.resolve(sha256.toLowerCase(java.util.Locale.ROOT) + ".img");
+        return Files.isRegularFile(file) ? file : null;
+    }
+
     private ResolvedTexture resolveRemote(ModManifest.TextureDefinition definition) throws IOException {
         if (definition.url == null || definition.url.isBlank()) {
             throw new IOException("textura remota sem url");
@@ -120,6 +138,16 @@ public final class RemoteResourceManager {
             throw new IOException("URL de textura inválida", error);
         }
         requireHttps(uri);
+
+        // Com o hash declarado, o arquivo em disco ja e a resposta: nao ha o que baixar para
+        // descobrir. Ate aqui o download acontecia sempre, e o cache so evitava reescrever o
+        // arquivo -- economizava disco e nao economizava rede, que e o que custa.
+        Path pronto = cached(definition.sha256);
+        if (pronto != null) {
+            ImageInfo local = validateImage(Files.readAllBytes(pronto));
+            return new ResolvedTexture(pronto, definition.sha256.toLowerCase(java.util.Locale.ROOT),
+                    local.width(), local.height(), true);
+        }
 
         long maxBytes = limit(definition.maxBytes);
         HttpRequest request = HttpRequest.newBuilder(uri)
@@ -184,7 +212,17 @@ public final class RemoteResourceManager {
             throw new IOException("recurso sem origem");
         }
 
-        byte[] bytes = ResourceCatalog.isRemote(resource.from)
+        boolean remoto = ResourceCatalog.isRemote(resource.from);
+
+        // Com o hash declarado, o arquivo em disco ja e a resposta: nao ha o que baixar para
+        // descobrir. Vale so para o remoto -- ler do disco do mod ja e local, e passar pelo cache
+        // ali seria uma copia a mais do mesmo arquivo.
+        if (remoto) {
+            Path pronto = cached(resource.sha256);
+            if (pronto != null) return Files.readAllBytes(pronto);
+        }
+
+        byte[] bytes = remoto
                 ? downloadBytes(resource.from, limit(resource.maxBytes))
                 : localBytes(modDirectory, resource, remoteBase);
 
@@ -194,6 +232,10 @@ public final class RemoteResourceManager {
                 throw new IOException("hash SHA-256 do recurso nao confere");
             }
         }
+
+        // Guarda o que veio da rede, para a proxima partida nao repetir o download. Sem isto o
+        // cache so servia a textura, e todo modelo, som e script remoto era baixado de novo.
+        if (remoto) guardar(bytes);
         return bytes;
     }
 
@@ -222,6 +264,25 @@ public final class RemoteResourceManager {
             throw new IOException("recurso local excede o limite de " + maxBytes + " bytes");
         }
         return Files.readAllBytes(file);
+    }
+
+    /**
+     * Grava os bytes no cache, indexados pelo proprio hash.
+     *
+     * <p>Escreve num temporario e move: uma partida interrompida no meio do download deixaria um
+     * arquivo truncado com nome de hash valido, e a proxima o serviria sem desconfiar.
+     */
+    private void guardar(byte[] bytes) throws IOException {
+        Path destino = cacheDirectory.resolve(sha256(bytes) + ".img");
+        if (Files.exists(destino)) return;
+
+        Path temporario = Files.createTempFile(cacheDirectory, "download-", ".tmp");
+        try {
+            Files.write(temporario, bytes);
+            Files.move(temporario, destino, StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            Files.deleteIfExists(temporario);
+        }
     }
 
     private byte[] downloadBytes(String url, long maxBytes) throws IOException {
