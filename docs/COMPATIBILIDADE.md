@@ -117,7 +117,7 @@ núcleo não conhecer Minecraft.
 | `shape.cores` e `shape.arms` (varias caixas) | sim | sim | As caixas de um braco giram juntas, como uma peca so |
 | Modelo `.obj` de bloco | sim | sim | O leitor mora no nucleo, e as duas plataformas usam o mesmo |
 | `obj_parts` -- pecas por conexao | sim | sim | Mesmos numeros de face nos dois: 164 no miolo, 40 na manga, 2 na placa |
-| Malha desenhada corretamente na tela | **com defeito** | sim | Mesmo pacote e mesmos numeros de face; o Fabric passa pelo Indigo e o resultado sai errado. Ver PROGRESSO.md |
+| Malha desenhada corretamente na tela | **com defeito** | sim | Ver "A malha desenha errado no Fabric", abaixo |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |
@@ -180,6 +180,48 @@ passa pela mesma resolução de herança que o conteúdo do manifesto.
 
 Nessa fase não há mundo: nem servidor, nem jogador, nem bloco para tocar. O contexto é pequeno de
 propósito — oferecer o resto seria oferecer chamadas que só podem falhar.
+
+## A malha desenha errado no Fabric
+
+**O que acontece.** Um bloco com modelo `.obj` aparece correto no NeoForge e errado no Fabric:
+faces escuras e pedaços fora do lugar. Mesmo pacote, mesmo arquivo, mesmo leitor.
+
+**O que já está descartado.** O leitor de OBJ mora no núcleo e é o mesmo nos dois lados;
+`tools/inspecionar-modelo.sh` confirma que as duas plataformas recebem os mesmos dados — 164 faces
+no miolo, 40 na manga, 2 na placa —, e o cliente Fabric relata exatamente os mesmos números depois
+de montar. Então **não é** o modelo, o manifesto, o recorte nem o parser: é a conversão para quads
+do lado Fabric.
+
+**Por que os dois erram diferente.** O NeoForge desenha pelo caminho vanilla; o Fabric passa pelo
+Indigo, que lê os campos do vértice com mais rigor e aplica iluminação por outras regras. Uma conta
+que o vanilla ignora vira defeito lá.
+
+**Três causas já foram achadas e corrigidas por este caminho**, todas com a mesma assinatura — a
+mesma decisão tomada diferente em cada lado:
+
+| Onde | O que era |
+|---|---|
+| `hasDepth()` (Yarn) = `isGui3d()` (Mojang) | estava `false` num lado e `true` no outro: o item virava figura chapada na mão e na barra rápida só no Fabric |
+| Oclusão de ambiente e sombreamento difuso | as duas contas supõem a face encostada na parede do cubo; numa malha ela fica no meio do bloco, e as faces desenhadas pelo avesso são iluminadas como se olhassem para dentro |
+| Vértice montado à mão num `int[32]` | o leitor do NeoForge preenche campo a campo por uma API que conhece o formato; aqui passou a usar o equivalente do Fabric |
+
+E um erro que fez **duas correções não surtirem efeito nenhum**: o material era configurado no
+emissor e o resultado convertido de volta para quad — o que **descarta o material**, e com ele a
+decisão de não aplicar difuso. O modelo agora entrega a malha direto.
+
+**Onde procurar a seguir**, em ordem: a normal por vértice das faces duplicadas, o `shade` do quad,
+e o caminho de item (que passa por outro ponto do renderizador). Vale ler o código de uma
+implementação de referência — [FOML](https://github.com/OnyxStudios/FOML) ou
+[Special Model Loader](https://modrinth.com/mod/special-model-loader) — em vez da documentação
+delas, que não desce a esse nível.
+
+**Nenhum teste pega isto, e é o ponto que mais importa.** 18/18 GameTests em cada plataforma, a
+suíte do núcleo e a ferramenta de inspeção ficaram verdes o tempo todo — porque nenhum deles vê
+pixel. Quem apontou cada defeito foi quem estava jogando, e a informação decisiva foi "no NeoForge
+funciona bem": ela transformou um problema aberto numa diferença localizável.
+
+**O que isto não bloqueia.** O desenho é do cliente. A rede, a viagem dos itens, o inventário e os
+eventos funcionam igual nas duas plataformas, e o porte do mod segue por elas.
 
 ## Como cada linha é conferida
 
