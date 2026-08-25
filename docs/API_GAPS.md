@@ -160,11 +160,11 @@ blocos, não executa script nenhum, e o mapeamento de eventos aponta para funç�
 existir. Nada reclama, e o sintoma é um mod que carrega e não faz nada — o modo de falhar mais caro
 possível, porque parece que o loader está quebrado. Precisa ser recusado na carga.
 
-**A forma de um bloco não varia com o estado.** `shape` é declarado uma vez, e vale para todas as
-variantes; `render.variant_textures` troca a textura por variante, e não a geometria. Um cano não
-tem como crescer braços em direção aos vizinhos, e a rede fica sendo peças soltas encostadas — que
-é a diferença visual mais gritante para o original. É o mesmo mecanismo que cerca, vidraça e muro
-do jogo usam, e nenhum deles é declarável hoje.
+**A forma de um bloco varia com o estado** (`shape.core`, `shape.arm`, `shape.connects_to`): um
+cano cresce braços em direção aos vizinhos, e cerca, muro e vidraça viraram declaráveis junto. O
+blockstate gerado é `multipart` — sete peças, e não as sessenta e quatro combinações de seis
+booleanos. **A colisão acompanha o desenho**, que é a metade fácil de esquecer: ver o braço e
+atravessá-lo é pior que não ter braço.
 
 **Não há tique agendado por posição.** Um cano que move item ao longo do tempo precisaria de "volte
 a me chamar nesta posição daqui a N tiques". Hoje só existe `block_random_tick`, que é aleatório, e

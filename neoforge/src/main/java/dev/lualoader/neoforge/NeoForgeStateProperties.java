@@ -55,7 +55,23 @@ public final class NeoForgeStateProperties {
         if (facing != null) {
             built.put("facing", facing);
         }
+
+        // Um bloco que conecta ganha uma propriedade booleana por lado -- o mesmo que cerca e muro
+        // fazem. A lista de lados vem do nucleo: os dois adaptadores precisam concordar sobre qual
+        // propriedade e qual direcao.
+        if (connects(definition)) {
+            for (String side : dev.lualoader.content.BlockShapes.SIDES) {
+                built.put(side, BooleanProperty.create(side));
+            }
+        }
         return new NeoForgeStateProperties(built, defaults);
+    }
+
+    /** Se o bloco declara nucleo e a quem se conectar. */
+    public static boolean connects(ModManifest.BlockDefinition definition) {
+        return definition.shape != null
+                && definition.shape.core != null && definition.shape.core.size() == 6
+                && definition.shape.connectsTo != null && !definition.shape.connectsTo.isEmpty();
     }
 
     /**

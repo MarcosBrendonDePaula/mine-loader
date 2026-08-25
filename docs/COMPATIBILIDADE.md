@@ -70,6 +70,7 @@ núcleo não conhecer Minecraft.
 | Variantes visuais (`render.variant_textures`) | sim | sim | |
 | **Estados declarados** (`state.properties`) | sim | sim | |
 | Formas de colisão (`shape`) | sim | sim | Nomes prontos ou caixas próprias em `shape.boxes` |
+| Forma que conecta (`shape.core`, `arm`, `connects_to`) | sim | sim | Blockstate multipart; **a colisão acompanha o desenho**; GameTest nas duas |
 | Orientação (`placement.facing`) | sim | sim | `horizontal`, `all` ou `player`; blockstate com uma variante por direção |
 | **Alagável** (`placement.waterloggable`) | **não** | **não** | Declarado e ignorado nas duas |
 | **Aparência** (`render`: layer, emissive, tint) | **não** | **não** | Declarado e ignorado nas duas |

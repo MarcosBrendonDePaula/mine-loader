@@ -76,6 +76,15 @@ public final class BlockRegistrar {
                             values.hardness, values.resistance, values.slipperiness,
                             values.velocityMultiplier, values.jumpVelocityMultiplier);
                     dataBlocks.add(block);
+                } else if (DeclarativeStateProperties.connects(definition)) {
+                    // Um bloco que conecta calcula a propria forma a partir do estado, entao ele
+                    // ignora outline e collision declarados -- o nucleo e o braco os substituem.
+                    block = new ConnectedBlock(settings,
+                            values.hardness, values.resistance, values.slipperiness,
+                            values.velocityMultiplier, values.jumpVelocityMultiplier,
+                            dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
+                            dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
+                            definition.shape.connectsTo);
                 } else if (outline != null || collision != null) {
                     block = new DeclarativeShapes.ShapedBlock(settings,
                             values.hardness, values.resistance, values.slipperiness,

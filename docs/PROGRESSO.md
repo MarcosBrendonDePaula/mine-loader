@@ -7,8 +7,8 @@ meio e o que vem a seguir.
 **Regra:** ao fechar um item, risque-o na mesma mudança que o implementa. Um acompanhamento que
 envelhece em silêncio é pior que nenhum — é a mesma razão de `COMPATIBILIDADE.md` existir.
 
-Última revisão: bestiário declarativo completo, tela de mods no menu principal, e o primeiro mod
-migrado rodando.
+Última revisão: três limites removidos de uma vez — `events` sem `entrypoint`,
+`placement.facing` e a forma que varia com o estado. Os três saíram da migração do Logistic Pipes.
 
 ---
 
@@ -33,6 +33,11 @@ migrado rodando.
 - [x] Quatro **eventos de criatura** e **mover/empurrar** entidade.
 
 ### Limites removidos
+
+- [x] **Forma do bloco variando com o estado** — o cano que conecta. `shape.core`, `shape.arm` e
+      `shape.connects_to`; o adaptador registra seis propriedades booleanas, calcula ao colocar e a
+      cada mudança de vizinhança, e o pacote gerado escreve um blockstate `multipart` — sete peças,
+      não sessenta e quatro variantes. **A colisão acompanha o desenho.**
 
 - [x] **`events` sem `entrypoint` era aceito em silêncio.** Agora é recusado na carga, dizendo que
       o mapeamento aponta para funções de um script que não existe. Custou tempo real nesta sessão:
@@ -60,14 +65,13 @@ migrado rodando.
 
 ## Em andamento
 
-- [ ] **Forma do bloco variando com o estado** — o cano que conecta. É a lacuna mais estruturante
-      que a migração achou: `shape` é declarado uma vez e não varia, então os canos ficam sendo
-      peças soltas encostadas. Desbloqueia cerca, muro, vidraça e grade de uma vez.
+**Nada em aberto no código.** O último item — a forma que varia com o estado — fechou e está
+verificado: 11 casos de aritmética de rotação no núcleo, 7 do blockstate gerado, e um GameTest em
+cada plataforma que confere a propriedade depois de pôr e tirar um vizinho.
 
-      Desenho: o bloco declara núcleo, braço e a quem se conecta; o adaptador registra seis
-      propriedades booleanas e as calcula ao colocar e a cada mudança de vizinhança; o pacote gerado
-      escreve um blockstate `multipart` — sete modelos, não sessenta e quatro. A colisão precisa
-      acompanhar, senão o jogador atravessa o braço.
+**A pendência é de olho, não de código:** nada disso foi visto no `runClient`. O blockstate está
+certo no arquivo e a propriedade está certa no mundo, mas se o braço aparece no lugar, só a tela
+diz. Vale abrir o cliente e olhar uma linha de canos antes de seguir.
 
 ---
 
@@ -77,7 +81,7 @@ migrado rodando.
 
 Estão em `API_GAPS.md`, em ordem de quanto doem:
 
-1. **Forma por estado** — em andamento, acima.
+1. ~~**Forma por estado.**~~ **Fechado.**
 2. **Tique agendado por posição.** Não existe "volte a me chamar nesta posição daqui a N tiques".
    Hoje o item some de um baú e aparece no outro, sem viagem visível — a maior diferença para o
    original.
@@ -121,8 +125,9 @@ uma. Este documento é o mapa; elas são o roteiro.
 
 | # | Tarefa | Estado |
 |---|---|---|
-| 14 | Forma do bloco variando com o estado — o cano que conecta | em andamento |
-| 15 | Recusar manifesto que declara `events` sem `entrypoint` | a fazer — o mais barato |
+| 14 | ~~Forma do bloco variando com o estado~~ | **fechado** |
+| 15 | ~~Recusar `events` sem `entrypoint`~~ | **fechado** |
+| 20 | ~~Aplicar `placement.facing`~~ | **fechado** |
 | 16 | Tique agendado por posição | a fazer |
 | 17 | Ler inventário por slot | a fazer |
 | 18 | Evento de bloco quebrado com o inventário íntegro | a fazer |

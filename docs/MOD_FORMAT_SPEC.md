@@ -681,6 +681,38 @@ simplesmente nao nasce. Para conferir uma posicao, `ctx.server.biome_at(x, y, z)
 
 O ovo entra na aba criativa do mod junto dos blocos e itens.
 
+## Bloco que conecta
+
+Um cano, uma cerca, um muro ou uma vidraca crescem em direcao aos vizinhos. Declare o nucleo, o
+braco e a quem se ligar:
+
+```json
+"shape": {
+  "core": [5, 5, 5, 11, 11, 11],
+  "arm":  [5, 5, 0, 11, 11, 5],
+  "connects_to": ["logistica:cano", "#minecraft:wooden_fences"]
+}
+```
+
+| Campo | O que e |
+|---|---|
+| `core` | seis numeros, sempre desenhado |
+| `arm` | seis numeros, apontando para o **norte**; o loader gira para os outros cinco lados |
+| `connects_to` | ids de bloco, ou tags com `#`. **Vazio nao significa "a todos"** -- significa que nada foi declarado, e o bloco nao conecta a nada |
+
+O braco e declarado numa direcao so. Escrever os seis daria seis listas de numeros para manter em
+sincronia, e o primeiro ajuste esqueceria uma.
+
+O pacote gerado escreve um blockstate **multipart**: o nucleo sem condicao, e uma peca por lado
+condicionada aquela propriedade. Sao sete pecas -- as sessenta e quatro combinacoes de seis
+booleanos nao precisam ser escritas.
+
+**A colisao acompanha o desenho.** Um bloco que conecta ignora `outline` e `collision` declarados:
+nucleo e braco os substituem. Uma forma que ficasse so no visual deixaria o jogador ver o braco e
+atravessa-lo.
+
+Declarar `core` sem `arm` e legitimo -- e um poste, que nao cresce nada.
+
 ## Orientacao do bloco
 
 `placement.facing` faz o bloco lembrar para onde foi virado:

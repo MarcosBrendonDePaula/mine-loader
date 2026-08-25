@@ -215,6 +215,30 @@ public final class ModManifest {
          * <p>Para o que os nomes prontos nao cobrem. Quando presente, tem prioridade sobre o nome.
          */
         public List<List<Float>> boxes = new ArrayList<>();
+
+        /**
+         * O nucleo de um bloco que conecta -- cano, cerca, muro, vidraca.
+         *
+         * <p>Esta sempre presente na forma final. Os bracos sao acrescentados a ele, um por lado
+         * ligado.
+         */
+        public List<Float> core = new ArrayList<>();
+
+        /**
+         * O braco, desenhado apontando para o <b>norte</b>.
+         *
+         * <p>Uma direcao so, e o loader gira para as outras cinco. Declarar seis bracos daria seis
+         * listas de numeros para manter em sincronia, e o primeiro ajuste esqueceria uma.
+         */
+        public List<Float> arm = new ArrayList<>();
+
+        /**
+         * A quem este bloco se conecta: ids de bloco, ou tags com {@code #}.
+         *
+         * <p>Vazio nao significa "a todos": significa que nada foi declarado, e o bloco nao conecta
+         * a nada. Um padrao de "tudo" faria um cano crescer bracos em direcao a terra e pedra.
+         */
+        public List<String> connectsTo = new ArrayList<>();
     }
 
     public static final class PlacementDefinition {

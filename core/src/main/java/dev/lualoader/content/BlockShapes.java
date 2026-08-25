@@ -1,5 +1,7 @@
 package dev.lualoader.content;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -115,5 +117,85 @@ public final class BlockShapes {
      */
     public static boolean isFullCube(List<Box> boxes) {
         return boxes != null && boxes.size() == 1 && boxes.get(0).isFullCube();
+    }
+
+    // ------------------------------------------------------------------ blocos que conectam
+
+    /**
+     * As seis direcoes, na ordem em que o formato do jogo as nomeia.
+     *
+     * <p>No nucleo, e nao em cada adaptador: os dois precisam concordar sobre qual propriedade
+     * corresponde a qual lado, e uma segunda lista divergiria na primeira reordenacao.
+     */
+    public static final List<String> SIDES =
+            List.of("north", "south", "west", "east", "up", "down");
+
+    /**
+     * O deslocamento de cada direcao, em blocos.
+     *
+     * <p>Norte e {@code -z}, como o jogo define. Trocar o sinal aqui faria um cano conectar com o
+     * vizinho errado -- e o defeito apareceria como braco apontando para o nada.
+     */
+    public static int[] offsetOf(String side) {
+        return switch (side) {
+            case "north" -> new int[]{0, 0, -1};
+            case "south" -> new int[]{0, 0, 1};
+            case "west" -> new int[]{-1, 0, 0};
+            case "east" -> new int[]{1, 0, 0};
+            case "up" -> new int[]{0, 1, 0};
+            case "down" -> new int[]{0, -1, 0};
+            default -> new int[]{0, 0, 0};
+        };
+    }
+
+    /**
+     * Gira uma caixa desenhada para o norte na direcao pedida.
+     *
+     * <p>Aritmetica sobre o cubo de dezesseis, e nao matriz: o giro e sempre de noventa graus em
+     * torno do centro, e escrever os quatro casos e mais legivel que uma formula que ninguem
+     * confere. Um erro aqui sai como braco atravessando o bloco vizinho.
+     */
+    public static Box rotate(Box box, String side) {
+        double x1 = box.fromX(), y1 = box.fromY(), z1 = box.fromZ();
+        double x2 = box.toX(),   y2 = box.toY(),   z2 = box.toZ();
+
+        return switch (side) {
+            case "north" -> box;
+            // Meia volta no eixo vertical.
+            case "south" -> new Box(16 - x2, y1, 16 - z2, 16 - x1, y2, 16 - z1);
+            // Um quarto de volta, cada um para um lado.
+            case "west" -> new Box(z1, y1, 16 - x2, z2, y2, 16 - x1);
+            case "east" -> new Box(16 - z2, y1, x1, 16 - z1, y2, x2);
+            // Cima e baixo giram no eixo horizontal, trocando altura por profundidade.
+            case "up" -> new Box(x1, 16 - z2, y1, x2, 16 - z1, y2);
+            case "down" -> new Box(x1, z1, 16 - y2, x2, z2, 16 - y1);
+            default -> box;
+        };
+    }
+
+    /**
+     * A forma de um bloco que conecta, dado quais lados estao ligados.
+     *
+     * <p>O nucleo sempre, mais um braco por lado. E o que faz a colisao acompanhar o desenho: uma
+     * forma que fica so no visual deixa o jogador ver o braco e atravessa-lo, e esse e o defeito
+     * que este repositorio ja registra como o pior de forma declarada.
+     */
+    public static List<Box> connected(Box core, Box arm, Collection<String> connected) {
+        List<Box> boxes = new ArrayList<>();
+        boxes.add(core);
+
+        if (arm != null) {
+            for (String side : SIDES) {
+                if (connected.contains(side)) boxes.add(rotate(arm, side));
+            }
+        }
+        return List.copyOf(boxes);
+    }
+
+    /** Uma caixa a partir dos seis numeros declarados, ou {@code null} quando nao ha. */
+    public static Box boxOf(List<Float> numbers) {
+        if (numbers == null || numbers.size() != 6) return null;
+        return new Box(numbers.get(0), numbers.get(1), numbers.get(2),
+                numbers.get(3), numbers.get(4), numbers.get(5));
     }
 }

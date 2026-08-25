@@ -165,11 +165,20 @@ public final class NeoForgeContentRegistrar {
                 Block block;
                 NeoForgeDeclarativeBlock.beginConstruction(declaredState);
                 try {
-                    block = withData
-                            ? new NeoForgeDeclarativeDataBlock(
-                                    settingsOf(definition), values.luminance, outline, collision)
-                            : new NeoForgeDeclarativeBlock(
-                                    settingsOf(definition), values.luminance, outline, collision);
+                    if (NeoForgeStateProperties.connects(definition) && !withData) {
+                        // Um bloco que conecta calcula a propria forma a partir do estado, entao
+                        // ignora outline e collision declarados -- nucleo e braco os substituem.
+                        block = new NeoForgeConnectedBlock(settingsOf(definition), values.luminance,
+                                dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
+                                dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
+                                definition.shape.connectsTo);
+                    } else {
+                        block = withData
+                                ? new NeoForgeDeclarativeDataBlock(
+                                        settingsOf(definition), values.luminance, outline, collision)
+                                : new NeoForgeDeclarativeBlock(
+                                        settingsOf(definition), values.luminance, outline, collision);
+                    }
                 } finally {
                     NeoForgeDeclarativeBlock.endConstruction();
                 }

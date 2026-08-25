@@ -981,10 +981,114 @@ public final class ResourcePackAssembler {
         }
     }
 
+    /** Se o bloco declara nucleo e a quem se conectar. */
+    private static boolean connects(ModManifest.BlockDefinition block) {
+        return block.shape != null
+                && block.shape.core != null && block.shape.core.size() == 6
+                && block.shape.connectsTo != null && !block.shape.connectsTo.isEmpty();
+    }
+
+    /**
+     * Escreve o blockstate de um bloco que conecta, no formato multipart.
+     *
+     * <p>Uma peca sem condicao -- o nucleo, sempre desenhado -- e uma peca por lado, cada uma
+     * condicionada aquela propriedade. <b>Sete pecas, e nao sessenta e quatro variantes.</b>
+     *
+     * <p>O braco e um modelo so, girado. Desenhar seis daria seis arquivos, e o primeiro ajuste
+     * esqueceria um deles.
+     */
+    private void writeConnectedBlockstate(Path generatedRoot, String namespace, String blockId,
+                                          ModManifest.BlockDefinition block, String texture)
+            throws IOException {
+        String coreModel = namespace + ":block/" + blockId + "_core";
+        String armModel = namespace + ":block/" + blockId + "_arm";
+
+        writeBoxModel(generatedRoot, namespace, blockId + "_core", block.shape.core, texture);
+        boolean hasArm = block.shape.arm != null && block.shape.arm.size() == 6;
+        if (hasArm) {
+            writeBoxModel(generatedRoot, namespace, blockId + "_arm", block.shape.arm, texture);
+        }
+
+        StringBuilder parts = new StringBuilder();
+        parts.append("    { \"apply\": { \"model\": \"").append(coreModel).append("\" } }");
+
+        if (hasArm) {
+            for (String side : dev.lualoader.content.BlockShapes.SIDES) {
+                parts.append(",").append(NEWLINE)
+                        .append("    { \"when\": { \"").append(side).append("\": \"true\" },")
+                        .append(" \"apply\": { \"model\": \"").append(armModel).append("\"");
+                appendArmRotation(parts, side);
+                parts.append(" } }");
+            }
+        }
+
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                        .resolve("blockstates").resolve(blockId + ".json"),
+                "{" + NEWLINE + "  \"multipart\": [" + NEWLINE + parts + NEWLINE
+                        + "  ]" + NEWLINE + "}" + NEWLINE);
+
+        if (block.item == null || block.item.register) {
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                            .resolve("models/item").resolve(blockId + ".json"),
+                    "{" + NEWLINE + "  \"parent\": \"" + coreModel + "\"" + NEWLINE + "}" + NEWLINE);
+        }
+    }
+
+    /**
+     * A rotacao de cada braco, no formato do blockstate.
+     *
+     * <p>{@code uvlock} mantem a textura de pe quando a peca gira -- sem ele, o braco de cima sai
+     * com a textura deitada, e o defeito so aparece olhando de perto.
+     */
+    private static void appendArmRotation(StringBuilder out, String side) {
+        switch (side) {
+            case "south" -> out.append(", \"y\": 180, \"uvlock\": true");
+            case "west" -> out.append(", \"y\": 270, \"uvlock\": true");
+            case "east" -> out.append(", \"y\": 90, \"uvlock\": true");
+            case "up" -> out.append(", \"x\": 270, \"uvlock\": true");
+            case "down" -> out.append(", \"x\": 90, \"uvlock\": true");
+            default -> {
+            }
+        }
+    }
+
+    /** Um modelo de uma caixa so, com a mesma textura nas seis faces. */
+    private void writeBoxModel(Path generatedRoot, String namespace, String name,
+                               java.util.List<Float> box, String texture) throws IOException {
+        String[] lados = {"north", "south", "east", "west", "up", "down"};
+        StringBuilder faces = new StringBuilder();
+        for (int index = 0; index < lados.length; index++) {
+            if (index > 0) faces.append(",").append(NEWLINE);
+            faces.append("        \"").append(lados[index])
+                    .append("\": { \"texture\": \"#all\" }");
+        }
+
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                        .resolve("models/block").resolve(name + ".json"),
+                "{" + NEWLINE
+                        + "  \"textures\": { \"all\": \"" + texture + "\","
+                        + " \"particle\": \"" + texture + "\" }," + NEWLINE
+                        + "  \"elements\": [" + NEWLINE
+                        + "    { \"from\": [" + number(box.get(0)) + ", " + number(box.get(1))
+                        + ", " + number(box.get(2)) + "]," + NEWLINE
+                        + "      \"to\": [" + number(box.get(3)) + ", " + number(box.get(4))
+                        + ", " + number(box.get(5)) + "]," + NEWLINE
+                        + "      \"faces\": {" + NEWLINE + faces + NEWLINE + "      } }" + NEWLINE
+                        + "  ]" + NEWLINE + "}" + NEWLINE);
+    }
+
     private void writeBlockstate(Path generatedRoot, String namespace, String blockId,
                                  ModManifest.BlockDefinition block,
                                  Map<Integer, String> models) throws IOException {
         String fallbackModel = models.getOrDefault(0, models.values().iterator().next());
+
+        // Um bloco que conecta nao usa variantes: cada lado ligado acrescenta uma peca, e listar
+        // as sessenta e quatro combinacoes daria sessenta e quatro entradas para manter em
+        // sincronia. O formato multipart do jogo existe exatamente para isso.
+        if (connects(block)) {
+            writeConnectedBlockstate(generatedRoot, namespace, blockId, block, fallbackModel);
+            return;
+        }
 
         // As direcoes que o bloco assume, ou uma so quando ele nao gira. Cada combinacao de
         // variante visual e direcao vira uma entrada: o modelo e o mesmo, girado.

@@ -244,4 +244,63 @@ public class NeoForgeBlockGameTest {
         }
         helper.succeed();
     }
+
+    /**
+     * Um cano cresce braço quando ganha vizinho, e o perde quando o vizinho some.
+     *
+     * <p>O par do lado Fabric, e o par importa: a aritmética das caixas vem do núcleo, mas quem
+     * calcula a conexão é cada adaptador. Um lado que ligasse e o outro não daria o mesmo manifesto
+     * produzindo canos que se encontram numa plataforma e não na outra.
+     */
+    @GameTest(template = EMPTY)
+    public static void oCanoConectaComOVizinho(GameTestHelper helper) {
+        Block cano = BuiltInRegistries.BLOCK.get(
+                ResourceLocation.fromNamespaceAndPath("logistica", "cano"));
+        if (cano == null || cano == net.minecraft.world.level.block.Blocks.AIR) {
+            throw new AssertionError("o cano do exemplo nao foi registrado");
+        }
+
+        BlockPos primeiro = new BlockPos(1, 1, 1);
+        BlockPos segundo = new BlockPos(1, 1, 2);
+
+        helper.setBlock(primeiro, cano.defaultBlockState());
+        if (conectado(helper, primeiro, "south")) {
+            throw new AssertionError("um cano sozinho nao deveria estar conectado");
+        }
+
+        helper.setBlock(segundo, cano.defaultBlockState());
+        if (!conectado(helper, primeiro, "south")) {
+            throw new AssertionError("o cano deveria ter conectado ao vizinho ao sul");
+        }
+        if (!conectado(helper, segundo, "north")) {
+            throw new AssertionError("a conexao precisa valer nos dois sentidos");
+        }
+
+        // Lados sem vizinho continuam desligados: um bloco que conecta para todo lado passaria
+        // despercebido se so se conferisse o lado ligado.
+        if (conectado(helper, primeiro, "north") || conectado(helper, primeiro, "up")) {
+            throw new AssertionError("lados sem vizinho nao deveriam conectar");
+        }
+
+        helper.setBlock(segundo, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+        if (conectado(helper, primeiro, "south")) {
+            throw new AssertionError("o cano deveria ter perdido a conexao");
+        }
+        helper.succeed();
+    }
+
+    /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
+    private static boolean conectado(GameTestHelper helper, BlockPos relative, String side) {
+        BlockState state = helper.getLevel().getBlockState(helper.absolutePos(relative));
+
+        for (var property : state.getProperties()) {
+            if (property.getName().equals(side)
+                    && property instanceof net.minecraft.world.level.block.state.properties
+                            .BooleanProperty booleano) {
+                return state.getValue(booleano);
+            }
+        }
+        throw new AssertionError("o cano nao tem a propriedade " + side
+                + "; propriedades: " + state.getProperties());
+    }
 }

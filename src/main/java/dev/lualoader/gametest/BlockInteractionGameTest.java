@@ -141,4 +141,70 @@ public class BlockInteractionGameTest implements FabricGameTest {
             throw new AssertionError(id + ": " + field + " declared " + expected + ", got " + actual);
         }
     }
+
+    /**
+     * Um cano cresce braço quando ganha vizinho, e o perde quando o vizinho some.
+     *
+     * <p>Era a lacuna mais estruturante que a migração do Logistic Pipes achou: {@code shape} era
+     * declarado uma vez e valia para todos os estados, e uma rede de canos ficava sendo peças
+     * soltas encostadas.
+     *
+     * <p>O que se pergunta é a propriedade de estado, e não o desenho — o desenho só o
+     * {@code runClient} mostra. Mas a propriedade é o que o desenho lê, e é ela que também decide a
+     * colisão: se ela estiver errada, as duas ficam.
+     */
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void oCanoConectaComOVizinho(TestContext context) {
+        var cano = net.minecraft.registry.Registries.BLOCK.get(
+                net.minecraft.util.Identifier.of("logistica", "cano"));
+        if (cano == null || cano == net.minecraft.block.Blocks.AIR) {
+            throw new AssertionError("o cano do exemplo nao foi registrado");
+        }
+
+        BlockPos primeiro = new BlockPos(1, 1, 1);
+        BlockPos segundo = new BlockPos(1, 1, 2);
+
+        // Colocado sozinho, nasce sem braco nenhum: desenhar bracos sem vizinho daria a impressao
+        // de rede onde nao ha nenhuma.
+        context.setBlockState(primeiro, cano.getDefaultState());
+        if (conectado(context, primeiro, "south")) {
+            throw new AssertionError("um cano sozinho nao deveria estar conectado");
+        }
+
+        // O vizinho chega, e o jogo avisa aquele lado.
+        context.setBlockState(segundo, cano.getDefaultState());
+        if (!conectado(context, primeiro, "south")) {
+            throw new AssertionError("o cano deveria ter conectado ao vizinho ao sul");
+        }
+        if (!conectado(context, segundo, "north")) {
+            throw new AssertionError("a conexao precisa valer nos dois sentidos");
+        }
+
+        // E os lados sem vizinho continuam desligados -- um bloco que conecta para todo lado seria
+        // igualmente errado, e passaria despercebido se so se conferisse o lado ligado.
+        if (conectado(context, primeiro, "north") || conectado(context, primeiro, "up")) {
+            throw new AssertionError("lados sem vizinho nao deveriam conectar");
+        }
+
+        // Some o vizinho, some o braco.
+        context.setBlockState(segundo, net.minecraft.block.Blocks.AIR.getDefaultState());
+        if (conectado(context, primeiro, "south")) {
+            throw new AssertionError("o cano deveria ter perdido a conexao");
+        }
+        context.complete();
+    }
+
+    /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
+    private static boolean conectado(TestContext context, BlockPos relative, String side) {
+        var state = context.getWorld().getBlockState(context.getAbsolutePos(relative));
+
+        for (var property : state.getProperties()) {
+            if (property.getName().equals(side)
+                    && property instanceof net.minecraft.state.property.BooleanProperty booleano) {
+                return state.get(booleano);
+            }
+        }
+        throw new AssertionError("o cano nao tem a propriedade " + side
+                + "; propriedades: " + state.getProperties());
+    }
 }

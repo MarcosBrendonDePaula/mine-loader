@@ -47,10 +47,25 @@ public final class DeclarativeStateProperties {
         Property<?> facing = facingProperty(definition);
         if (facing != null) built.put("facing", facing);
 
+        // Um bloco que conecta ganha uma propriedade booleana por lado. Seis booleanos dao sessenta
+        // e quatro estados, e o jogo lida bem com isso -- e o mesmo que cerca e muro fazem.
+        if (connects(definition)) {
+            for (String side : dev.lualoader.content.BlockShapes.SIDES) {
+                built.put(side, BooleanProperty.of(side));
+            }
+        }
+
         if (definition.state != null && definition.state.defaults != null) {
             defaults.putAll(definition.state.defaults);
         }
         return new DeclarativeStateProperties(built, defaults);
+    }
+
+    /** Se o bloco declara nucleo e a quem se conectar. */
+    public static boolean connects(ModManifest.BlockDefinition definition) {
+        return definition.shape != null
+                && definition.shape.core != null && definition.shape.core.size() == 6
+                && definition.shape.connectsTo != null && !definition.shape.connectsTo.isEmpty();
     }
 
     /**
