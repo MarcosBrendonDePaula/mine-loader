@@ -289,6 +289,62 @@ public class NeoForgeBlockGameTest {
         helper.succeed();
     }
 
+
+    /**
+     * O tique agendado entra na fila do jogo e chega de volta ao bloco.
+     *
+     * <p>O par do lado Fabric. A fila é do jogo nas duas plataformas, mas quem a alimenta é cada
+     * adaptador: um lado que agendasse e o outro não daria o mesmo manifesto com uma rede que anda
+     * numa plataforma e trava na outra.
+     */
+    @GameTest(template = EMPTY)
+    public static void oTiqueAgendadoEntraNaFilaDoJogo(GameTestHelper helper) {
+        Block cano = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("logistica:cano"));
+        if (cano == null || cano == net.minecraft.world.level.block.Blocks.AIR) {
+            throw new AssertionError("o cano do exemplo nao foi registrado");
+        }
+
+        BlockPos relativa = new BlockPos(1, 1, 1);
+        helper.getLevel().setBlock(helper.absolutePos(relativa), cano.defaultBlockState(), 3);
+        BlockPos absoluta = helper.absolutePos(relativa);
+
+        var level = helper.getLevel();
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+
+        bridge.setCurrentLevel(level);
+        try {
+            bridge.scheduleBlockTick(absoluta.getX(), absoluta.getY(), absoluta.getZ(), 4);
+
+            if (!level.getBlockTicks().hasScheduledTick(absoluta, cano)) {
+                throw new AssertionError("o pedido nao virou entrada na fila do jogo");
+            }
+
+            // Agendar num bloco do jogo tem que ser recusado: a fila aceitaria, e o tique iria
+            // para o metodo do bloco vanilla -- o pedido pareceria aceito e nada chegaria ao script.
+            BlockPos pedra = helper.absolutePos(new BlockPos(2, 1, 1));
+            level.setBlock(pedra, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 3);
+            boolean recusou = false;
+            try {
+                bridge.scheduleBlockTick(pedra.getX(), pedra.getY(), pedra.getZ(), 4);
+            } catch (dev.lualoader.platform.BridgeException expected) {
+                recusou = true;
+            }
+            if (!recusou) throw new AssertionError("agendar em bloco vanilla deveria ser recusado");
+        } finally {
+            bridge.setCurrentLevel(null);
+        }
+
+        // Cinco tiques depois de um prazo de quatro, a fila precisa estar limpa: se continuar la, o
+        // tique nunca foi entregue.
+        helper.runAfterDelay(5, () -> {
+            if (level.getBlockTicks().hasScheduledTick(absoluta, cano)) {
+                throw new AssertionError("o tique agendado nunca foi entregue");
+            }
+            helper.succeed();
+        });
+    }
+
     /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
     private static boolean conectado(GameTestHelper helper, BlockPos relative, String side) {
         BlockState state = helper.getLevel().getBlockState(helper.absolutePos(relative));

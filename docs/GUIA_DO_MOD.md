@@ -70,6 +70,11 @@ local clima = ctx.server.weather()
 
 local chao = ctx.server.top_y(x, z)       -- altura do primeiro bloco solido
 ctx.server.break_block(x, y, z, true)     -- quebra e solta o drop
+
+-- Volte a me chamar nesta posicao daqui a N tiques. Chega como o evento `block_scheduled`, que o
+-- bloco mapeia com `behavior.on_scheduled`. So vale em bloco declarado por um mod, e nao se repete
+-- sozinho: continuar e agendar o proximo de dentro do proprio callback.
+ctx.server.schedule_block(x, y, z, 10)    -- de 1 a 24000 tiques
 ```
 
 `break_block` nao e o mesmo que escrever ar: respeita a tabela de loot e derrama o inventario do

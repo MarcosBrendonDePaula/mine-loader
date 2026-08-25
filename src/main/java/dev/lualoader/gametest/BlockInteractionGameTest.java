@@ -194,6 +194,63 @@ public class BlockInteractionGameTest implements FabricGameTest {
         context.complete();
     }
 
+    /**
+     * O tique agendado entra na fila do jogo e chega de volta ao bloco.
+     *
+     * <p>O que se verifica é a fila, e não um efeito no mundo: o efeito depende do que o script faz
+     * quando acorda, e isso o núcleo já prova. O que só o jogo mostra é se o pedido virou uma
+     * entrada real na fila e se ela é consumida no prazo — um agendamento que ficasse na fila para
+     * sempre seria um item parado no meio do cano, sem nada no log.
+     */
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void oTiqueAgendadoEntraNaFilaDoJogo(TestContext context) {
+        var cano = net.minecraft.registry.Registries.BLOCK.get(
+                Identifier.of("logistica", "cano"));
+        if (cano == null || cano == net.minecraft.block.Blocks.AIR) {
+            throw new AssertionError("o cano do exemplo nao foi registrado");
+        }
+
+        BlockPos relativa = new BlockPos(1, 1, 1);
+        context.setBlockState(relativa, cano.getDefaultState());
+        BlockPos absoluta = context.getAbsolutePos(relativa);
+
+        var world = context.getWorld();
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+
+        bridge.setCurrentWorld(world);
+        try {
+            bridge.scheduleBlockTick(absoluta.getX(), absoluta.getY(), absoluta.getZ(), 4);
+
+            if (!world.getBlockTickScheduler().isQueued(absoluta, cano)) {
+                throw new AssertionError("o pedido nao virou entrada na fila do jogo");
+            }
+
+            // Agendar num bloco do jogo tem que ser recusado: a fila aceitaria, e o tique iria
+            // para o metodo do bloco vanilla -- o pedido pareceria aceito e nada chegaria ao script.
+            BlockPos pedra = context.getAbsolutePos(new BlockPos(2, 1, 1));
+            context.setBlockState(new BlockPos(2, 1, 1), net.minecraft.block.Blocks.STONE.getDefaultState());
+            boolean recusou = false;
+            try {
+                bridge.scheduleBlockTick(pedra.getX(), pedra.getY(), pedra.getZ(), 4);
+            } catch (dev.lualoader.platform.BridgeException expected) {
+                recusou = true;
+            }
+            if (!recusou) throw new AssertionError("agendar em bloco vanilla deveria ser recusado");
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+
+        // Cinco tiques depois de um prazo de quatro, a fila precisa estar limpa: se continuar la, o
+        // tique nunca foi entregue.
+        context.runAtTick(5, () -> {
+            if (world.getBlockTickScheduler().isQueued(absoluta, cano)) {
+                throw new AssertionError("o tique agendado nunca foi entregue");
+            }
+            context.complete();
+        });
+    }
+
     /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
     private static boolean conectado(TestContext context, BlockPos relative, String side) {
         var state = context.getWorld().getBlockState(context.getAbsolutePos(relative));

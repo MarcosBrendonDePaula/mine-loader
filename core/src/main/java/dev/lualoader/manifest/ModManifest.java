@@ -373,6 +373,14 @@ public final class ModManifest {
         public String onBroken;
         public String onRandomTick;
         public String onNeighborUpdate;
+        /**
+         * Chamado quando chega o tique que o script pediu com {@code schedule_block}.
+         *
+         * <p>Diferente de {@link #onRandomTick}, que o jogo dispara quando quer: aqui o script diz
+         * daqui a quantos tiques quer ser chamado naquela posicao. E o que faz um item atravessar
+         * um cano em vez de aparecer do outro lado.
+         */
+        public String onScheduled;
         /** Campo antigo, nunca implementado; use {@link #onPlaced}. */
         public String onPlace;
     }

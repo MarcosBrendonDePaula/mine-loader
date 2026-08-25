@@ -66,6 +66,19 @@ public abstract class TestBridge implements GameBridge {
     public void spawnParticles(String particleId, double x, double y, double z, int count, double spread) {
     }
 
+    /**
+     * O que foi agendado, na ordem: {@code "x,y,z,tiques"}.
+     *
+     * <p>Guardado em vez de executado. Um dublê que disparasse o tique sozinho esconderia o caso
+     * que mais importa — o script que agenda e nunca é chamado de volta.
+     */
+    public final java.util.List<String> scheduledTicks = new java.util.ArrayList<>();
+
+    @Override
+    public void scheduleBlockTick(int x, int y, int z, int ticks) {
+        scheduledTicks.add(x + "," + y + "," + z + "," + ticks);
+    }
+
     /** Dados por posição, simulados em memória. */
     private final java.util.Map<String, String> blockData = new java.util.HashMap<>();
 

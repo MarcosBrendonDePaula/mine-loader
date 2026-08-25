@@ -166,11 +166,30 @@ blockstate gerado é `multipart` — sete peças, e não as sessenta e quatro co
 booleanos. **A colisão acompanha o desenho**, que é a metade fácil de esquecer: ver o braço e
 atravessá-lo é pior que não ter braço.
 
-**Não há tique agendado por posição.** Um cano que move item ao longo do tempo precisaria de "volte
-a me chamar nesta posição daqui a N tiques". Hoje só existe `block_random_tick`, que é aleatório, e
-o agendador global `mod.after`, que não sabe de posição. O porte contorna entregando na hora — o
-item some de um baú e aparece no outro, sem viagem —, e é a maior diferença visível para o
-original.
+**Tique agendado por posição** (`ctx.server.schedule_block(x, y, z, tiques)` e o evento
+`block_scheduled`, mapeado por `behavior.on_scheduled`): "volte a me chamar nesta posição daqui a N
+tiques". É a base de uma máquina que processa ao longo do tempo, e do cano que move item passo a
+passo.
+
+Três decisões que valem lembrar:
+
+- **A fila é a do jogo, não um temporizador do loader.** A diferença aparece ao salvar: a fila do
+  jogo é gravada com o chunk e volta na próxima sessão, enquanto um temporizador em memória perderia
+  todo item que estivesse a caminho quando o servidor caísse. Pela mesma razão o chunk descarregado
+  leva junto o que estava agendado nele, em vez de acumular chamadas para um lugar que ninguém está
+  olhando.
+- **Não se repete sozinho.** Cada tique vale uma vez; continuar é o script agendar o próximo. Um
+  loader que repetisse teria que decidir quando parar, e essa decisão é do mod.
+- **Só vale em bloco declarado pelo loader.** Agendar num bloco do jogo é recusado: a fila
+  aceitaria, o tique iria para o método do bloco vanilla, e o pedido pareceria aceito sem nada
+  chegar ao script.
+
+O prazo vai de 1 a 24000 tiques — um dia de jogo. Zero e negativo o jogo trataria como "agora", o
+que de dentro do próprio tique é recursão sem folga.
+
+**O que ainda falta é o mod usar isso.** O porte do Logistic Pipes continua entregando na hora — o
+item some de um baú e aparece no outro —, e essa é a maior diferença visível para o original. O
+mecanismo existe; a viagem é trabalho no exemplo, e está na tarefa do porte.
 
 **Não há como ler um inventário por slot pela rede.** `container_at` soma por item, o que basta para
 um estoque, e não permite reproduzir filtros por slot como os módulos de chassi do original.
@@ -189,9 +208,6 @@ O que ainda falta é **ataque como evento próprio** — hoje se descobre pelo `
 apanhou, o que responde "quem bateu" mas não avisa quando um golpe erra.
 
 **Redstone e comparador.** Um bloco declarado não emite nem lê sinal.
-
-**Tick agendado de bloco.** Existe `block_random_tick`; não existe "volte a me chamar daqui a N
-tiques nesta posição", que é a base de uma máquina que processa ao longo do tempo.
 
 **Receita customizada.** Dá para declarar receita de bancada e fornalha do jogo, não um tipo novo de
 processamento com regras próprias.

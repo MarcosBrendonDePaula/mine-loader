@@ -401,6 +401,20 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public void scheduleBlockTick(int x, int y, int z, int ticks) {
+        ServerLevel level = requireLevel();
+        BlockPos pos = new BlockPos(x, y, z);
+        var state = level.getBlockState(pos);
+        if (!(state.getBlock() instanceof NeoForgeDeclarativeBlock)) {
+            // Agendar num bloco do jogo agendaria de verdade -- e o tique iria para o metodo dele,
+            // nao para o script. O pedido pareceria aceito e nada chegaria.
+            throw new BridgeException("o bloco em " + x + "," + y + "," + z
+                    + " nao foi declarado por um mod; so bloco do loader recebe tique agendado");
+        }
+        level.scheduleTick(pos, state.getBlock(), ticks);
+    }
+
+    @Override
     public String getBlockData(int x, int y, int z) {
         NeoForgeDeclarativeBlockEntity entity = dataEntityAt(x, y, z);
         return entity == null ? "{}" : entity.data();

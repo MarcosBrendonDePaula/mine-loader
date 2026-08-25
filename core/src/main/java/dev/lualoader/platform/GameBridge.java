@@ -105,6 +105,20 @@ public interface GameBridge {
      *
      * @return {@code "{}"} quando o bloco não guarda dados ou nada foi gravado ainda
      */
+    /**
+     * Pede ao jogo que chame o bloco daquela posicao dali a {@code ticks} tiques.
+     *
+     * <p>Usa a fila do proprio jogo, e nao um temporizador do loader. A diferenca aparece ao salvar
+     * o mundo: a fila do jogo e gravada com o chunk e volta na proxima sessao, enquanto um
+     * temporizador em memoria perderia todo item que estivesse a caminho quando o servidor caisse.
+     * Pela mesma razao ela e por posicao, e nao por mod -- o chunk descarregado leva junto o que
+     * estava agendado nele, em vez de acumular chamadas para um lugar que ninguem esta olhando.
+     *
+     * <p>Vale so para bloco declarado pelo loader: o tique chega pelo metodo do bloco, e um bloco
+     * do jogo nao teria como avisar o runtime.
+     */
+    void scheduleBlockTick(int x, int y, int z, int ticks);
+
     String getBlockData(int x, int y, int z);
 
     /** Grava dados na posição. O bloco precisa ter sido declarado com {@code block_data}. */
@@ -367,6 +381,11 @@ public interface GameBridge {
         @Override
         public void spawnParticles(String particleId, double x, double y, double z,
                                    int count, double spread) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public void scheduleBlockTick(int x, int y, int z, int ticks) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
 

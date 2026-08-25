@@ -110,6 +110,7 @@ núcleo não conhecer Minecraft.
 | `tick`, e o agendador de `mod.after` | sim | sim | |
 | `block_used`, `block_attacked`, `block_placed`, `block_broken` | sim | sim | |
 | `block_random_tick`, `block_neighbor_update` | sim | sim | |
+| `block_scheduled` e `schedule_block` | sim | sim | A fila e a do jogo nas duas: gravada com o chunk, volta ao recarregar |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |

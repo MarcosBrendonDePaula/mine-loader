@@ -248,6 +248,20 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public void scheduleBlockTick(int x, int y, int z, int ticks) {
+        var world = requireWorld();
+        var pos = new BlockPos(x, y, z);
+        var state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof DeclarativeBlock)) {
+            // Agendar num bloco do jogo agendaria de verdade -- e o tique iria para o metodo dele,
+            // nao para o script. O pedido pareceria aceito e nada chegaria.
+            throw new BridgeException("o bloco em " + x + "," + y + "," + z
+                    + " nao foi declarado por um mod; so bloco do loader recebe tique agendado");
+        }
+        world.scheduleBlockTick(pos, state.getBlock(), ticks);
+    }
+
+    @Override
     public String getBlockData(int x, int y, int z) {
         var entity = requireWorld().getBlockEntity(new BlockPos(x, y, z));
         if (entity instanceof DeclarativeBlockEntity data) return data.data();

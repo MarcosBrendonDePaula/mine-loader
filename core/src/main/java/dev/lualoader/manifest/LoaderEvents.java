@@ -53,7 +53,8 @@ public final class LoaderEvents {
             "block_placed",
             "block_broken",
             "block_random_tick",
-            "block_neighbor_update"
+            "block_neighbor_update",
+            "block_scheduled"
     );
 
     /** Eventos originados por uma janela aberta pelo mod. */

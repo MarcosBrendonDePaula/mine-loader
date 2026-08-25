@@ -1258,6 +1258,7 @@ public final class LuaRuntime {
             case "block_broken" -> handlers.get("on_broken");
             case "block_random_tick" -> handlers.get("on_random_tick");
             case "block_neighbor_update" -> handlers.get("on_neighbor_update");
+            case "block_scheduled" -> handlers.get("on_scheduled");
             default -> null;
         };
         return handler;
@@ -1958,6 +1959,30 @@ public final class LuaRuntime {
                 int y = requireCoordinate(args.arg(3));
                 int z = requireCoordinate(args.arg(4));
                 bridge.setBlock(id, x, y, z);
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("schedule_block", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4) {
+                    throw new LuaError("schedule_block exige x, y, z e o numero de tiques");
+                }
+                int x = requireCoordinate(args.arg(1));
+                int y = requireCoordinate(args.arg(2));
+                int z = requireCoordinate(args.arg(3));
+
+                int ticks = args.arg(4).checkint();
+                // Zero seria "no proximo tique", mas o jogo trata prazo nao positivo como agora
+                // mesmo -- e agendar de dentro do proprio tique daria recursao sem folga.
+                if (ticks < 1) throw new LuaError("schedule_block exige pelo menos 1 tique");
+                // Um dia de jogo. O limite existe porque a fila e gravada com o chunk: um prazo
+                // absurdo fica no arquivo do mundo esperando um bloco que ninguem lembra por que
+                // agendou.
+                if (ticks > 24000) throw new LuaError("schedule_block aceita no maximo 24000 tiques");
+
+                bridge.scheduleBlockTick(x, y, z, ticks);
                 return LuaValue.NIL;
             }
         });

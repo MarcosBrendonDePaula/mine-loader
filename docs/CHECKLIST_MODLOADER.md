@@ -180,7 +180,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [ ] Raio
 - [ ] Largar item solto no mundo, sem passar pelo inventário de alguém
 - [ ] Ler e emitir sinal de redstone
-- [ ] Tique agendado por posição — "volte aqui em N tiques"
+- [x] Tique agendado por posição (`schedule_block` / `on_scheduled`) — "volte aqui em N tiques"
 - [ ] Raycast — o primeiro bloco que uma linha atravessa
 - [ ] Carregar e manter chunk sob demanda
 
@@ -557,7 +557,7 @@ jogo.
 ### Nível 5 — Processo → destrava *tech* e *automação*
 
 - [ ] Redstone: ler e emitir sinal
-- [ ] Tique agendado por posição
+- [x] Tique agendado por posição (`schedule_block` / `on_scheduled`)
 - [ ] Slot funcional em tela desenhada
 - [ ] Arrastar e soltar entre slots
 - [ ] Combustível e tempo de queima
@@ -568,8 +568,8 @@ redstone.
 
 **Por que.** Automação é o gênero de maior apelo em modpack, e o único que precisa dos quatro
 primeiros ao mesmo tempo: sem tique agendado a máquina não processa, sem slot funcional não recebe
-insumo, sem redstone não integra, sem barra não comunica. A barra de progresso já existe — é o único
-pedaço deste nível que está pronto.
+insumo, sem redstone não integra, sem barra não comunica. A barra de progresso e o tique agendado já
+existem; faltam os outros quatro.
 
 ### Nível 6 — Geração → destrava *exploração*
 

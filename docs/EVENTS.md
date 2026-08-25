@@ -38,6 +38,7 @@ do mod não é chamado para aquele bloco.
 | `block_broken` | O bloco deixou de existir na posição | `ctx.block` |
 | `block_random_tick` | Tick aleatório, com `settings.random_ticks` ligado | `ctx.block` |
 | `block_neighbor_update` | Um bloco vizinho mudou | `ctx.block` |
+| `block_scheduled` | Chegou o tique pedido com `schedule_block` naquela posição | `ctx.block` |
 | `item_used` | Item usado na mão, sem alvo | `ctx.item`, `ctx.player` |
 | `item_used_on_block` | Item usado sobre um bloco | `ctx.item` com `target_block` e posição, `ctx.player` |
 | `menu_click` | Slot clicado em uma janela do mod | `ctx.menu` com `id`, `slot`, `button` e `item`, `ctx.player` |
@@ -79,6 +80,7 @@ conexão por isso seria transformar diferença de versão em falha.
 | `on_broken` | `block_broken` |
 | `on_random_tick` | `block_random_tick` |
 | `on_neighbor_update` | `block_neighbor_update` |
+| `on_scheduled` | `block_scheduled` |
 | `on_break` | apelido antigo de `on_attack`, ainda aceito |
 
 ### De criatura

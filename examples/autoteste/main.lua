@@ -87,6 +87,11 @@ TESTES.container = function(ctx)
     -- Poe um bau debaixo do jogador, mexe nele e desfaz. Sem escrever no mundo nao da para
     -- verificar a camada de capacidades de verdade.
     local antes = ctx.server.get_block(x, y, z)
+    -- Limpa antes de colocar. Por a mesma coisa em cima de si mesma nao troca a entidade de bloco:
+    -- um bau que ja estivesse ali continuaria com o conteudo antigo, e o caso falharia acusando
+    -- numeros que ele proprio nao pos. Foi o que apareceu quando outro caso passou a rodar antes
+    -- deste -- a ordem da bateria vem da iteracao de uma tabela Lua, e nao e estavel.
+    ctx.server.set_block("minecraft:air", x, y, z)
     ctx.server.set_block("minecraft:chest", x, y, z)
 
     local capacidades = ctx.server.capabilities_at(x, y, z)
@@ -379,6 +384,46 @@ TESTES.eventos_de_entidade = function(ctx)
     ctx.server.damage_entity(uuid, 100.0)
     exigir(ctx.state.vistos.morreu > 0,
            "entity_died deveria ter disparado, veio " .. ctx.state.vistos.morreu)
+end
+
+-- Tique agendado por posicao: pedir para ser chamado de volta ali daqui a N tiques.
+--
+-- O que da para conferir sem esperar: que o pedido e aceito num bloco do loader, e recusado onde
+-- nao teria como voltar. A volta em si e assincrona -- ela e verificada pelo GameTest, que consegue
+-- avancar o relogio, e pelos testes do nucleo, que chamam o evento direto.
+TESTES.tique_agendado = function(ctx)
+    local x, y, z = 0, 100, 0
+
+    -- Um bloco do loader precisa existir na posicao. O cano do exemplo de logistica serve, e usar
+    -- um bloco de mod em vez de inventar outro e o que mantem este caso perto do uso real.
+    ctx.server.set_block("logistica:cano", x, y, z)
+    exigir(ctx.server.get_block(x, y, z) == "logistica:cano", "o cano deveria ter sido colocado")
+
+    ctx.server.schedule_block(x, y, z, 10)
+
+    -- Agendar de novo na mesma posicao nao pode estourar: o jogo aceita mais de uma entrada, e um
+    -- cano com dois itens a caminho agenda duas vezes.
+    ctx.server.schedule_block(x, y, z, 20)
+
+    -- Em bloco do jogo, nao. A fila aceitaria, e o tique iria para o metodo do bloco vanilla: o
+    -- pedido pareceria aceito e nada chegaria ao script.
+    ctx.server.set_block("minecraft:stone", x + 1, y, z)
+    local vanilla = pcall(function()
+        ctx.server.schedule_block(x + 1, y, z, 10)
+    end)
+    exigir(vanilla == false, "agendar em bloco do jogo deveria ser recusado")
+
+    -- Prazo tem faixa. Zero e negativo o jogo trataria como agora mesmo, o que de dentro do proprio
+    -- tique e recursao sem folga; e um prazo enorme fica gravado no chunk esperando.
+    exigir(pcall(function() ctx.server.schedule_block(x, y, z, 0) end) == false,
+           "prazo zero deveria ser recusado")
+    exigir(pcall(function() ctx.server.schedule_block(x, y, z, -1) end) == false,
+           "prazo negativo deveria ser recusado")
+    exigir(pcall(function() ctx.server.schedule_block(x, y, z, 30000) end) == false,
+           "prazo acima de um dia deveria ser recusado")
+
+    ctx.server.set_block("minecraft:air", x, y, z)
+    ctx.server.set_block("minecraft:air", x + 1, y, z)
 end
 
 TESTES.mover_entidade = function(ctx)

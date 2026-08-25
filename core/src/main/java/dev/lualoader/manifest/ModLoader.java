@@ -676,6 +676,7 @@ public final class ModLoader {
         if (behavior.onBroken != null) handlers.put("on_broken", behavior.onBroken);
         if (behavior.onRandomTick != null) handlers.put("on_random_tick", behavior.onRandomTick);
         if (behavior.onNeighborUpdate != null) handlers.put("on_neighbor_update", behavior.onNeighborUpdate);
+        if (behavior.onScheduled != null) handlers.put("on_scheduled", behavior.onScheduled);
         if (behavior.onPlace != null) handlers.put("on_place", behavior.onPlace);
         return handlers;
     }

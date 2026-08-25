@@ -179,6 +179,18 @@ public class DeclarativeBlock extends Block {
         notifyLoader("block_random_tick", world, pos, state, null);
     }
 
+    /**
+     * O tique que o script pediu, chegando na posicao em que foi pedido.
+     *
+     * <p>Nao se repete sozinho: cada tique vale uma vez, e continuar significa o script agendar o
+     * proximo. E o que faz um item parar no meio do cano quando o script decide parar, em vez de o
+     * loader ter que descobrir quando desligar um temporizador.
+     */
+    @Override
+    protected void scheduledTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
+        notifyLoader("block_scheduled", world, pos, state, null);
+    }
+
     @Override
     protected void neighborUpdate(BlockState state, World world, BlockPos pos, Block sourceBlock,
                                   BlockPos sourcePos, boolean notify) {

@@ -7,8 +7,10 @@ meio e o que vem a seguir.
 **Regra:** ao fechar um item, risque-o na mesma mudança que o implementa. Um acompanhamento que
 envelhece em silêncio é pior que nenhum — é a mesma razão de `COMPATIBILIDADE.md` existir.
 
-Última revisão: três limites removidos de uma vez — `events` sem `entrypoint`,
-`placement.facing` e a forma que varia com o estado. Os três saíram da migração do Logistic Pipes.
+Última revisão: quatro limites removidos — `events` sem `entrypoint`, `placement.facing`, a forma
+que varia com o estado e o tique agendado por posição. Os quatro saíram da migração do Logistic
+Pipes. Junto veio um conserto de ferramenta que valia mais do que parece: `run/mods-lua` era uma
+cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que passou.
 
 ---
 
@@ -33,6 +35,18 @@ envelhece em silêncio é pior que nenhum — é a mesma razão de `COMPATIBILID
 - [x] Quatro **eventos de criatura** e **mover/empurrar** entidade.
 
 ### Limites removidos
+
+- [x] **Tique agendado por posição** — `ctx.server.schedule_block(x, y, z, tiques)` e o evento
+      `block_scheduled`, mapeado por `behavior.on_scheduled`. A fila é a **do jogo**, gravada com o
+      chunk: o que estava a caminho volta na próxima sessão, em vez de sumir com o servidor. Não se
+      repete sozinho — continuar é o script agendar o próximo —, e é recusado em bloco do jogo, onde
+      o tique iria para o método vanilla e nada chegaria ao script.
+
+- [x] **Uma pasta de mods só, de ponta a ponta.** `neoforge/run/mods-lua` já apontava para
+      `run/mods-lua`, mas essa pasta compartilhada era uma **cópia** de `examples/`. Resultado: a
+      bateria ficava verde contra um script velho, e o log dizia que passou — o pior resultado
+      possível. A tarefa `linkExemplos` agora liga cada exemplo, e roda antes de `runServer` e
+      `runClient`.
 
 - [x] **Forma do bloco variando com o estado** — o cano que conecta. `shape.core`, `shape.arm` e
       `shape.connects_to`; o adaptador registra seis propriedades booleanas, calcula ao colocar e a
@@ -65,13 +79,17 @@ envelhece em silêncio é pior que nenhum — é a mesma razão de `COMPATIBILID
 
 ## Em andamento
 
-**Nada em aberto no código.** O último item — a forma que varia com o estado — fechou e está
-verificado: 11 casos de aritmética de rotação no núcleo, 7 do blockstate gerado, e um GameTest em
-cada plataforma que confere a propriedade depois de pôr e tirar um vizinho.
+**Nada em aberto no código.** O tique agendado fechou e está verificado nos quatro níveis: 6 casos
+no núcleo, um GameTest em **cada** plataforma que confere a fila do jogo e a recusa em bloco
+vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
 
-**A pendência é de olho, não de código:** nada disso foi visto no `runClient`. O blockstate está
-certo no arquivo e a propriedade está certa no mundo, mas se o braço aparece no lugar, só a tela
-diz. Vale abrir o cliente e olhar uma linha de canos antes de seguir.
+**Duas pendências de olho, não de código:**
+
+- Nada da forma que varia com o estado foi visto no `runClient`. O blockstate está certo no arquivo
+  e a propriedade está certa no mundo, mas se o braço aparece no lugar, só a tela diz.
+- **O mecanismo do tique existe; o mod ainda não usa.** O porte do Logistic Pipes continua
+  entregando na hora, e essa é a maior diferença visível para o original. Fazer o item viajar é
+  reescrever a entrega do exemplo, e está na tarefa do porte — não no limite, que já saiu.
 
 ---
 
@@ -82,9 +100,8 @@ diz. Vale abrir o cliente e olhar uma linha de canos antes de seguir.
 Estão em `API_GAPS.md`, em ordem de quanto doem:
 
 1. ~~**Forma por estado.**~~ **Fechado.**
-2. **Tique agendado por posição.** Não existe "volte a me chamar nesta posição daqui a N tiques".
-   Hoje o item some de um baú e aparece no outro, sem viagem visível — a maior diferença para o
-   original.
+2. ~~**Tique agendado por posição.**~~ **Fechado.** Falta o exemplo usar: o item ainda some de um
+   baú e aparece no outro.
 3. **Ler inventário por slot.** `container_at` soma por item, o que basta para um estoque e impede
    reproduzir os filtros dos módulos de chassi.
 4. **Evento de bloco quebrado com o inventário íntegro.** A rede só se refaz quando alguém abre a
@@ -128,10 +145,10 @@ uma. Este documento é o mapa; elas são o roteiro.
 | 14 | ~~Forma do bloco variando com o estado~~ | **fechado** |
 | 15 | ~~Recusar `events` sem `entrypoint`~~ | **fechado** |
 | 20 | ~~Aplicar `placement.facing`~~ | **fechado** |
-| 16 | Tique agendado por posição | a fazer |
+| 16 | ~~Tique agendado por posição~~ | **fechado** |
 | 17 | Ler inventário por slot | a fazer |
 | 18 | Evento de bloco quebrado com o inventário íntegro | a fazer |
-| 19 | Portar os canos que faltam do Logistic Pipes | a fazer |
+| 19 | Portar os canos que faltam, e fazer o item viajar pelo cano | a fazer |
 | 12 | UI por HTML e CSS | adiado por decisão |
 
 ## Como retomar

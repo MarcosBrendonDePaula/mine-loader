@@ -153,6 +153,19 @@ public class NeoForgeDeclarativeBlock extends Block {
         notifyLoader("block_random_tick", level, pos, state);
     }
 
+    /**
+     * O tique que o script pediu, chegando na posicao em que foi pedido.
+     *
+     * <p>Nao se repete sozinho: cada tique vale uma vez, e continuar significa o script agendar o
+     * proximo. Igual ao par no Fabric -- um lado que repetisse sozinho faria o mesmo manifesto
+     * andar em velocidades diferentes nas duas plataformas.
+     */
+    @Override
+    protected void tick(BlockState state, net.minecraft.server.level.ServerLevel level,
+                        BlockPos pos, net.minecraft.util.RandomSource random) {
+        notifyLoader("block_scheduled", level, pos, state);
+    }
+
     @Override
     protected void neighborChanged(BlockState state, net.minecraft.world.level.Level level,
                                    BlockPos pos, Block sourceBlock, BlockPos sourcePos,
