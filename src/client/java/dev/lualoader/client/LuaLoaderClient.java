@@ -47,6 +47,10 @@ public class LuaLoaderClient implements ClientModInitializer {
         // bastante para nao se perder no meio do log de carga.
         EntityRenderers.register();
 
+        // Antes de qualquer modelo ser pedido: o resolvedor precisa estar de pe quando o jogo monta
+        // os modelos, e registrar depois nao teria efeito nenhum nesta carga.
+        ObjModels.register();
+
         addModsButton();
 
         HudOverlay.register();

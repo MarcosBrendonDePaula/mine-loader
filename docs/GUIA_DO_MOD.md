@@ -342,6 +342,23 @@ declarar a permissão dela é erro em tempo de execução.
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
 | `entity.register` | Declarar espécie nova por script. Mais forte que as três acima: acrescenta um tipo ao registro do jogo, que vale para o mundo inteiro e não se desfaz sem reiniciar |
 
+## Desenhar um bloco com malha
+
+Quando caixas não bastam — um cano, uma máquina, qualquer coisa arredondada — o bloco pode apontar
+um arquivo `.obj`:
+
+```json
+"resources": { "forma": { "type": "model", "from": "models/cano.obj" } },
+"blocks": [{ "id": "cano", "render": { "model": "@forma", "texture": { "ref": "metal" } } }]
+```
+
+O arquivo é encaixado no bloco automaticamente. Se ele for um **catálogo de peças** — o miolo, a
+manga de cada lado, as placas —, `obj_parts` diz o que desenhar em cada estado; veja
+`MOD_FORMAT_SPEC.md`.
+
+**Hoje só o cliente Fabric desenha malha.** A declaração é aceita nos dois lados, e no NeoForge o
+bloco aparece como o cubo de reserva.
+
 ## Desenvolver um mod que mora em outro repositório
 
 Um mod não precisa estar dentro de `mods-lua` para ser carregado. Aponte a pasta e o loader lê

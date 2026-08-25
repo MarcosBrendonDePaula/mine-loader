@@ -115,6 +115,8 @@ núcleo não conhecer Minecraft.
 | Pastas de mod extras (`MINE_LOADER_MODS`) | sim | sim | Carrega direto da pasta apontada, sem copiar |
 | `entrypoint` vindo de `remote_base` | sim | sim | Era o unico pedaco de um mod que ainda exigia arquivo local |
 | `shape.cores` e `shape.arms` (varias caixas) | sim | sim | As caixas de um braco giram juntas, como uma peca so |
+| Modelo `.obj` de bloco | sim | **nao** | O leitor mora no nucleo; falta o lado cliente do NeoForge |
+| `obj_parts` -- pecas por conexao | sim | **nao** | Idem: a declaracao ja vale nos dois, o desenho so no Fabric |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |

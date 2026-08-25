@@ -873,10 +873,22 @@ public final class ResourcePackAssembler {
         // Um modelo declarado vence a geracao por forma: quem desenhou o bloco foi especifico, e
         // gerar por cima seria ignorar o desenho. Todas as variantes apontam para ele, porque a
         // variante troca textura e o modelo declarado ja traz as suas.
-        String declaredModel = assembleDeclaredModel(mod, block, generatedRoot);
+        DeclaredModel declaredModel = assembleDeclaredModel(mod, block, generatedRoot);
         if (declaredModel != null) {
-            writeBlockstate(generatedRoot, namespace, blockId, block,
-                    Map.of(0, declaredModel), Map.of());
+            // Um modelo declarado vence a forma por estado, e o aviso importa: um cano com desenho
+            // proprio e `connects_to` teria dois desenhos disputando o mesmo bloco, e o multipart
+            // simplesmente ignoraria o modelo -- o mod pareceria nao ter sido aplicado.
+            if (dev.lualoader.content.BlockShapes.connects(block)) {
+                logger.warn("Bloco {} declara modelo proprio e tambem shape.connects_to;"
+                                + " o modelo vence e os bracos por conexao nao serao desenhados",
+                        namespace + ":" + blockId);
+            }
+            // Quem escreve as pecas ja escreveu o blockstate multipart que escolhe entre elas.
+            // Escrever de novo aqui trocava esse multipart por variantes, e o bloco voltava a
+            // desenhar o catalogo inteiro -- o cano com as seis conexoes sempre abertas.
+            if (!declaredModel.blockstateEscrito()) {
+                writeDeclaredBlockstate(generatedRoot, namespace, blockId, block, declaredModel.id());
+            }
             return;
         }
 
@@ -1137,6 +1149,46 @@ public final class ResourcePackAssembler {
                         + "  ]" + NEWLINE + "}" + NEWLINE);
     }
 
+    /**
+     * O blockstate de um bloco com modelo proprio: uma variante por direcao, e nada de multipart.
+     *
+     * <p>Separado do caminho comum porque a pergunta ali e "este bloco conecta?", e aqui a resposta
+     * ja foi decidida: o modelo declarado vence. Reusar o outro caminho significaria uma condicao a
+     * mais dentro dele, e foi assim que o modelo declarado passou a ser ignorado em silencio.
+     */
+    private void writeDeclaredBlockstate(Path generatedRoot, String namespace, String blockId,
+                                         ModManifest.BlockDefinition block, String model)
+            throws IOException {
+        java.util.List<String> facings = facingsOf(block);
+
+        StringBuilder blockstate = new StringBuilder("{" + NEWLINE + "  \"variants\": {" + NEWLINE);
+        boolean primeira = true;
+        for (int variant = 0; variant <= 15; variant++) {
+            for (String facing : facings) {
+                if (!primeira) blockstate.append(",").append(NEWLINE);
+                primeira = false;
+
+                blockstate.append("    \"lua_variant=").append(variant);
+                if (facing != null) blockstate.append(",facing=").append(facing);
+                blockstate.append("\": {\"model\": \"").append(model).append("\"");
+                appendRotation(blockstate, facing);
+                blockstate.append("}");
+            }
+        }
+        blockstate.append(NEWLINE).append("  }").append(NEWLINE).append("}").append(NEWLINE);
+
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("blockstates").resolve(blockId + ".json"), blockstate.toString());
+
+        // So escreve o item se ninguem ja escreveu: o caminho do OBJ escreve o dele proprio, e
+        // sobrescrever aqui devolveria o pai que faz o cliente nao abrir.
+        Path item = generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("models/item").resolve(blockId + ".json");
+        if ((block.item == null || block.item.register) && !Files.exists(item)) {
+            write(item, "{" + NEWLINE + "  \"parent\": \"" + model + "\"" + NEWLINE + "}" + NEWLINE);
+        }
+    }
+
     private void writeBlockstate(Path generatedRoot, String namespace, String blockId,
                                  ModManifest.BlockDefinition block,
                                  Map<Integer, String> models,
@@ -1199,7 +1251,247 @@ public final class ResourcePackAssembler {
      *
      * @return o identificador do modelo escrito, ou {@code null} quando não há modelo declarado
      */
-    private String assembleDeclaredModel(ModLoader.LoadedMod mod,
+    /**
+     * Poe um modelo OBJ no pack, com um cubo texturizado de reserva.
+     *
+     * <p>O arquivo vai inteiro, e nao convertido: o cliente le a malha e monta as faces. O JSON
+     * escrito ao lado dele e a reserva -- se o cliente nao interceptar o modelo, o bloco aparece
+     * como um cubo com a textura certa em vez do cubo roxo de modelo ausente. Um mod que perde o
+     * desenho e um problema; um mod que vira cubo roxo parece o jogo quebrado.
+     *
+     * <p>O arquivo e conferido aqui, na montagem, e nao no cliente: um OBJ quebrado precisa virar
+     * mensagem para quem escreveu o mod, e o cliente e o lugar onde ninguem esta olhando o log.
+     */
+    private DeclaredModel assembleObjModel(ModLoader.LoadedMod mod,
+                                           ModManifest.BlockDefinition block,
+                                           Path generatedRoot, byte[] bytes) throws IOException {
+        String namespace = mod.manifest().id;
+
+        // A textura vem antes da malha porque a reserva precisa dela mesmo quando a malha falha.
+        String textura = objTexture(mod, block, generatedRoot);
+
+        int faces = 0;
+        try (var reader = new java.io.InputStreamReader(
+                new java.io.ByteArrayInputStream(bytes), StandardCharsets.UTF_8)) {
+
+            var parsed = dev.lualoader.content.ObjModel.read(reader);
+            faces = parsed.faces().size();
+
+            Path destino = generatedRoot.resolve("assets").resolve(namespace)
+                    .resolve("models/block").resolve(block.id + ".obj");
+            Files.createDirectories(destino.getParent());
+            Files.write(destino, bytes);
+        } catch (IOException error) {
+            // O arquivo quebrado nao vai para o pacote, e o bloco fica com a reserva. Deixar a
+            // excecao subir derrubaria a montagem inteira: um OBJ torto num mod apagaria o pacote
+            // de todos os outros, que e muito pior que um bloco desenhado como cubo.
+            logger.warn("Modelo OBJ de {} recusado, usando a reserva: {}",
+                    namespace + ":" + block.id, error.getMessage());
+        }
+
+        // Um catalogo de pecas vira um modelo por condicao, e um blockstate multipart que escolhe.
+        var partes = block.render == null ? null : block.render.objParts;
+        boolean porPeca = partes != null && faces > 0
+                && dev.lualoader.content.BlockShapes.connects(block);
+
+        if (porPeca) {
+            writeObjParts(mod, generatedRoot, namespace, block, textura, partes);
+        } else {
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                            .resolve("models/block").resolve(block.id + ".json"),
+                    objModelJson(namespace + ":block/" + block.id + ".obj", List.of(), textura, 1f));
+        }
+
+        // O item nao pode herdar do modelo do bloco: o pai dele passa a ser a malha, e o jogo exige
+        // que o pai de um modelo JSON seja outro modelo JSON -- "BlockModel parent has to be a block
+        // model", e o cliente nao abre. Entao o item ganha um modelo completo proprio.
+        if (block.item == null || block.item.register) {
+            write(generatedRoot.resolve("assets").resolve(namespace)
+                            .resolve("models/item").resolve(block.id + ".json"),
+                    "{" + NEWLINE
+                            + "  \"parent\": \"minecraft:block/cube_all\"," + NEWLINE
+                            + "  \"textures\": { \"all\": \"" + textura + "\","
+                            + " \"particle\": \"" + textura + "\" }" + NEWLINE
+                            + "}" + NEWLINE);
+        }
+
+        if (faces > 0) {
+            logger.info("Modelo OBJ de {} montado: {} face(s), textura {}",
+                    namespace + ":" + block.id, faces, textura);
+        }
+        return new DeclaredModel(namespace + ":block/" + block.id, porPeca);
+    }
+
+    /**
+     * As letras que nomeiam cada direcao num arquivo de modelo.
+     *
+     * <p>N, S, E, W, U, D e a nomenclatura que as ferramentas usam nos nomes de grupo. Nao e escolha
+     * do loader: e o que esta escrito nos arquivos que ele precisa ler.
+     */
+    private static final Map<String, String> LETRA_DO_LADO = Map.of(
+            "north", "N", "south", "S", "east", "E", "west", "W", "up", "U", "down", "D");
+
+    /**
+     * Escreve um modelo por condicao e o blockstate que escolhe entre eles.
+     *
+     * <p>E como um mod monta um cano: o miolo sempre, uma peca no lado ligado, outra no lado livre.
+     * O loader nao sabe nada sobre canos -- ele so aplica os grupos que o manifesto declarou, e a
+     * direcao entra no lugar do {@code %s}.
+     *
+     * <p>O blockstate precisa de condicao <b>negativa</b> ({@code "false"}) para o lado livre. Ate
+     * aqui so a positiva era escrita, e por isso um bloco so sabia crescer bracos -- nunca fechar a
+     * face que ninguem usa.
+     */
+    private void writeObjParts(ModLoader.LoadedMod mod, Path generatedRoot, String namespace,
+                               ModManifest.BlockDefinition block, String textura,
+                               ModManifest.ObjPartsDefinition partes) throws IOException {
+        String objRef = namespace + ":block/" + block.id + ".obj";
+        StringBuilder multipart = new StringBuilder();
+
+        if (partes.core != null && partes.core.groups != null && !partes.core.groups.isEmpty()) {
+            String nome = block.id + "_core";
+            write(modelPath(generatedRoot, namespace, nome),
+                    objModelJson(objRef, partes.core.groups,
+                            partTexture(mod, block, generatedRoot, partes.core, "core", textura),
+                            partes.core.uvScale));
+            multipart.append("    { \"apply\": { \"model\": \"")
+                    .append(namespace).append(":block/").append(nome).append("\" } }");
+        }
+
+        for (String lado : dev.lualoader.content.BlockShapes.SIDES) {
+            String letra = LETRA_DO_LADO.get(lado);
+
+            appendPart(multipart, mod, generatedRoot, namespace, block, textura, objRef,
+                    partes.connected, letra, lado, true);
+            appendPart(multipart, mod, generatedRoot, namespace, block, textura, objRef,
+                    partes.disconnected, letra, lado, false);
+        }
+
+        write(generatedRoot.resolve("assets").resolve(namespace)
+                        .resolve("blockstates").resolve(block.id + ".json"),
+                "{" + NEWLINE + "  \"multipart\": [" + NEWLINE + multipart + NEWLINE
+                        + "  ]" + NEWLINE + "}" + NEWLINE);
+
+        logger.info("Modelo OBJ de {} dividido em pecas por conexao", namespace + ":" + block.id);
+    }
+
+    /** Uma peca do catalogo, ligada a um lado do bloco estar ou nao conectado. */
+    private void appendPart(StringBuilder multipart, ModLoader.LoadedMod mod, Path generatedRoot,
+                            String namespace, ModManifest.BlockDefinition block, String textura,
+                            String objRef, ModManifest.ObjPartDefinition peca, String letra,
+                            String lado, boolean ligado) throws IOException {
+        if (peca == null || peca.groups == null || peca.groups.isEmpty()) return;
+
+        java.util.List<String> grupos = new java.util.ArrayList<>(peca.groups.size());
+        for (String padrao : peca.groups) {
+            if (padrao != null && !padrao.isBlank()) grupos.add(padrao.replace("%s", letra));
+        }
+        if (grupos.isEmpty()) return;
+
+        String sufixo = ligado ? "on" : "off";
+        String nome = block.id + "_" + sufixo + "_" + letra.toLowerCase(java.util.Locale.ROOT);
+        write(modelPath(generatedRoot, namespace, nome),
+                objModelJson(objRef, grupos,
+                        partTexture(mod, block, generatedRoot, peca, sufixo, textura),
+                        peca.uvScale));
+
+        if (multipart.length() > 0) multipart.append(",").append(NEWLINE);
+        multipart.append("    { \"when\": { \"").append(lado).append("\": \"")
+                .append(ligado).append("\" },")
+                .append(" \"apply\": { \"model\": \"")
+                .append(namespace).append(":block/").append(nome).append("\" } }");
+    }
+
+    private Path modelPath(Path generatedRoot, String namespace, String nome) {
+        return generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("models/block").resolve(nome + ".json");
+    }
+
+    /**
+     * O JSON que aponta para a malha.
+     *
+     * <p>Ele nao e um modelo do jogo: e a declaracao que o cliente le para saber qual arquivo abrir
+     * e quais grupos desenhar. O {@code parent} de cubo continua ali como reserva -- se o cliente
+     * nao interceptar, o bloco vira um cubo com a textura certa em vez do cubo roxo de modelo
+     * ausente.
+     */
+    /**
+     * A textura de uma peca, copiada para o pacote.
+     *
+     * <p>Sem textura propria, vale a do bloco. E o caso comum -- so um modelo com atlas proprio
+     * precisa de imagens diferentes por peca.
+     */
+    private String partTexture(ModLoader.LoadedMod mod, ModManifest.BlockDefinition block,
+                               Path generatedRoot, ModManifest.ObjPartDefinition peca,
+                               String sufixo, String padrao) throws IOException {
+        if (peca.texture == null) return padrao;
+
+        String namespace = mod.manifest().id;
+        String nome = block.id + "_" + sufixo;
+        Path arquivo = generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("textures/block").resolve(nome + ".png");
+        Files.createDirectories(arquivo.getParent());
+
+        try {
+            var resolved = remoteResources.resolveTexture(mod.directory(),
+                    new ResourceCatalog(mod.manifest()).resolveTexture(peca.texture),
+                    mod.manifest().remoteBase);
+            copyAsPng(resolved.path(), arquivo);
+            return namespace + ":block/" + nome;
+        } catch (IOException error) {
+            logger.warn("Textura da peca {} de {} indisponivel; usando a do bloco: {}",
+                    sufixo, namespace + ":" + block.id, error.getMessage());
+            return padrao;
+        }
+    }
+
+    private String objModelJson(String objRef, java.util.List<String> grupos, String textura,
+                                float uvScale) {
+        StringBuilder lista = new StringBuilder();
+        for (String grupo : grupos) {
+            if (lista.length() > 0) lista.append(", ");
+            lista.append("\"").append(grupo).append("\"");
+        }
+
+        return "{" + NEWLINE
+                + "  \"parent\": \"minecraft:block/cube_all\"," + NEWLINE
+                + "  \"lua_obj\": \"" + objRef + "\"," + NEWLINE
+                + "  \"lua_obj_groups\": [" + lista + "]," + NEWLINE
+                + "  \"lua_obj_uv_scale\": " + number(uvScale) + "," + NEWLINE
+                + "  \"textures\": { \"all\": \"" + textura + "\","
+                + " \"particle\": \"" + textura + "\" }" + NEWLINE
+                + "}" + NEWLINE;
+    }
+
+    /** A textura de um bloco com modelo OBJ, copiada para o pack. */
+    private String objTexture(ModLoader.LoadedMod mod, ModManifest.BlockDefinition block,
+                              Path generatedRoot) throws IOException {
+        String namespace = mod.manifest().id;
+        ModManifest.TextureDefinition declarada = singleTexture(block);
+        if (declarada == null) return fallbackTexture(block);
+
+        Path arquivo = generatedRoot.resolve("assets").resolve(namespace)
+                .resolve("textures/block").resolve(block.id + "_v0.png");
+        Files.createDirectories(arquivo.getParent());
+
+        try {
+            var resolved = remoteResources.resolveTexture(mod.directory(),
+                    new ResourceCatalog(mod.manifest()).resolveTexture(declarada),
+                    mod.manifest().remoteBase);
+            copyAsPng(resolved.path(), arquivo);
+            return namespace + ":block/" + block.id + "_v0";
+        } catch (IOException error) {
+            logger.warn("Textura do modelo OBJ de {} indisponivel; usando {}: {}",
+                    namespace + ":" + block.id, fallbackTexture(block), error.getMessage());
+            return fallbackTexture(block);
+        }
+    }
+
+    /** O modelo declarado, e se ele ja cuidou do proprio blockstate. */
+    private record DeclaredModel(String id, boolean blockstateEscrito) {
+    }
+
+    private DeclaredModel assembleDeclaredModel(ModLoader.LoadedMod mod,
                                          ModManifest.BlockDefinition block,
                                          Path generatedRoot) throws IOException {
         if (block.render == null || block.render.model == null) return null;
@@ -1214,6 +1506,14 @@ public final class ResourcePackAssembler {
 
         byte[] bytes = remoteResources.resolveBytes(
                 mod.directory(), resource, mod.manifest().remoteBase);
+
+        // Um OBJ nao vira JSON de modelo: o formato do jogo descreve caixas, e uma malha nao e
+        // uniao de caixas. O arquivo vai inteiro para o pack, e o cliente o transforma em faces na
+        // hora de desenhar -- e por isso o desvio acontece aqui, antes de tentar ler como JSON.
+        if (dev.lualoader.content.ObjModel.isObj(resource.from)) {
+            return assembleObjModel(mod, block, generatedRoot, bytes);
+        }
+
         String json = new String(bytes, StandardCharsets.UTF_8);
 
         var root = com.google.gson.JsonParser.parseString(json);
@@ -1267,7 +1567,7 @@ public final class ResourcePackAssembler {
 
         logger.info("Modelo declarado aplicado a {} ({} textura(s))",
                 namespace + ":" + block.id, textures.size());
-        return modelId;
+        return new DeclaredModel(modelId, false);
     }
 
     /**

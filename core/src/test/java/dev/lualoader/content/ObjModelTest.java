@@ -115,6 +115,75 @@ class ObjModelTest {
     }
 
     @Test
+    void aLinhaDeGrupoPodeTerVariosNomes() throws IOException {
+        // Uma ferramenta escreve varios nomes na mesma linha de grupo. Guardar so o primeiro perde
+        // justamente o que identifica a peca -- e foi esse o defeito: o recorte nao casava com nada
+        // e o modelo saia vazio, entao o bloco desenhava a reserva e parecia um cubo comum.
+        ObjModel modelo = ler("""
+                v 0 0 0
+                v 1 0 0
+                v 1 1 0
+                g Mesh332 Side_Plate3 Texture_Side_N
+                f 1 2 3
+                """);
+
+        assertEquals("Mesh332 Side_Plate3 Texture_Side_N", modelo.faces().get(0).group());
+    }
+
+    @Test
+    void oRecorteCasaPalavraAPalavra() throws IOException {
+        ObjModel modelo = ler("""
+                v 0 0 0
+                v 1 0 0
+                v 1 1 0
+                g Mesh1 Edge_M_U_N
+                f 1 2 3
+                g Mesh2 Side_N
+                f 1 2 3
+                g Mesh3 Texture_Plate_N
+                f 1 2 3
+                """);
+
+        // O nome procurado esta no meio da linha, e nao no comeco: casar so pelo inicio da linha
+        // encontraria nada.
+        assertEquals(1, modelo.filtered(List.of("Side_N")).faces().size());
+        assertEquals(1, modelo.filtered(List.of("Edge_M_")).faces().size());
+
+        // Varios padroes de uma vez, que e como se monta o miolo.
+        assertEquals(2, modelo.filtered(List.of("Edge_M_", "Texture_Plate_")).faces().size());
+
+        // E um padrao que nao existe nao traz nada -- em vez de trazer tudo.
+        assertTrue(modelo.filtered(List.of("Nao_Existe")).faces().isEmpty());
+
+        // Sem padrao nenhum, o modelo inteiro: e o caso de um OBJ que ja e o objeto pronto.
+        assertEquals(3, modelo.filtered(List.of()).faces().size());
+    }
+
+    @Test
+    void oRecorteNaoMexeNaEscala() throws IOException {
+        ObjModel inteiro = ler("""
+                v 0 0 0
+                v 100 0 0
+                v 100 100 0
+                g corpo
+                f 1 2 3
+                g detalhe
+                v 40 40 0
+                v 60 40 0
+                v 60 60 0
+                f 4 5 6
+                """).normalized();
+
+        ObjModel peca = inteiro.filtered(List.of("detalhe"));
+
+        // A caixa continua sendo a do modelo inteiro. Recalcula-la pela peca faria cada recorte ser
+        // escalado por conta propria: o miolo no centro e a manga a metros dali.
+        assertEquals(inteiro.minX(), peca.minX());
+        assertEquals(inteiro.maxY(), peca.maxY());
+        assertEquals(1, peca.faces().size());
+    }
+
+    @Test
     void oQueOLeitorNaoEntendeNaoDerrubaOArquivo() throws IOException {
         // vn, s e mtllib nao mudam a geometria. Recusar por causa deles rejeitaria quase todo
         // arquivo de verdade, porque toda ferramenta escreve alguma coisa a mais.

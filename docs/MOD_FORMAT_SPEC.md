@@ -144,6 +144,80 @@ A declaração de bloco é composta por identidade, material, configurações, e
 | `drops` | objeto | Pode ser recarregado quando convertido em dados |
 | `behavior` | objeto | Depende do callback e do tipo de bloco |
 
+### Modelo de malha (`.obj`)
+
+O formato de modelo do Minecraft descreve **caixas**. Uma malha não é união de caixas, e mod que
+desenha assim — cano, máquina, criatura — não tem como ser portado só com `shape`.
+
+```json
+"resources": {
+  "forma": { "type": "model", "from": "models/cano.obj" },
+  "corpo": { "type": "image", "from": "assets/pipemodel.png" }
+},
+"blocks": [{
+  "id": "cano",
+  "render": { "model": "@forma", "texture": { "ref": "corpo" } }
+}]
+```
+
+O arquivo vai **inteiro** para o pacote, e o cliente o transforma em faces. Ao lado dele o loader
+escreve um cubo de reserva com a mesma textura: se o desenho falhar, o bloco aparece como cubo em
+vez do cubo roxo de modelo ausente.
+
+Regras que valem a pena saber:
+
+| O que | Como |
+|---|---|
+| Escala | O arquivo é encaixado no bloco automaticamente, com o chão em zero. A escala é a **mesma nos três eixos** — senão um cano fino sairia achatado até encher a caixa. |
+| Coordenada de textura | Invertida na vertical, porque o OBJ conta de baixo para cima e o jogo de cima para baixo. |
+| Face com mais de 4 lados | Triangulada. O jogo desenha quads. |
+| `.mtl` | **Não é lido.** Quem declara o mod diz qual textura vale; um `.mtl` aponta para caminho de disco, que não existe dentro do jogo. |
+| Teto | 50 000 faces por arquivo. Sem isso, um export descuidado trava o carregamento sem uma linha explicando. |
+| Modelo declarado × `connects_to` | O modelo **vence**, e o loader avisa no log. Os braços por conexão não são desenhados — a menos que se use `obj_parts`, abaixo. |
+
+### Peças de um modelo de malha (`obj_parts`)
+
+Um OBJ de mod costuma ser um **catálogo de peças**, e não um objeto pronto: o miolo, a manga de cada
+lado e as placas de cada face, todos no mesmo arquivo. Sem escolher o que desenhar, o único
+resultado possível é o catálogo inteiro de uma vez — um cano com as seis conexões sempre abertas.
+
+```json
+"render": {
+  "model": "@forma",
+  "texture": { "ref": "corpo" },
+  "obj_parts": {
+    "core":         { "groups": ["Edge_M_", "Corner_M_"], "texture": { "ref": "corpo" } },
+    "connected":    { "groups": ["Side_%s"],              "texture": { "ref": "corpo" } },
+    "disconnected": { "groups": ["Texture_Plate_%s"], "texture": { "ref": "tipo" }, "uv_scale": 0.75 }
+  }
+}
+```
+
+| Campo | Quando desenha |
+|---|---|
+| `core` | sempre |
+| `connected` | naquele lado, quando ele está ligado a um vizinho |
+| `disconnected` | naquele lado, quando ele está livre |
+
+Em `connected` e `disconnected`, **`%s` vira a direção** em maiúsculas: `N`, `S`, `E`, `W`, `U`,
+`D`. É a nomenclatura que as ferramentas de modelo usam nos nomes de grupo.
+
+**Os nomes casam palavra a palavra, por prefixo.** Uma linha de grupo costuma trazer vários nomes
+(`g Mesh332 Side_Plate3 Texture_Side_N`), e a ferramenta acrescenta sufixos (`Side_N`, `Side_N2`).
+Procurar o nome exato, ou só no começo da linha, não acha nada — e o sintoma é um bloco que desenha
+a reserva e parece um cubo comum.
+
+**A textura é por peça.** Um modelo de malha costuma ter um atlas próprio para o corpo, com as
+coordenadas já embutidas no arquivo, e usar a imagem que identifica o bloco em algumas faces apenas.
+Pintar tudo com a mesma imagem faz o corpo perder o desenho e virar uma mancha de cor. Sem
+`texture` na peça, vale a do bloco.
+
+`uv_scale` encolhe a coordenada de textura **em torno do centro**: `0.75` usa os doze dezesseis avos
+do meio da imagem. Serve para uma placa mostrar só o miolo de uma textura de bloco, sem a borda.
+
+**`obj_parts` exige `connects_to`**, porque as condições falam de lados ligados e livres. Sem ele o
+modelo é desenhado inteiro.
+
 ### Forma de um bloco que conecta
 
 | Campo | O que é |

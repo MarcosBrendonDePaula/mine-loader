@@ -289,11 +289,65 @@ public final class ModManifest {
          */
         public Map<String, TextureDefinition> textures = new LinkedHashMap<>();
         public Map<String, TextureDefinition> variantTextures = new LinkedHashMap<>();
+
+        /**
+         * Quais pecas de um modelo OBJ desenhar, conforme as conexoes do bloco.
+         *
+         * <p>Um OBJ de mod costuma ser um catalogo de pecas. Sem isto, o unico desenho possivel e o
+         * catalogo inteiro -- um cano com as seis conexoes sempre abertas.
+         */
+        public ObjPartsDefinition objParts;
         public String renderLayer = "solid";
         public boolean translucent = false;
         public boolean cutout = false;
         public boolean emissive = false;
         public String tint;
+    }
+
+    /**
+     * As pecas de um modelo OBJ, por condicao.
+     *
+     * <p>O vocabulario e o mesmo do bloco que conecta: sempre, quando aquele lado esta ligado, e
+     * quando esta livre. E como o Logistic Pipes monta o cano dele -- miolo sempre, manga do lado
+     * ligado, placa de textura do lado livre --, e e o que faz a textura do tipo de cano aparecer
+     * so nas faces abertas.
+     *
+     * <p>Em {@code connected} e {@code disconnected}, {@code %s} vira a direcao em maiusculas:
+     * {@code N}, {@code S}, {@code E}, {@code W}, {@code U}, {@code D}. E a nomenclatura que as
+     * ferramentas de modelo usam, e a mesma do arquivo original.
+     */
+    public static final class ObjPartsDefinition {
+        /** Pecas desenhadas em qualquer estado -- o miolo. */
+        public ObjPartDefinition core;
+        /** Pecas desenhadas no lado ligado, com {@code %s} pela direcao. */
+        public ObjPartDefinition connected;
+        /** Pecas desenhadas no lado livre, com {@code %s} pela direcao. */
+        public ObjPartDefinition disconnected;
+    }
+
+    /**
+     * Uma peca de modelo OBJ: quais grupos, e com que textura.
+     *
+     * <p><b>A textura e por peca, e nao por bloco.</b> Um modelo de malha costuma ter um atlas
+     * proprio para o corpo -- com as coordenadas ja embutidas no arquivo -- e usar a textura que
+     * identifica o bloco so em algumas faces. Pintar tudo com a mesma imagem faz o corpo perder o
+     * desenho e virar uma mancha de cor.
+     */
+    public static final class ObjPartDefinition {
+        /** Nomes de grupo, ou prefixos deles. Com {@code %s} pela direcao onde faz sentido. */
+        public List<String> groups = new ArrayList<>();
+
+        /** A textura desta peca. Sem ela, vale a do bloco. */
+        public TextureDefinition texture;
+
+        /**
+         * Encolhe a coordenada de textura em torno do centro.
+         *
+         * <p>Um valor de {@code 0.75} usa os doze dezesseis avos do meio da imagem. Serve para uma
+         * placa mostrar so o miolo de uma textura de bloco, sem a borda -- e sem isso a imagem sai
+         * esticada de canto a canto da peca.
+         */
+        public float uvScale = 1.0f;
     }
 
     public static final class TextureDefinition {

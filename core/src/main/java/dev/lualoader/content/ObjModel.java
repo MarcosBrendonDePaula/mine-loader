@@ -140,7 +140,12 @@ public final class ObjModel {
                         uvs.add(new double[]{number(parts[1]), number(parts[2])});
                     }
                     // O grupo e o material dao nome a parte; o desenho nao muda por causa deles.
-                    case "g", "o", "usemtl" -> group = parts.length > 1 ? parts[1] : "";
+                    //
+                    // A LINHA INTEIRA vira o nome, e nao o primeiro nome dela. Uma ferramenta
+                    // escreve varios nomes na mesma linha -- "g Mesh332 Side_Plate3 Texture_Side_N"
+                    // --, e guardar so o primeiro perde justamente o que identifica a peca: o
+                    // recorte por grupo nao casava com nada e o modelo saia vazio.
+                    case "g", "o", "usemtl" -> group = line.substring(parts[0].length()).trim();
                     case "f" -> {
                         List<Vertex> vertices = new ArrayList<>();
                         for (int index = 1; index < parts.length; index++) {
@@ -260,6 +265,57 @@ public final class ObjModel {
         return new ObjModel(moved,
                 minX * scale + offsetX, minY * scale + offsetY, minZ * scale + offsetZ,
                 maxX * scale + offsetX, maxY * scale + offsetY, maxZ * scale + offsetZ);
+    }
+
+    /**
+     * O mesmo modelo com as faces de alguns grupos apenas.
+     *
+     * <p>Um OBJ de mod costuma ser um <b>catalogo de pecas</b>, e nao um objeto pronto: o do
+     * Logistic Pipes traz o miolo, as mangas de cada lado e as placas de textura, todos no mesmo
+     * arquivo, e o jogo monta o cano escolhendo o que desenhar conforme as conexoes. Sem poder
+     * filtrar por grupo, o unico desenho possivel seria o catalogo inteiro de uma vez -- um cano
+     * com as seis conexoes sempre abertas.
+     *
+     * <p>Compara <b>palavra a palavra</b>, porque o nome de um grupo costuma ser uma linha com
+     * varios nomes. E por prefixo dentro de cada palavra, porque a ferramenta gera sufixos
+     * ({@code Side_N}, {@code Side_N2}) e exigir o nome exato faria a declaracao listar cada
+     * variacao.
+     *
+     * <p><b>Filtre depois de escalar.</b> Escalar cada peca por si usaria a caixa dela, e as pecas
+     * sairiam de tamanhos diferentes e fora do lugar -- o miolo no centro e a manga a metros dali.
+     */
+    public ObjModel filtered(List<String> groupPrefixes) {
+        if (groupPrefixes == null || groupPrefixes.isEmpty()) return this;
+
+        List<Face> kept = new ArrayList<>();
+        for (Face face : faces) {
+            if (matches(face.group(), groupPrefixes)) kept.add(face);
+        }
+
+        // A caixa continua sendo a do modelo inteiro, e nao a das faces que sobraram: ela e o que
+        // define a escala, e recalcula-la aqui faria cada peca ser escalada por conta propria.
+        return new ObjModel(kept, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /** Se alguma palavra do nome do grupo comeca com algum dos padroes. */
+    private static boolean matches(String group, List<String> prefixes) {
+        if (group.isEmpty()) return false;
+
+        for (String word : group.split("\s+")) {
+            for (String prefix : prefixes) {
+                if (prefix != null && !prefix.isBlank() && word.startsWith(prefix)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Os nomes de grupo que o arquivo traz, na ordem em que aparecem. */
+    public List<String> groups() {
+        List<String> nomes = new ArrayList<>();
+        for (Face face : faces) {
+            if (!face.group().isEmpty() && !nomes.contains(face.group())) nomes.add(face.group());
+        }
+        return List.copyOf(nomes);
     }
 
     /** Se o caminho declarado aponta para um OBJ. */
