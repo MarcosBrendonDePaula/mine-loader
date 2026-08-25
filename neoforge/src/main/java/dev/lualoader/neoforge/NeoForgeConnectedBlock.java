@@ -33,7 +33,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p><b>A colisão acompanha o desenho.</b> Uma forma que fica só no visual deixa o jogador ver o
  * braço e atravessá-lo.
  */
-public class NeoForgeConnectedBlock extends NeoForgeDeclarativeBlock {
+public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
+    /**
+     * Se este cano guarda dados na propria posicao.
+     *
+     * <p>Conectar e guardar dados sao independentes, e o registrador escolhia um so: aqui a
+     * condicao era literalmente {@code connects(definition) && !withData}, entao um cano que
+     * pedisse {@code block_data} perdia a conexao inteira sem aviso. O porte do Logistic Pipes
+     * precisou das duas ao mesmo tempo, porque a carga em viagem mora na posicao do cano.
+     */
+    private final boolean withData;
+
     private final BlockShapes.Box core;
     private final BlockShapes.Box arm;
 
@@ -50,8 +60,10 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeBlock {
 
     public NeoForgeConnectedBlock(Properties properties, int luminance,
                                   BlockShapes.Box core, BlockShapes.Box arm,
-                                  List<String> connectsTo) {
+                                  List<String> connectsTo, boolean withData) {
         super(properties, luminance, null, null);
+
+        this.withData = withData;
 
         this.core = core;
         this.arm = arm;
@@ -170,5 +182,12 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeBlock {
 
         return shapeCache.computeIfAbsent(key.toString(), ignored ->
                 NeoForgeShapes.fromBoxes(BlockShapes.connected(core, arm, connected)));
+    }
+
+    @Override
+    public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(BlockPos pos,
+                                                                            BlockState state) {
+        if (!withData) return null;
+        return super.newBlockEntity(pos, state);
     }
 }

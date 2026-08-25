@@ -33,7 +33,20 @@ import java.util.Set;
  * de divergência como o pior defeito de forma declarada — parece o jogo quebrado, e não um recurso
  * faltando.
  */
-public class ConnectedBlock extends DeclarativeBlock {
+public class ConnectedBlock extends DeclarativeDataBlock {
+    /**
+     * Se este cano guarda dados na propria posicao.
+     *
+     * <p>Conectar e guardar dados sao capacidades independentes, e o registrador escolhia uma so:
+     * um cano que declarasse {@code block_data} virava bloco de dados e perdia a conexao inteira --
+     * em silencio, com as seis propriedades no blockstate e nenhuma mudando nunca. Foi o porte do
+     * Logistic Pipes que precisou das duas ao mesmo tempo, porque a carga em viagem mora na posicao.
+     *
+     * <p>Herdar de {@link DeclarativeDataBlock} e devolver {@code null} aqui e o que deixa um cano
+     * sem dados nao pagar o custo da entidade.
+     */
+    private final boolean withData;
+
     private final BlockShapes.Box core;
     private final BlockShapes.Box arm;
 
@@ -55,9 +68,12 @@ public class ConnectedBlock extends DeclarativeBlock {
     public ConnectedBlock(Settings settings,
                           float hardness, float resistance, float slipperiness,
                           float velocityMultiplier, float jumpVelocityMultiplier,
-                          BlockShapes.Box core, BlockShapes.Box arm, List<String> connectsTo) {
+                          BlockShapes.Box core, BlockShapes.Box arm, List<String> connectsTo,
+                          boolean withData) {
         super(settings, hardness, resistance, slipperiness,
                 velocityMultiplier, jumpVelocityMultiplier);
+
+        this.withData = withData;
 
         this.core = core;
         this.arm = arm;
@@ -181,5 +197,11 @@ public class ConnectedBlock extends DeclarativeBlock {
 
         return shapeCache.computeIfAbsent(key.toString(), ignored ->
                 DeclarativeShapes.fromBoxes(BlockShapes.connected(core, arm, connected)));
+    }
+
+    @Override
+    public net.minecraft.block.entity.BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
+        if (!withData) return null;
+        return super.createBlockEntity(pos, state);
     }
 }

@@ -187,9 +187,15 @@ Três decisões que valem lembrar:
 O prazo vai de 1 a 24000 tiques — um dia de jogo. Zero e negativo o jogo trataria como "agora", o
 que de dentro do próprio tique é recursão sem folga.
 
-**O que ainda falta é o mod usar isso.** O porte do Logistic Pipes continua entregando na hora — o
-item some de um baú e aparece no outro —, e essa é a maior diferença visível para o original. O
-mecanismo existe; a viagem é trabalho no exemplo, e está na tarefa do porte.
+**O exemplo já usa.** O porte do Logistic Pipes move a carga de cano em cano, um passo a cada quatro
+tiques, e a carga mora no `block_data` do cano em que está — some junto com o cano, em vez de apontar
+para uma posição que não existe mais, e sobrevive ao servidor cair.
+
+Fazer isso encontrou outro limite, que já foi fechado junto: **um bloco não podia conectar e guardar
+dados ao mesmo tempo.** O registrador escolhia um dos dois — no NeoForge a condição era literalmente
+`connects && !withData` —, então um cano que declarasse `block_data` perdia a conexão inteira, com
+as seis propriedades no blockstate e nenhuma mudando nunca. Sem erro nenhum no log. As duas
+capacidades são independentes e agora compõem.
 
 **Inventário por slot** — fechado. `container_at` já numerava cada linha; o que faltava era
 endereçar o slot que ele nomeia, e `insert_into` e `extract_from` passaram a aceitar um índice

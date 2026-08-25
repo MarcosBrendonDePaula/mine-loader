@@ -171,6 +171,13 @@ public class BlockInteractionGameTest implements FabricGameTest {
             throw new AssertionError("um cano sozinho nao deveria estar conectado");
         }
 
+        // E ele guarda dados na posicao ao mesmo tempo. As duas coisas juntas nao eram possiveis:
+        // o registrador escolhia uma, e um cano que pedisse block_data perdia a conexao inteira sem
+        // aviso. O exemplo de logistica precisa das duas -- a carga em viagem mora no cano.
+        if (context.getWorld().getBlockEntity(context.getAbsolutePos(primeiro)) == null) {
+            throw new AssertionError("o cano declara block_data e deveria ter entidade de bloco");
+        }
+
         // O vizinho chega, e o jogo avisa aquele lado.
         context.setBlockState(segundo, cano.getDefaultState());
         if (!conectado(context, primeiro, "south")) {

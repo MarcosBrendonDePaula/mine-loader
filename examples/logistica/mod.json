@@ -16,7 +16,8 @@
     "player.inventory",
     "world.read",
     "world.containers",
-    "server.command.register"
+    "server.command.register",
+    "world.write"
   ],
   "creative_tab": {
     "register": true,
@@ -81,6 +82,10 @@
           "logistica:terminal",
           "#minecraft:wooden_fences"
         ]
+      },
+      "block_data": true,
+      "behavior": {
+        "on_scheduled": "scripts/cano_tique.lua"
       }
     },
     {
@@ -122,6 +127,10 @@
           "logistica:terminal",
           "#minecraft:wooden_fences"
         ]
+      },
+      "block_data": true,
+      "behavior": {
+        "on_scheduled": "scripts/cano_tique.lua"
       }
     },
     {
@@ -141,7 +150,8 @@
         }
       },
       "behavior": {
-        "on_use": "scripts/terminal_usado.lua"
+        "on_use": "scripts/terminal_usado.lua",
+        "on_scheduled": "scripts/cano_tique.lua"
       },
       "shape": {
         "core": [
@@ -169,7 +179,8 @@
       },
       "placement": {
         "facing": "player"
-      }
+      },
+      "block_data": true
     }
   ],
   "events": {

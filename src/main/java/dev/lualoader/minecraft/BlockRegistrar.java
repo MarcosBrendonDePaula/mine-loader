@@ -71,12 +71,11 @@ public final class BlockRegistrar {
                         definition.shape == null ? null : definition.shape.collision);
 
                 var settings = BlockSettingsFactory.create(definition);
-                if (withData) {
-                    block = new DeclarativeDataBlock(settings,
-                            values.hardness, values.resistance, values.slipperiness,
-                            values.velocityMultiplier, values.jumpVelocityMultiplier);
-                    dataBlocks.add(block);
-                } else if (DeclarativeStateProperties.connects(definition)) {
+                // Conectar vem antes de guardar dados, e o bloco conectado sabe fazer os dois.
+                // Na ordem contraria, um cano que declarasse block_data virava bloco de dados e
+                // perdia a conexao inteira -- sem erro nenhum, so com um cano que nunca cresce
+                // braco. Foi o porte do Logistic Pipes que precisou das duas coisas juntas.
+                if (DeclarativeStateProperties.connects(definition)) {
                     // Um bloco que conecta calcula a propria forma a partir do estado, entao ele
                     // ignora outline e collision declarados -- o nucleo e o braco os substituem.
                     block = new ConnectedBlock(settings,
@@ -84,7 +83,14 @@ public final class BlockRegistrar {
                             values.velocityMultiplier, values.jumpVelocityMultiplier,
                             dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
                             dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
-                            definition.shape.connectsTo);
+                            definition.shape.connectsTo,
+                            withData);
+                    if (withData) dataBlocks.add(block);
+                } else if (withData) {
+                    block = new DeclarativeDataBlock(settings,
+                            values.hardness, values.resistance, values.slipperiness,
+                            values.velocityMultiplier, values.jumpVelocityMultiplier);
+                    dataBlocks.add(block);
                 } else if (outline != null || collision != null) {
                     block = new DeclarativeShapes.ShapedBlock(settings,
                             values.hardness, values.resistance, values.slipperiness,

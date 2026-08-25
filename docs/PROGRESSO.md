@@ -40,6 +40,10 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
       aceitam o índice. É o que destrava o filtro por slot dos módulos de chassi, e a máquina com
       entrada e saída separadas.
 
+- [x] **Bloco que conecta e guarda dados ao mesmo tempo.** Eram exclusivos no registrador das duas
+      plataformas: um cano com `block_data` perdia a conexão inteira, em silêncio. Descoberto ao
+      fazer o item viajar — a carga precisa morar na posição do cano.
+
 - [x] **Tique agendado por posição** — `ctx.server.schedule_block(x, y, z, tiques)` e o evento
       `block_scheduled`, mapeado por `behavior.on_scheduled`. A fila é a **do jogo**, gravada com o
       chunk: o que estava a caminho volta na próxima sessão, em vez de sumir com o servidor. Não se
@@ -75,6 +79,10 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
 
 - [x] **Logistic Pipes**: primeiro mod migrado. Cano, provedor e terminal, com o ciclo completo de
       pedido e entrega conferido no servidor dirigível.
+- [x] **O item viaja pelo cano**, um passo a cada quatro tiques, com a carga guardada na posição.
+      Era a maior diferença visível para o original. Seis casos no núcleo prendem o comportamento,
+      inclusive os dois que mais importam: cano quebrado no meio e baú de destino cheio **não podem
+      apagar item do mundo**.
 - [x] Porte autônomo publicado em
       [`logistic-pipes-lua`](https://github.com/MarcosBrendonDePaula/logistic-pipes-lua), sob MMPL
       por reusar a arte do original.
@@ -91,9 +99,8 @@ vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
 
 - Nada da forma que varia com o estado foi visto no `runClient`. O blockstate está certo no arquivo
   e a propriedade está certa no mundo, mas se o braço aparece no lugar, só a tela diz.
-- **O mecanismo do tique existe; o mod ainda não usa.** O porte do Logistic Pipes continua
-  entregando na hora, e essa é a maior diferença visível para o original. Fazer o item viajar é
-  reescrever a entrega do exemplo, e está na tarefa do porte — não no limite, que já saiu.
+- **O porte autônomo ficou para trás.** `logistic-pipes-lua` ainda tem a versão anterior do mod, sem
+  a viagem. Vale sincronizar antes de mexer nele.
 
 ---
 
@@ -104,8 +111,7 @@ vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
 Estão em `API_GAPS.md`, em ordem de quanto doem:
 
 1. ~~**Forma por estado.**~~ **Fechado.**
-2. ~~**Tique agendado por posição.**~~ **Fechado.** Falta o exemplo usar: o item ainda some de um
-   baú e aparece no outro.
+2. ~~**Tique agendado por posição.**~~ **Fechado**, e o exemplo já usa: o item atravessa os canos.
 3. ~~**Ler inventário por slot.**~~ **Fechado.** `container_at` numera cada linha, e `insert_into`
    e `extract_from` aceitam um slot opcional.
 4. **Evento de bloco quebrado com o inventário íntegro.** A rede só se refaz quando alguém abre a

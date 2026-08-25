@@ -268,6 +268,12 @@ public class NeoForgeBlockGameTest {
             throw new AssertionError("um cano sozinho nao deveria estar conectado");
         }
 
+        // E guarda dados na posicao ao mesmo tempo. A condicao aqui era `connects && !withData`:
+        // um cano que pedisse block_data virava bloco de dados e nunca crescia braco.
+        if (helper.getLevel().getBlockEntity(helper.absolutePos(primeiro)) == null) {
+            throw new AssertionError("o cano declara block_data e deveria ter entidade de bloco");
+        }
+
         helper.setBlock(segundo, cano.defaultBlockState());
         if (!conectado(helper, primeiro, "south")) {
             throw new AssertionError("o cano deveria ter conectado ao vizinho ao sul");

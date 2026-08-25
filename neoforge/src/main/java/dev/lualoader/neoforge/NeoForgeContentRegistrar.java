@@ -165,13 +165,19 @@ public final class NeoForgeContentRegistrar {
                 Block block;
                 NeoForgeDeclarativeBlock.beginConstruction(declaredState);
                 try {
-                    if (NeoForgeStateProperties.connects(definition) && !withData) {
+                    // Conectar vem antes de guardar dados, e o bloco conectado sabe fazer os
+                    // dois. A condicao anterior era `connects && !withData`: um cano que
+                    // declarasse block_data virava bloco de dados e nunca crescia braco, sem erro
+                    // nenhum. Vale para as duas plataformas -- uma so faria o mesmo manifesto
+                    // conectar de um lado e nao do outro.
+                    if (NeoForgeStateProperties.connects(definition)) {
                         // Um bloco que conecta calcula a propria forma a partir do estado, entao
                         // ignora outline e collision declarados -- nucleo e braco os substituem.
                         block = new NeoForgeConnectedBlock(settingsOf(definition), values.luminance,
                                 dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
                                 dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
-                                definition.shape.connectsTo);
+                                definition.shape.connectsTo,
+                                withData);
                     } else {
                         block = withData
                                 ? new NeoForgeDeclarativeDataBlock(
