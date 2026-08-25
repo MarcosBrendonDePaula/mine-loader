@@ -36,6 +36,10 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
 
 ### Limites removidos
 
+- [x] **Inventário por slot** — `container_at` numera cada linha, e `insert_into` e `extract_from`
+      aceitam o índice. É o que destrava o filtro por slot dos módulos de chassi, e a máquina com
+      entrada e saída separadas.
+
 - [x] **Tique agendado por posição** — `ctx.server.schedule_block(x, y, z, tiques)` e o evento
       `block_scheduled`, mapeado por `behavior.on_scheduled`. A fila é a **do jogo**, gravada com o
       chunk: o que estava a caminho volta na próxima sessão, em vez de sumir com o servidor. Não se
@@ -102,8 +106,8 @@ Estão em `API_GAPS.md`, em ordem de quanto doem:
 1. ~~**Forma por estado.**~~ **Fechado.**
 2. ~~**Tique agendado por posição.**~~ **Fechado.** Falta o exemplo usar: o item ainda some de um
    baú e aparece no outro.
-3. **Ler inventário por slot.** `container_at` soma por item, o que basta para um estoque e impede
-   reproduzir os filtros dos módulos de chassi.
+3. ~~**Ler inventário por slot.**~~ **Fechado.** `container_at` numera cada linha, e `insert_into`
+   e `extract_from` aceitam um slot opcional.
 4. **Evento de bloco quebrado com o inventário íntegro.** A rede só se refaz quando alguém abre a
    tela.
 5. ~~**`events` sem `entrypoint` é aceito em silêncio.**~~ **Fechado.**
@@ -122,7 +126,7 @@ Estão em `API_GAPS.md`, em ordem de quanto doem:
 - `supplier` — mantém um baú abastecido
 - `satellite` — endereço nomeado na rede
 - `crafting` — fabrica sob demanda
-- `chassis` + módulos — dependem de ler inventário por slot
+- `chassis` + módulos — o que faltava (ler inventário por slot) já existe
 
 ### Outros
 
@@ -146,7 +150,7 @@ uma. Este documento é o mapa; elas são o roteiro.
 | 15 | ~~Recusar `events` sem `entrypoint`~~ | **fechado** |
 | 20 | ~~Aplicar `placement.facing`~~ | **fechado** |
 | 16 | ~~Tique agendado por posição~~ | **fechado** |
-| 17 | Ler inventário por slot | a fazer |
+| 17 | ~~Ler inventário por slot~~ | **fechado** |
 | 18 | Evento de bloco quebrado com o inventário íntegro | a fazer |
 | 19 | Portar os canos que faltam, e fazer o item viajar pelo cano | a fazer |
 | 12 | UI por HTML e CSS | adiado por decisão |

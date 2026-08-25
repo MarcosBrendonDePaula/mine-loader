@@ -191,8 +191,10 @@ que de dentro do próprio tique é recursão sem folga.
 item some de um baú e aparece no outro —, e essa é a maior diferença visível para o original. O
 mecanismo existe; a viagem é trabalho no exemplo, e está na tarefa do porte.
 
-**Não há como ler um inventário por slot pela rede.** `container_at` soma por item, o que basta para
-um estoque, e não permite reproduzir filtros por slot como os módulos de chassi do original.
+**Inventário por slot** — fechado. `container_at` já numerava cada linha; o que faltava era
+endereçar o slot que ele nomeia, e `insert_into` e `extract_from` passaram a aceitar um índice
+opcional. Sem isso não dá para reproduzir filtro por slot como os módulos de chassi do original, nem
+respeitar máquina com entrada e saída separadas: inserir sem dizer onde pode encher o slot de saída.
 
 **Falta evento de bloco quebrado com o inventário ainda íntegro.** Uma rede precisa saber que um cano
 sumiu para se reconfigurar; hoje a varredura é refeita a cada abertura de tela, que é caro e só
