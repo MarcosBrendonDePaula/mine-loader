@@ -4,6 +4,13 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.lualoader.content.ObjModel;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
+import net.fabricmc.fabric.api.renderer.v1.Renderer;
+import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
+import net.fabricmc.fabric.api.renderer.v1.material.RenderMaterial;
+import net.fabricmc.fabric.api.util.TriState;
+import net.fabricmc.fabric.api.renderer.v1.mesh.Mesh;
+import net.fabricmc.fabric.api.renderer.v1.mesh.MutableQuadView;
+import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelResolver;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -63,7 +70,10 @@ public final class ObjModels {
     @Nullable
     private static UnbakedModel resolve(ModelResolver.Context context) {
         Identifier id = context.id();
-        if (!id.getPath().startsWith("block/")) return null;
+        // Item tambem: o modelo do item nao pode HERDAR da malha -- o jogo exige que o pai de um
+        // modelo JSON seja outro JSON, e com a malha como pai o cliente nao abre. Mas ser a malha
+        // ele pode, porque ai nao ha heranca nenhuma.
+        if (!id.getPath().startsWith("block/") && !id.getPath().startsWith("item/")) return null;
 
         // A declaracao mora no JSON escrito pelo pacote, e nao no nome do arquivo: e ela que diz
         // qual malha abrir e quais grupos desenhar. Assim varias pecas de um mesmo bloco -- o
@@ -96,6 +106,27 @@ public final class ObjModels {
             // caixa e sairia de tamanho diferente e fora do lugar -- o miolo no centro e a manga a
             // metros dali.
             ObjModel model = ObjModel.read(reader).normalized().filtered(grupos);
+            // O recorte por regiao vem antes de duplicar as faces: dobrar primeiro so faria o
+            // recorte percorrer o dobro do trabalho para chegar ao mesmo resultado.
+            if (declaracao.has("lua_obj_clip")) {
+                var caixa = declaracao.getAsJsonArray("lua_obj_clip");
+                if (caixa.size() == 6) {
+                    model = model.clipped(
+                            caixa.get(0).getAsDouble(), caixa.get(1).getAsDouble(),
+                            caixa.get(2).getAsDouble(), caixa.get(3).getAsDouble(),
+                            caixa.get(4).getAsDouble(), caixa.get(5).getAsDouble());
+                }
+            }
+
+            // Inflar antes de duplicar, pela mesma razao do recorte.
+            if (declaracao.has("lua_obj_expand")) {
+                model = model.expanded(declaracao.get("lua_obj_expand").getAsDouble());
+            }
+
+            if (declaracao.has("lua_obj_double_sided")
+                    && declaracao.get("lua_obj_double_sided").getAsBoolean()) {
+                model = model.doubleSided();
+            }
             Identifier texture = textureOf(declaracao);
 
             // Encolhe a coordenada de textura em torno do centro. Serve para uma peca mostrar so o
@@ -162,9 +193,17 @@ public final class ObjModels {
     /** O modelo antes de o atlas existir: guarda a malha e o nome da textura. */
     private record ObjUnbakedModel(ObjModel model, Identifier texture, float uvScale)
             implements UnbakedModel {
+        /**
+         * O modelo de bloco padrao, do qual saem as transformacoes de exibicao.
+         *
+         * <p>Sem elas o item aparece do tamanho errado e fora de lugar na mao, no inventario e na
+         * moldura -- um modelo JSON as herda do pai, e a malha nao tem pai.
+         */
+        private static final Identifier BLOCO_PADRAO = Identifier.ofVanilla("block/block");
+
         @Override
         public Collection<Identifier> getModelDependencies() {
-            return List.of();
+            return List.of(BLOCO_PADRAO);
         }
 
         @Override
@@ -178,11 +217,13 @@ public final class ObjModels {
             Sprite sprite = textures.apply(new SpriteIdentifier(
                     PlayerScreenHandler.BLOCK_ATLAS_TEXTURE, texture));
 
-            List<BakedQuad> quads = new ArrayList<>(model.faces().size());
-            for (ObjModel.Face face : model.faces()) {
-                BakedQuad quad = quadOf(face, sprite, uvScale);
-                if (quad != null) quads.add(quad);
-            }
+            Mesh mesh = meshOf(model, sprite, uvScale);
+
+            // Os quads soltos existem so para quem pergunta pelo caminho antigo -- a tela desenha
+            // pelo Mesh. Convertidos, eles perdem o material, e com ele a decisao de nao aplicar
+            // sombreamento difuso.
+            List<BakedQuad> quads = new ArrayList<>();
+            mesh.forEach(quad -> quads.add(quad.toBakedQuad(sprite)));
 
             LuaLoaderClient.LOGGER.info(
                     "Malha assada: {} quad(s), sprite {}, caixa x {}..{} y {}..{} z {}..{}",
@@ -190,66 +231,116 @@ public final class ObjModels {
                     model.minX(), model.maxX(), model.minY(), model.maxY(),
                     model.minZ(), model.maxZ());
 
-            return new ObjBakedModel(List.copyOf(quads), sprite);
+            return new ObjBakedModel(mesh, List.copyOf(quads), sprite,
+                    transformsOf(baker, settings));
+        }
+
+        /** As transformacoes do bloco padrao, ou nenhuma se ele nao puder ser assado. */
+        private static ModelTransformation transformsOf(Baker baker, ModelBakeSettings settings) {
+            try {
+                BakedModel bloco = baker.bake(BLOCO_PADRAO, settings);
+                return bloco == null ? ModelTransformation.NONE : bloco.getTransformation();
+            } catch (RuntimeException error) {
+                // Um item mal posicionado e melhor que um cliente que nao abre.
+                LuaLoaderClient.LOGGER.warn("Sem as transformacoes do bloco padrao: {}",
+                        error.getMessage());
+                return ModelTransformation.NONE;
+            }
         }
     }
 
     /**
-     * Uma face da malha virando um quad do jogo.
+     * A malha virando quads, pela API de emissao da plataforma.
      *
-     * <p>Triângulo vira quad com o último vértice repetido. O jogo desenha quads, e repetir o
-     * vértice é o jeito de descrever um triângulo sem inventar geometria — a alternativa seria
-     * descartar as faces de três lados, e a maior parte de um OBJ exportado é feita delas.
+     * <p><b>Por que nao montar o vertice a mao.</b> A primeira versao escrevia o {@code int[32]} do
+     * vertice diretamente -- posicao, cor, uv, luz e normal, na ordem certa e no formato certo. O
+     * caminho vanilla tolera um campo mal preenchido; o renderizador do Fabric nao, e o resultado
+     * era o mesmo modelo aparecendo bem numa plataforma e quebrado na outra.
+     *
+     * <p>O leitor de OBJ do NeoForge nao monta o array: ele preenche campo a campo por uma API que
+     * conhece o formato. Aqui se faz o mesmo com o equivalente do Fabric -- a ideia e a mesma, o
+     * codigo e o daqui.
+     *
+     * <p>A <b>normal</b> e a da geometria, calculada por face, e nao a direcao do cubo mais
+     * parecida. E ela que da volume ao desenho: aproximar para um dos seis lados achata a malha na
+     * iluminacao, e um cano redondo passa a parecer uma caixa.
      */
-    @Nullable
-    private static BakedQuad quadOf(ObjModel.Face face, Sprite sprite, float uvScale) {
-        List<ObjModel.Vertex> vertices = face.vertices();
-        if (vertices.size() < 3) return null;
+    private static Mesh meshOf(ObjModel model, Sprite sprite, float uvScale) {
+        // Sem renderizador registrado nao ha como emitir, e o modelo fica sem quads. So acontece
+        // se a Rendering API nao estiver presente -- caso em que a malha nao seria desenhada de
+        // qualquer forma.
+        if (!RendererAccess.INSTANCE.hasRenderer()) {
+            LuaLoaderClient.LOGGER.warn("Sem renderizador da Rendering API; a malha nao sera desenhada");
+            return null;
+        }
 
-        ObjModel.Vertex a = vertices.get(0);
-        ObjModel.Vertex b = vertices.get(1);
-        ObjModel.Vertex c = vertices.get(2);
-        ObjModel.Vertex d = vertices.size() > 3 ? vertices.get(3) : c;
+        Renderer renderer = RendererAccess.INSTANCE.getRenderer();
 
-        Direction direction = dominantSide(a, b, c);
-        int normal = packNormal(direction);
+        /*
+         * Sem sombreamento difuso, e sem oclusao de ambiente.
+         *
+         * As duas contas partem do principio de que a face esta encostada na parede do cubo -- e
+         * numa malha ela fica no meio do bloco. Pior: desenhar cada face tambem pelo avesso
+         * (`double_sided`) cria faces com a normal apontando para dentro, e o difuso as ilumina
+         * como se estivessem viradas para o lado errado. Elas ficam PRETAS, e sao justamente as que
+         * aparecem de certos angulos.
+         *
+         * E a diferenca entre as duas plataformas: o caminho vanilla do NeoForge sombreia pela
+         * direcao do quad, e o renderizador do Fabric pela normal do vertice. O mesmo modelo saia
+         * bem la e preto aqui.
+         */
+        RenderMaterial material = renderer.materialFinder()
+                .disableDiffuse(true)
+                .ambientOcclusion(TriState.FALSE)
+                .find();
 
-        int[] data = new int[32];
-        putVertex(data, 0, a, sprite, normal, uvScale);
-        putVertex(data, 8, b, sprite, normal, uvScale);
-        putVertex(data, 16, c, sprite, normal, uvScale);
-        putVertex(data, 24, d, sprite, normal, uvScale);
+        var builder = renderer.meshBuilder();
+        QuadEmitter emitter = builder.getEmitter();
 
-        // shade ligado: sem ele a malha fica com todas as faces na mesma luz, e o desenho perde o
-        // volume -- um cano vira uma mancha da cor da textura.
-        return new BakedQuad(data, -1, direction, sprite, true);
-    }
+        for (ObjModel.Face face : model.faces()) {
+            List<ObjModel.Vertex> vertices = face.vertices();
+            if (vertices.size() < 3) continue;
 
-    /** Escreve um vértice no formato que o jogo espera: posição, cor, uv, luz e normal. */
-    private static void putVertex(int[] data, int offset, ObjModel.Vertex vertex,
-                                  Sprite sprite, int normal, float uvScale) {
-        // As coordenadas do modelo estao em dezesseis avos, e o jogo desenha o bloco de 0 a 1.
-        data[offset] = Float.floatToRawIntBits((float) (vertex.x() / 16.0));
-        data[offset + 1] = Float.floatToRawIntBits((float) (vertex.y() / 16.0));
-        data[offset + 2] = Float.floatToRawIntBits((float) (vertex.z() / 16.0));
-        data[offset + 3] = -1;
-        // Em torno do centro: 0,75 usa os doze dezesseis avos do meio da imagem, e nao um canto.
-        float u = 0.5f + ((float) vertex.u() - 0.5f) * uvScale;
-        float v = 0.5f + ((float) vertex.v() - 0.5f) * uvScale;
-        data[offset + 4] = Float.floatToRawIntBits(sprite.getFrameU(u));
-        data[offset + 5] = Float.floatToRawIntBits(sprite.getFrameV(v));
-        data[offset + 6] = 0;
-        data[offset + 7] = normal;
+            float[] normal = normalOf(vertices.get(0), vertices.get(1), vertices.get(2));
+
+            for (int index = 0; index < 4; index++) {
+                // Triangulo vira quad com o ultimo vertice repetido: o jogo desenha quads, e
+                // descartar as faces de tres lados jogaria fora a maior parte de um OBJ exportado.
+                ObjModel.Vertex vertex = vertices.get(Math.min(index, vertices.size() - 1));
+
+                emitter.pos(index,
+                        (float) (vertex.x() / 16.0),
+                        (float) (vertex.y() / 16.0),
+                        (float) (vertex.z() / 16.0));
+
+                // Em torno do centro: 0,75 usa os doze dezesseis avos do meio da imagem.
+                emitter.uv(index,
+                        0.5f + ((float) vertex.u() - 0.5f) * uvScale,
+                        0.5f + ((float) vertex.v() - 0.5f) * uvScale);
+
+                emitter.color(index, -1);
+                emitter.normal(index, normal[0], normal[1], normal[2]);
+            }
+
+            // Sem cullFace: uma malha nao garante que a face cubra exatamente um lado do bloco -- a
+            // face de um cano fica no meio do cubo, e esconde-la por causa de um vizinho abriria
+            // buracos no desenho.
+            emitter.material(material);
+            emitter.cullFace(null);
+            emitter.spriteBake(sprite, MutableQuadView.BAKE_NORMALIZED);
+            emitter.emit();
+        }
+
+        return builder.build();
     }
 
     /**
-     * O lado do bloco para o qual a face aponta.
+     * A normal da face, pela geometria.
      *
-     * <p>É a normal geométrica arredondada para uma das seis direções. O jogo usa esse lado para
-     * iluminar; um valor errado não some com a face, mas deixa o desenho com sombras que não
-     * combinam com a forma.
+     * <p>Normalizada, porque a iluminacao espera um vetor de comprimento um; uma face grande daria
+     * um vetor grande, e o desenho sairia claro ou escuro demais conforme o tamanho da peca.
      */
-    private static Direction dominantSide(ObjModel.Vertex a, ObjModel.Vertex b, ObjModel.Vertex c) {
+    private static float[] normalOf(ObjModel.Vertex a, ObjModel.Vertex b, ObjModel.Vertex c) {
         double ux = b.x() - a.x(), uy = b.y() - a.y(), uz = b.z() - a.z();
         double vx = c.x() - a.x(), vy = c.y() - a.y(), vz = c.z() - a.z();
 
@@ -257,17 +348,10 @@ public final class ObjModels {
         double ny = uz * vx - ux * vz;
         double nz = ux * vy - uy * vx;
 
-        double ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
-        if (ay >= ax && ay >= az) return ny >= 0 ? Direction.UP : Direction.DOWN;
-        if (ax >= az) return nx >= 0 ? Direction.EAST : Direction.WEST;
-        return nz >= 0 ? Direction.SOUTH : Direction.NORTH;
-    }
+        double tamanho = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (tamanho < 1.0e-6) return new float[]{0, 1, 0};
 
-    private static int packNormal(Direction direction) {
-        int x = (int) (direction.getOffsetX() * 127) & 0xFF;
-        int y = (int) (direction.getOffsetY() * 127) & 0xFF;
-        int z = (int) (direction.getOffsetZ() * 127) & 0xFF;
-        return x | (y << 8) | (z << 16);
+        return new float[]{(float) (nx / tamanho), (float) (ny / tamanho), (float) (nz / tamanho)};
     }
 
     /**
@@ -278,21 +362,71 @@ public final class ObjModels {
      * arbitrária não dá essa garantia: a face de um cano fica no meio do cubo, e escondê-la porque
      * há um vizinho abriria buracos no desenho.
      */
-    private record ObjBakedModel(List<BakedQuad> quads, Sprite particle) implements BakedModel {
+    private record ObjBakedModel(@Nullable Mesh mesh, List<BakedQuad> quads, Sprite particle,
+                                 ModelTransformation transformation) implements BakedModel {
+
+        /**
+         * Desenha pela malha, e nao pelos quads soltos.
+         *
+         * <p><b>E o que faz o material valer.</b> Um quad convertido perde o material -- e com ele
+         * a decisao de nao aplicar sombreamento difuso, que e o que escurecia ate o preto as faces
+         * desenhadas pelo avesso. Enquanto o modelo se dizia "adaptador do caminho antigo", o
+         * renderizador montava a malha por conta propria a partir dos quads, e a configuracao era
+         * jogada fora antes de chegar na tela.
+         */
+        @Override
+        public boolean isVanillaAdapter() {
+            return false;
+        }
+
+        @Override
+        public void emitBlockQuads(net.minecraft.world.BlockRenderView view, BlockState state,
+                                   net.minecraft.util.math.BlockPos pos,
+                                   java.util.function.Supplier<Random> random,
+                                   net.fabricmc.fabric.api.renderer.v1.render.RenderContext context) {
+            if (mesh != null) context.meshConsumer().accept(mesh);
+        }
+
+        @Override
+        public void emitItemQuads(net.minecraft.item.ItemStack stack,
+                                  java.util.function.Supplier<Random> random,
+                                  net.fabricmc.fabric.api.renderer.v1.render.RenderContext context) {
+            if (mesh != null) context.meshConsumer().accept(mesh);
+        }
         @Override
         public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction face,
                                         Random random) {
             return face == null ? quads : List.of();
         }
 
+        /**
+         * Sem oclusao de ambiente.
+         *
+         * <p>O calculo de AO parte do principio de que a face esta encostada na parede do cubo, e
+         * usa os blocos vizinhos para escurecer os cantos. Numa malha isso nao vale: a face de um
+         * cano fica no meio do bloco, e o resultado e ela escurecer ate ficar preta.
+         *
+         * <p>Os dois renderizadores erram diferente com AO ligado -- o do Fabric passa pelo Indigo,
+         * o do NeoForge pelo caminho vanilla --, e foi assim que o mesmo modelo apareceu certo numa
+         * plataforma e preto na outra. Desligar deixa as duas iguais, que e o ponto de o leitor
+         * morar no nucleo.
+         */
         @Override
         public boolean useAmbientOcclusion() {
-            return true;
+            return false;
         }
 
+        /**
+         * O item tem profundidade: na mao e no inventario ele e desenhado como objeto, e nao como
+         * figura chapada.
+         *
+         * <p>Este metodo e o {@code isGui3d} do outro mapeamento, e estava {@code false} aqui e
+         * {@code true} no NeoForge -- o mesmo modelo virava um adesivo numa plataforma e um objeto
+         * na outra. Uma malha sempre tem profundidade; quem nao tem e uma textura de item comum.
+         */
         @Override
         public boolean hasDepth() {
-            return false;
+            return true;
         }
 
         @Override
@@ -312,7 +446,7 @@ public final class ObjModels {
 
         @Override
         public ModelTransformation getTransformation() {
-            return ModelTransformation.NONE;
+            return transformation;
         }
 
         @Override

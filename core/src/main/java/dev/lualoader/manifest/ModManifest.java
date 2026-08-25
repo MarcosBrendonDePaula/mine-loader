@@ -318,11 +318,11 @@ public final class ModManifest {
      */
     public static final class ObjPartsDefinition {
         /** Pecas desenhadas em qualquer estado -- o miolo. */
-        public ObjPartDefinition core;
+        public List<ObjPartDefinition> core = new ArrayList<>();
         /** Pecas desenhadas no lado ligado, com {@code %s} pela direcao. */
-        public ObjPartDefinition connected;
+        public List<ObjPartDefinition> connected = new ArrayList<>();
         /** Pecas desenhadas no lado livre, com {@code %s} pela direcao. */
-        public ObjPartDefinition disconnected;
+        public List<ObjPartDefinition> disconnected = new ArrayList<>();
     }
 
     /**
@@ -332,6 +332,14 @@ public final class ModManifest {
      * proprio para o corpo -- com as coordenadas ja embutidas no arquivo -- e usar a textura que
      * identifica o bloco so em algumas faces. Pintar tudo com a mesma imagem faz o corpo perder o
      * desenho e virar uma mancha de cor.
+     */
+    /**
+     * Uma peca. Cada condicao aceita <b>varias</b>, e nao uma so.
+     *
+     * <p>Uma condicao costuma precisar de mais de uma: a face livre de um cano leva a tampa, no
+     * atlas do corpo, e o decalque que mostra o tipo, na imagem do bloco. Com uma peca por condicao
+     * so daria para desenhar uma das duas -- e faltando a tampa a face fica aberta, com o interior
+     * escuro aparecendo.
      */
     public static final class ObjPartDefinition {
         /** Nomes de grupo, ou prefixos deles. Com {@code %s} pela direcao onde faz sentido. */
@@ -348,6 +356,37 @@ public final class ModManifest {
          * esticada de canto a canto da peca.
          */
         public float uvScale = 1.0f;
+
+        /**
+         * Desenha cada face tambem pelo avesso.
+         *
+         * <p>Uma malha oca -- a manga de um cano sao quatro paredes finas -- perde metade das faces
+         * conforme o angulo, porque o jogo so desenha a face pelo lado para o qual ela aponta. O
+         * resultado parece um bloco com pedacos faltando.
+         *
+         * <p>Custa o dobro de faces, entao e declarado: um modelo macico nao ganha nada e pagaria
+         * o dobro.
+         */
+        public boolean doubleSided = false;
+
+        /**
+         * Desenha so a parte da peca que cai nesta caixa, como {@code [x1,y1,z1,x2,y2,z2]}.
+         *
+         * <p>Declarada apontando para o <b>norte</b>, e girada pelo loader para os outros lados --
+         * a mesma regra do braco. Serve quando o nome do grupo nao basta: num arquivo de verdade a
+         * face de um cano e um mosaico de placas com nomes que a ferramenta gerou, sem lado nenhum
+         * no nome, e a regiao e o que as separa.
+         */
+        public List<Float> keepWithin = new ArrayList<>();
+
+        /**
+         * Infla a peca a partir do centro do bloco.
+         *
+         * <p>Serve para um decalque colado numa parede nao brigar com ela pelo mesmo pixel: sem
+         * isso as duas superficies cintilam conforme quem joga anda. Um milesimo basta
+         * ({@code 1.001}), e e o mesmo empurrao que o mod original da na placa de textura dele.
+         */
+        public float expand = 1.0f;
     }
 
     public static final class TextureDefinition {

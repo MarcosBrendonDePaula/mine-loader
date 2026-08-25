@@ -1292,7 +1292,9 @@ public final class ResourcePackAssembler {
         // Um catalogo de pecas vira um modelo por condicao, e um blockstate multipart que escolhe.
         var partes = block.render == null ? null : block.render.objParts;
         boolean porPeca = partes != null && faces > 0
-                && dev.lualoader.content.BlockShapes.connects(block);
+                && dev.lualoader.content.BlockShapes.connects(block)
+                && !(partes.core.isEmpty() && partes.connected.isEmpty()
+                        && partes.disconnected.isEmpty());
 
         if (porPeca) {
             writeObjParts(mod, generatedRoot, namespace, block, textura, partes);
@@ -1302,17 +1304,18 @@ public final class ResourcePackAssembler {
                     objModelJson(namespace + ":block/" + block.id + ".obj", List.of(), textura, 1f));
         }
 
-        // O item nao pode herdar do modelo do bloco: o pai dele passa a ser a malha, e o jogo exige
-        // que o pai de um modelo JSON seja outro modelo JSON -- "BlockModel parent has to be a block
-        // model", e o cliente nao abre. Entao o item ganha um modelo completo proprio.
+        // O item desenha a mesma malha, e nao um cubo.
+        //
+        // Ele nao pode HERDAR do modelo do bloco -- com a malha como pai o jogo nao abre, porque
+        // exige que o pai de um modelo JSON seja outro JSON. Mas pode SER a malha: a declaracao
+        // aponta o arquivo direto, e sem heranca o problema nao existe.
+        //
+        // Sem grupo nenhum, entao o item mostra o catalogo inteiro. Um item so precisa parecer com
+        // o bloco na mao, e escolher pecas exigiria um estado de conexao que um item nao tem.
         if (block.item == null || block.item.register) {
             write(generatedRoot.resolve("assets").resolve(namespace)
                             .resolve("models/item").resolve(block.id + ".json"),
-                    "{" + NEWLINE
-                            + "  \"parent\": \"minecraft:block/cube_all\"," + NEWLINE
-                            + "  \"textures\": { \"all\": \"" + textura + "\","
-                            + " \"particle\": \"" + textura + "\" }" + NEWLINE
-                            + "}" + NEWLINE);
+                    objModelJson(namespace + ":block/" + block.id + ".obj", List.of(), textura, 1f));
         }
 
         if (faces > 0) {
@@ -1348,12 +1351,19 @@ public final class ResourcePackAssembler {
         String objRef = namespace + ":block/" + block.id + ".obj";
         StringBuilder multipart = new StringBuilder();
 
-        if (partes.core != null && partes.core.groups != null && !partes.core.groups.isEmpty()) {
-            String nome = block.id + "_core";
+        int indice = 0;
+        for (ModManifest.ObjPartDefinition peca : partes.core) {
+            if (peca == null || peca.groups == null || peca.groups.isEmpty()) continue;
+
+            String sufixo = "core" + indice++;
+            String nome = block.id + "_" + sufixo;
             write(modelPath(generatedRoot, namespace, nome),
-                    objModelJson(objRef, partes.core.groups,
-                            partTexture(mod, block, generatedRoot, partes.core, "core", textura),
-                            partes.core.uvScale));
+                    objModelJson(objRef, peca.groups,
+                            partTexture(mod, block, generatedRoot, peca, sufixo, textura),
+                            peca.uvScale, peca.doubleSided,
+                            dev.lualoader.content.BlockShapes.boxOf(peca.keepWithin), peca.expand));
+
+            if (multipart.length() > 0) multipart.append(",").append(NEWLINE);
             multipart.append("    { \"apply\": { \"model\": \"")
                     .append(namespace).append(":block/").append(nome).append("\" } }");
         }
@@ -1361,9 +1371,9 @@ public final class ResourcePackAssembler {
         for (String lado : dev.lualoader.content.BlockShapes.SIDES) {
             String letra = LETRA_DO_LADO.get(lado);
 
-            appendPart(multipart, mod, generatedRoot, namespace, block, textura, objRef,
+            appendParts(multipart, mod, generatedRoot, namespace, block, textura, objRef,
                     partes.connected, letra, lado, true);
-            appendPart(multipart, mod, generatedRoot, namespace, block, textura, objRef,
+            appendParts(multipart, mod, generatedRoot, namespace, block, textura, objRef,
                     partes.disconnected, letra, lado, false);
         }
 
@@ -1375,31 +1385,46 @@ public final class ResourcePackAssembler {
         logger.info("Modelo OBJ de {} dividido em pecas por conexao", namespace + ":" + block.id);
     }
 
-    /** Uma peca do catalogo, ligada a um lado do bloco estar ou nao conectado. */
-    private void appendPart(StringBuilder multipart, ModLoader.LoadedMod mod, Path generatedRoot,
-                            String namespace, ModManifest.BlockDefinition block, String textura,
-                            String objRef, ModManifest.ObjPartDefinition peca, String letra,
-                            String lado, boolean ligado) throws IOException {
-        if (peca == null || peca.groups == null || peca.groups.isEmpty()) return;
+    /**
+     * As pecas do catalogo ligadas a um lado do bloco estar ou nao conectado.
+     *
+     * <p>Varias por condicao: a face livre de um cano leva a tampa e o decalque do tipo, cada uma
+     * com a sua textura. Uma so deixaria a face aberta, com o interior escuro aparecendo.
+     */
+    private void appendParts(StringBuilder multipart, ModLoader.LoadedMod mod, Path generatedRoot,
+                             String namespace, ModManifest.BlockDefinition block, String textura,
+                             String objRef, java.util.List<ModManifest.ObjPartDefinition> pecas,
+                             String letra, String lado, boolean ligado) throws IOException {
+        if (pecas == null) return;
 
-        java.util.List<String> grupos = new java.util.ArrayList<>(peca.groups.size());
-        for (String padrao : peca.groups) {
-            if (padrao != null && !padrao.isBlank()) grupos.add(padrao.replace("%s", letra));
+        int indice = 0;
+        for (ModManifest.ObjPartDefinition peca : pecas) {
+            if (peca == null || peca.groups == null || peca.groups.isEmpty()) continue;
+
+            java.util.List<String> grupos = new java.util.ArrayList<>(peca.groups.size());
+            for (String padrao : peca.groups) {
+                if (padrao != null && !padrao.isBlank()) grupos.add(padrao.replace("%s", letra));
+            }
+            if (grupos.isEmpty()) continue;
+
+            String sufixo = (ligado ? "on" : "off") + indice++;
+            String nome = block.id + "_" + sufixo + "_" + letra.toLowerCase(java.util.Locale.ROOT);
+            // A regiao gira junto com o lado, como o braco: declarada uma vez apontando para o
+            // norte, e o loader vira para os outros cinco.
+            var recorte = dev.lualoader.content.BlockShapes.boxOf(peca.keepWithin);
+            if (recorte != null) recorte = dev.lualoader.content.BlockShapes.rotate(recorte, lado);
+
+            write(modelPath(generatedRoot, namespace, nome),
+                    objModelJson(objRef, grupos,
+                            partTexture(mod, block, generatedRoot, peca, sufixo, textura),
+                            peca.uvScale, peca.doubleSided, recorte, peca.expand));
+
+            if (multipart.length() > 0) multipart.append(",").append(NEWLINE);
+            multipart.append("    { \"when\": { \"").append(lado).append("\": \"")
+                    .append(ligado).append("\" },")
+                    .append(" \"apply\": { \"model\": \"")
+                    .append(namespace).append(":block/").append(nome).append("\" } }");
         }
-        if (grupos.isEmpty()) return;
-
-        String sufixo = ligado ? "on" : "off";
-        String nome = block.id + "_" + sufixo + "_" + letra.toLowerCase(java.util.Locale.ROOT);
-        write(modelPath(generatedRoot, namespace, nome),
-                objModelJson(objRef, grupos,
-                        partTexture(mod, block, generatedRoot, peca, sufixo, textura),
-                        peca.uvScale));
-
-        if (multipart.length() > 0) multipart.append(",").append(NEWLINE);
-        multipart.append("    { \"when\": { \"").append(lado).append("\": \"")
-                .append(ligado).append("\" },")
-                .append(" \"apply\": { \"model\": \"")
-                .append(namespace).append(":block/").append(nome).append("\" } }");
     }
 
     private Path modelPath(Path generatedRoot, String namespace, String nome) {
@@ -1447,6 +1472,12 @@ public final class ResourcePackAssembler {
 
     private String objModelJson(String objRef, java.util.List<String> grupos, String textura,
                                 float uvScale) {
+        return objModelJson(objRef, grupos, textura, uvScale, false, null, 1f);
+    }
+
+    private String objModelJson(String objRef, java.util.List<String> grupos, String textura,
+                                float uvScale, boolean doubleSided,
+                                dev.lualoader.content.BlockShapes.Box recorte, float expand) {
         StringBuilder lista = new StringBuilder();
         for (String grupo : grupos) {
             if (lista.length() > 0) lista.append(", ");
@@ -1462,6 +1493,13 @@ public final class ResourcePackAssembler {
                 + "  \"lua_obj\": \"" + objRef + "\"," + NEWLINE
                 + "  \"lua_obj_groups\": [" + lista + "]," + NEWLINE
                 + "  \"lua_obj_uv_scale\": " + number(uvScale) + "," + NEWLINE
+                + "  \"lua_obj_double_sided\": " + doubleSided + "," + NEWLINE
+                + "  \"lua_obj_expand\": " + number(expand) + "," + NEWLINE
+                + (recorte == null ? "" : "  \"lua_obj_clip\": ["
+                        + number((float) recorte.fromX()) + ", " + number((float) recorte.fromY())
+                        + ", " + number((float) recorte.fromZ()) + ", "
+                        + number((float) recorte.toX()) + ", " + number((float) recorte.toY())
+                        + ", " + number((float) recorte.toZ()) + "]," + NEWLINE)
                 + "  \"textures\": { \"all\": \"" + textura + "\","
                 + " \"particle\": \"" + textura + "\" }" + NEWLINE
                 + "}" + NEWLINE;

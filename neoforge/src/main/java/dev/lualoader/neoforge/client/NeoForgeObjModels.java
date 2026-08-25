@@ -79,6 +79,20 @@ public final class NeoForgeObjModels {
                 ? json.get("lua_obj_uv_scale").getAsFloat()
                 : 1f;
 
+        boolean doubleSided = json.has("lua_obj_double_sided")
+                && json.get("lua_obj_double_sided").getAsBoolean();
+
+        float expand = json.has("lua_obj_expand") ? json.get("lua_obj_expand").getAsFloat() : 1f;
+
+        double[] recorte = null;
+        if (json.has("lua_obj_clip")) {
+            var caixa = json.getAsJsonArray("lua_obj_clip");
+            if (caixa.size() == 6) {
+                recorte = new double[6];
+                for (int i = 0; i < 6; i++) recorte[i] = caixa.get(i).getAsDouble();
+            }
+        }
+
         ResourceLocation textura = null;
         if (json.has("textures")) {
             JsonObject textures = json.getAsJsonObject("textures");
@@ -91,12 +105,15 @@ public final class NeoForgeObjModels {
         }
         if (textura == null) textura = ResourceLocation.withDefaultNamespace("block/stone");
 
-        return new ObjGeometry(objRef, List.copyOf(grupos), uvScale, textura);
+        return new ObjGeometry(objRef, List.copyOf(grupos), uvScale, doubleSided, recorte, expand,
+                textura);
     }
 
     /** A declaração, esperando o momento de virar malha. */
     private record ObjGeometry(@Nullable String objRef, List<String> groups, float uvScale,
-                               ResourceLocation texture) implements IUnbakedGeometry<ObjGeometry> {
+                               boolean doubleSided, double @Nullable [] clip, float expand,
+                               ResourceLocation texture)
+            implements IUnbakedGeometry<ObjGeometry> {
 
         @Override
         public BakedModel bake(IGeometryBakingContext context, ModelBaker baker,
@@ -105,10 +122,14 @@ public final class NeoForgeObjModels {
             TextureAtlasSprite sprite = sprites.apply(
                     new Material(TextureAtlas.LOCATION_BLOCKS, texture));
 
-            if (objRef == null) return new ObjBakedModel(List.of(), sprite);
+            // As transformacoes de exibicao vem do contexto, que ja as resolveu pelo parent do
+            // JSON. Sem elas o item sai do tamanho errado na mao, no inventario e na moldura.
+            var transforms = context.getTransforms();
+
+            if (objRef == null) return new ObjBakedModel(List.of(), sprite, transforms);
 
             ResourceLocation parsed = ResourceLocation.tryParse(objRef);
-            if (parsed == null) return new ObjBakedModel(List.of(), sprite);
+            if (parsed == null) return new ObjBakedModel(List.of(), sprite, transforms);
 
             // "logistica:block/cano.obj" aponta para "assets/logistica/models/block/cano.obj".
             ResourceLocation objId = ResourceLocation.fromNamespaceAndPath(
@@ -117,7 +138,7 @@ public final class NeoForgeObjModels {
             var resource = Minecraft.getInstance().getResourceManager().getResource(objId);
             if (resource.isEmpty()) {
                 dev.lualoader.neoforge.NeoForgeLuaLoader.LOGGER.warn("Malha {} nao existe no pacote", objId);
-                return new ObjBakedModel(List.of(), sprite);
+                return new ObjBakedModel(List.of(), sprite, transforms);
             }
 
             try (var stream = resource.get().open();
@@ -126,6 +147,13 @@ public final class NeoForgeObjModels {
                 // Escala primeiro, recorte depois -- a mesma ordem do outro adaptador. Ao
                 // contrario, cada peca seria escalada pela propria caixa e sairia fora do lugar.
                 ObjModel model = ObjModel.read(reader).normalized().filtered(groups);
+                // Recorte antes de duplicar, como no outro adaptador: dobrar primeiro so faria o
+                // recorte percorrer o dobro do trabalho.
+                if (clip != null) {
+                    model = model.clipped(clip[0], clip[1], clip[2], clip[3], clip[4], clip[5]);
+                }
+                if (expand != 1f) model = model.expanded(expand);
+                if (doubleSided) model = model.doubleSided();
 
                 List<BakedQuad> quads = new ArrayList<>(model.faces().size());
                 for (ObjModel.Face face : model.faces()) {
@@ -136,12 +164,12 @@ public final class NeoForgeObjModels {
                 dev.lualoader.neoforge.NeoForgeLuaLoader.LOGGER.info("Modelo OBJ {}: {} face(s), textura {}{}",
                         objId, quads.size(), texture,
                         groups.isEmpty() ? "" : " (grupos " + groups + ")");
-                return new ObjBakedModel(List.copyOf(quads), sprite);
+                return new ObjBakedModel(List.copyOf(quads), sprite, transforms);
             } catch (Exception error) {
                 // Sem derrubar o jogo: a declaracao tem um parent de cubo como reserva.
                 dev.lualoader.neoforge.NeoForgeLuaLoader.LOGGER.warn("Malha {} nao pode ser lida: {}",
                         objId, error.getMessage());
-                return new ObjBakedModel(List.of(), sprite);
+                return new ObjBakedModel(List.of(), sprite, transforms);
             }
         }
     }
@@ -219,8 +247,14 @@ public final class NeoForgeObjModels {
      * <p>Todos os quads saem sem lado, e nenhum é cortado por vizinho: uma malha arbitrária não
      * garante que uma face cubra exatamente aquele lado do bloco, e escondê-la abriria buracos.
      */
-    private record ObjBakedModel(List<BakedQuad> quads, TextureAtlasSprite particle)
+    private record ObjBakedModel(List<BakedQuad> quads, TextureAtlasSprite particle,
+                                 net.minecraft.client.renderer.block.model.ItemTransforms transforms)
             implements BakedModel {
+
+        @Override
+        public net.minecraft.client.renderer.block.model.ItemTransforms getTransforms() {
+            return transforms;
+        }
 
         @Override
         public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side,
@@ -228,9 +262,21 @@ public final class NeoForgeObjModels {
             return side == null ? quads : List.of();
         }
 
+        /**
+         * Sem oclusao de ambiente.
+         *
+         * <p>O calculo de AO parte do principio de que a face esta encostada na parede do cubo, e
+         * usa os blocos vizinhos para escurecer os cantos. Numa malha isso nao vale: a face de um
+         * cano fica no meio do bloco, e o resultado e ela escurecer ate ficar preta.
+         *
+         * <p>Os dois renderizadores erram diferente com AO ligado -- o do Fabric passa pelo Indigo,
+         * o do NeoForge pelo caminho vanilla --, e foi assim que o mesmo modelo apareceu certo numa
+         * plataforma e preto na outra. Desligar deixa as duas iguais, que e o ponto de o leitor
+         * morar no nucleo.
+         */
         @Override
         public boolean useAmbientOcclusion() {
-            return true;
+            return false;
         }
 
         @Override

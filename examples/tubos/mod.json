@@ -26,6 +26,10 @@
       "type": "image",
       "from": "assets/tubo.png",
       "fallback": "minecraft:block/iron_block"
+    },
+    "forma": {
+      "type": "model",
+      "from": "models/tubo.obj"
     }
   },
   "blocks": [
@@ -41,8 +45,63 @@
         "non_opaque": true
       },
       "render": {
+        "model": "@forma",
         "texture": {
           "ref": "tubo"
+        },
+        "obj_parts": {
+          "core": [
+            {
+              "groups": [
+                "Core_"
+              ],
+              "texture": {
+                "ref": "tubo"
+              },
+              "double_sided": true
+            }
+          ],
+          "connected": [
+            {
+              "groups": [
+                "Side_%s"
+              ],
+              "texture": {
+                "ref": "tubo"
+              },
+              "double_sided": true
+            }
+          ],
+          "disconnected": [
+            {
+              "groups": [
+                "Wall_Plate"
+              ],
+              "keep_within": [
+                4,
+                4,
+                3.9,
+                12,
+                12,
+                4.1
+              ],
+              "texture": {
+                "ref": "tubo"
+              },
+              "double_sided": true
+            },
+            {
+              "groups": [
+                "Center_Plate_%s"
+              ],
+              "texture": {
+                "ref": "tubo"
+              },
+              "uv_scale": 0.75,
+              "expand": 1.001,
+              "double_sided": true
+            }
+          ]
         }
       },
       "block_data": true,

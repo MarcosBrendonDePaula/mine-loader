@@ -45,6 +45,14 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
       miolo. As caixas de um braco giram juntas, como uma peca so. Junto, a condicao que decide o
       que e um bloco que conecta saiu de tres copias para uma, no nucleo.
 
+- [x] **Pecas de malha por condicao, com recorte e ajuste fino** (`obj_parts` com lista,
+      `keep_within`, `expand`, `double_sided`, textura por peca). Um OBJ de mod e um catalogo de
+      pecas, e nem todo nome serve para separa-las: as placas da face de um cano se chamam igual nos
+      seis lados, e so a regiao as distingue.
+
+- [x] **`tools/inspecionar-modelo.sh`** -- diz o que o pacote manda desenhar sem abrir o jogo, na
+      mesma ordem que o cliente. Escrita depois de tres rodadas diagnosticando por captura de tela.
+
 - [x] **Modelo `.obj` de bloco, nas duas plataformas.** O formato do jogo descreve caixas, e uma
       malha nao e uniao de caixas -- sem isso, portar um mod que desenha assim esbarra no desenho.
       O leitor mora no nucleo justamente para o mesmo arquivo virar o mesmo desenho nos dois lados;
@@ -117,6 +125,33 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
 **Nada em aberto no código.** O tique agendado fechou e está verificado nos quatro níveis: 6 casos
 no núcleo, um GameTest em **cada** plataforma que confere a fila do jogo e a recusa em bloco
 vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
+
+### O render de malha do Fabric esta com defeito
+
+**O NeoForge desenha certo; o Fabric nao.** Mesmo pacote, mesmo leitor no nucleo, mesmos numeros de
+face conferidos pela ferramenta de inspecao -- e o resultado na tela e diferente. Isso descarta o
+modelo, o manifesto e o parser: o defeito esta na conversao para quads do lado Fabric, que passa
+pelo Indigo enquanto o NeoForge usa o caminho vanilla.
+
+O que ja foi tentado e nao resolveu sozinho:
+
+- **`double_sided`**, que o mod original faz em cada peca (`backfacedCopy`). Melhorou o corpo.
+- **`keep_within`**, que fechou a face livre -- as placas do original nao tem lado no nome.
+- **`expand`**, contra duas superficies brigando pelo mesmo pixel.
+- **AO desligado nos dois**, porque o calculo assume a face encostada na parede do cubo.
+
+Uma ja foi achada assim: `hasDepth()` (Yarn) e o `isGui3d()` (Mojang) do NeoForge, e estava
+`false` de um lado e `true` do outro -- o item virava figura chapada na mao e na barra de acesso
+rapido no Fabric, e objeto no NeoForge. **Metodos com nomes diferentes que significam a mesma coisa
+sao onde as duas plataformas divergem sem ninguem perceber.**
+
+Onde procurar a seguir, em ordem: o formato do vertice que montamos a mao (posicao, cor, uv, luz e
+normal em `int[32]`), a normal empacotada, e o `shade` do quad. O Indigo le esses campos com mais
+rigor que o caminho vanilla, e um valor que o vanilla ignora pode virar defeito la.
+
+**Nenhum teste pega isso.** Passaram 18/18 GameTests em cada plataforma, a suite do nucleo e a
+ferramenta de inspecao -- todos verdes, porque nenhum deles ve pixel. Quem apontou foi quem estava
+jogando.
 
 **Sobre a malha, o que falta e de olho:** os dois clientes montam as 65 pecas com numeros
 identicos (164 no miolo, 40 na manga, 2 na placa), mas **numeros iguais nao sao telas iguais** --

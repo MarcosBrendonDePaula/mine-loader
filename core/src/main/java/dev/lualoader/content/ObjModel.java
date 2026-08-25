@@ -309,6 +309,102 @@ public final class ObjModel {
         return false;
     }
 
+    /**
+     * O mesmo modelo com cada face tambem pelo avesso.
+     *
+     * <p>Uma malha de mod costuma ser <b>oca</b>: a manga de um cano sao quatro paredes finas, e nao
+     * um bloco macico. O jogo so desenha a face pelo lado para o qual ela aponta, entao metade das
+     * paredes some conforme o angulo -- e o que sobra parece um bloco com pedacos faltando em vez de
+     * um tubo.
+     *
+     * <p>Duplicar com a ordem dos vertices invertida e o que o mod original faz em cada peca que
+     * carrega, e e a razao de o cano dele ser visivel por dentro e por fora.
+     *
+     * <p>Custa o dobro de faces, e por isso e declarado e nao automatico: um modelo macico nao ganha
+     * nada com isso e pagaria o dobro do desenho.
+     */
+    public ObjModel doubleSided() {
+        List<Face> both = new ArrayList<>(faces.size() * 2);
+
+        for (Face face : faces) {
+            both.add(face);
+
+            List<Vertex> reversed = new ArrayList<>(face.vertices());
+            java.util.Collections.reverse(reversed);
+            both.add(new Face(List.copyOf(reversed), face.group()));
+        }
+
+        return new ObjModel(both, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /**
+     * O mesmo modelo com as faces cujo centro cai dentro da caixa.
+     *
+     * <p><b>Por que recortar por regiao, e nao so por nome.</b> Num arquivo de verdade nem toda peca
+     * tem nome util: a face de um cano e um mosaico de placas chamadas {@code Plate23},
+     * {@code Plate_Side2} -- nomes que a ferramenta gerou e que nao dizem a que lado pertencem. O
+     * mod original as separa calculando tamanho e distancia de cada uma em tempo de carga. Aqui a
+     * declaracao diz onde a peca esta, que e a mesma informacao sem o calculo escondido.
+     *
+     * <p>Compara pelo <b>centro</b> da face, e nao pelos vertices: uma placa encostada na borda da
+     * regiao tem vertices exatamente no limite, e exigir que todos caiam dentro descartaria
+     * justamente as pecas que interessam.
+     */
+    public ObjModel clipped(double minX, double minY, double minZ,
+                            double maxX, double maxY, double maxZ) {
+        List<Face> kept = new ArrayList<>();
+
+        for (Face face : faces) {
+            double cx = 0, cy = 0, cz = 0;
+            for (Vertex vertex : face.vertices()) {
+                cx += vertex.x();
+                cy += vertex.y();
+                cz += vertex.z();
+            }
+            int count = face.vertices().size();
+            cx /= count;
+            cy /= count;
+            cz /= count;
+
+            if (cx >= minX && cx <= maxX && cy >= minY && cy <= maxY && cz >= minZ && cz <= maxZ) {
+                kept.add(face);
+            }
+        }
+
+        // A caixa continua sendo a do modelo inteiro, pela mesma razao de filtered: ela define a
+        // escala, e recalcula-la faria cada recorte ser escalado por conta propria.
+        return new ObjModel(kept, minX(), minY(), minZ(), maxX(), maxY(), maxZ());
+    }
+
+    /**
+     * O mesmo modelo inflado a partir do centro do bloco.
+     *
+     * <p><b>Para duas superficies no mesmo plano nao brigarem.</b> Um decalque colado na parede
+     * ocupa exatamente os mesmos pixels que ela, e a placa de video nao tem como decidir qual esta
+     * na frente: o resultado cintila conforme quem joga anda. Empurrar o decalque um milesimo para
+     * fora resolve, e e o que o mod original faz na placa de textura dele.
+     *
+     * <p>A partir do centro do <b>bloco</b>, e nao do centro da peca: assim toda face se afasta na
+     * direcao em que ela olha, sem que a declaracao precise dizer qual e.
+     */
+    public ObjModel expanded(double factor) {
+        if (factor == 1.0) return this;
+
+        List<Face> grown = new ArrayList<>(faces.size());
+        for (Face face : faces) {
+            List<Vertex> vertices = new ArrayList<>(face.vertices().size());
+            for (Vertex vertex : face.vertices()) {
+                vertices.add(new Vertex(
+                        8 + (vertex.x() - 8) * factor,
+                        8 + (vertex.y() - 8) * factor,
+                        8 + (vertex.z() - 8) * factor,
+                        vertex.u(), vertex.v()));
+            }
+            grown.add(new Face(List.copyOf(vertices), face.group()));
+        }
+        return new ObjModel(grown, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
     /** Os nomes de grupo que o arquivo traz, na ordem em que aparecem. */
     public List<String> groups() {
         List<String> nomes = new ArrayList<>();

@@ -117,6 +117,7 @@ núcleo não conhecer Minecraft.
 | `shape.cores` e `shape.arms` (varias caixas) | sim | sim | As caixas de um braco giram juntas, como uma peca so |
 | Modelo `.obj` de bloco | sim | sim | O leitor mora no nucleo, e as duas plataformas usam o mesmo |
 | `obj_parts` -- pecas por conexao | sim | sim | Mesmos numeros de face nos dois: 164 no miolo, 40 na manga, 2 na placa |
+| Malha desenhada corretamente na tela | **com defeito** | sim | Mesmo pacote e mesmos numeros de face; o Fabric passa pelo Indigo e o resultado sai errado. Ver PROGRESSO.md |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |

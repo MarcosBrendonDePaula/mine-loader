@@ -1,0 +1,327 @@
+# Modelo de teste do mod `tubos`.
+#
+# Existe para exercitar o leitor de OBJ do loader, e por isso imita a estrutura de um arquivo
+# de verdade: catalogo de pecas, linha `g` com varios nomes, e grupos com e sem direcao no
+# nome -- os sem direcao so podem ser separados por regiao.
+#
+# Escala 0..100, como a de um export real, para passar pela normalizacao do loader.
+v 25 25 25
+v 75 25 25
+v 75 75 25
+v 25 75 25
+v 25 25 75
+v 75 25 75
+v 75 75 75
+v 25 75 75
+v 25 25 0
+v 75 25 0
+v 75 75 0
+v 25 75 0
+v 25 25 25
+v 75 25 25
+v 75 75 25
+v 25 75 25
+v 25 25 75
+v 75 25 75
+v 75 75 75
+v 25 75 75
+v 25 25 100
+v 75 25 100
+v 75 75 100
+v 25 75 100
+v 0 25 25
+v 25 25 25
+v 25 75 25
+v 0 75 25
+v 0 25 75
+v 25 25 75
+v 25 75 75
+v 0 75 75
+v 75 25 25
+v 100 25 25
+v 100 75 25
+v 75 75 25
+v 75 25 75
+v 100 25 75
+v 100 75 75
+v 75 75 75
+v 25 0 25
+v 75 0 25
+v 75 25 25
+v 25 25 25
+v 25 0 75
+v 75 0 75
+v 75 25 75
+v 25 25 75
+v 25 75 25
+v 75 75 25
+v 75 100 25
+v 25 100 25
+v 25 75 75
+v 75 75 75
+v 75 100 75
+v 25 100 75
+v 25 25 25
+v 75 25 25
+v 75 35 25
+v 25 35 25
+v 25 65 25
+v 75 65 25
+v 75 75 25
+v 25 75 25
+v 25 35 25
+v 35 35 25
+v 35 65 25
+v 25 65 25
+v 65 35 25
+v 75 35 25
+v 75 65 25
+v 65 65 25
+v 35 35 25
+v 65 35 25
+v 65 65 25
+v 35 65 25
+v 25 25 75
+v 75 25 75
+v 75 35 75
+v 25 35 75
+v 25 65 75
+v 75 65 75
+v 75 75 75
+v 25 75 75
+v 25 35 75
+v 35 35 75
+v 35 65 75
+v 25 65 75
+v 65 35 75
+v 75 35 75
+v 75 65 75
+v 65 65 75
+v 35 35 75
+v 65 35 75
+v 65 65 75
+v 35 65 75
+v 25 25 25
+v 25 75 25
+v 25 75 35
+v 25 25 35
+v 25 25 65
+v 25 75 65
+v 25 75 75
+v 25 25 75
+v 25 25 35
+v 25 35 35
+v 25 35 65
+v 25 25 65
+v 25 65 35
+v 25 75 35
+v 25 75 65
+v 25 65 65
+v 25 35 35
+v 25 65 35
+v 25 65 65
+v 25 35 65
+v 75 25 25
+v 75 75 25
+v 75 75 35
+v 75 25 35
+v 75 25 65
+v 75 75 65
+v 75 75 75
+v 75 25 75
+v 75 25 35
+v 75 35 35
+v 75 35 65
+v 75 25 65
+v 75 65 35
+v 75 75 35
+v 75 75 65
+v 75 65 65
+v 75 35 35
+v 75 65 35
+v 75 65 65
+v 75 35 65
+v 25 25 25
+v 75 25 25
+v 75 25 35
+v 25 25 35
+v 25 25 65
+v 75 25 65
+v 75 25 75
+v 25 25 75
+v 25 25 35
+v 35 25 35
+v 35 25 65
+v 25 25 65
+v 65 25 35
+v 75 25 35
+v 75 25 65
+v 65 25 65
+v 35 25 35
+v 65 25 35
+v 65 25 65
+v 35 25 65
+v 25 75 25
+v 75 75 25
+v 75 75 35
+v 25 75 35
+v 25 75 65
+v 75 75 65
+v 75 75 75
+v 25 75 75
+v 25 75 35
+v 35 75 35
+v 35 75 65
+v 25 75 65
+v 65 75 35
+v 75 75 35
+v 75 75 65
+v 65 75 65
+v 35 75 35
+v 65 75 35
+v 65 75 65
+v 35 75 65
+g Mesh1 Core_Body
+f 1 2 3 4
+g Mesh1 Core_Body
+f 6 5 8 7
+g Mesh1 Core_Body
+f 5 1 4 8
+g Mesh1 Core_Body
+f 2 6 7 3
+g Mesh1 Core_Body
+f 4 3 7 8
+g Mesh1 Core_Body
+f 5 6 2 1
+g Mesh2 Side_N Tube_Part
+f 9 10 11 12
+g Mesh2 Side_N Tube_Part
+f 14 13 16 15
+g Mesh2 Side_N Tube_Part
+f 13 9 12 16
+g Mesh2 Side_N Tube_Part
+f 10 14 15 11
+g Mesh2 Side_N Tube_Part
+f 12 11 15 16
+g Mesh2 Side_N Tube_Part
+f 13 14 10 9
+g Mesh3 Side_S Tube_Part
+f 17 18 19 20
+g Mesh3 Side_S Tube_Part
+f 22 21 24 23
+g Mesh3 Side_S Tube_Part
+f 21 17 20 24
+g Mesh3 Side_S Tube_Part
+f 18 22 23 19
+g Mesh3 Side_S Tube_Part
+f 20 19 23 24
+g Mesh3 Side_S Tube_Part
+f 21 22 18 17
+g Mesh4 Side_W Tube_Part
+f 25 26 27 28
+g Mesh4 Side_W Tube_Part
+f 30 29 32 31
+g Mesh4 Side_W Tube_Part
+f 29 25 28 32
+g Mesh4 Side_W Tube_Part
+f 26 30 31 27
+g Mesh4 Side_W Tube_Part
+f 28 27 31 32
+g Mesh4 Side_W Tube_Part
+f 29 30 26 25
+g Mesh5 Side_E Tube_Part
+f 33 34 35 36
+g Mesh5 Side_E Tube_Part
+f 38 37 40 39
+g Mesh5 Side_E Tube_Part
+f 37 33 36 40
+g Mesh5 Side_E Tube_Part
+f 34 38 39 35
+g Mesh5 Side_E Tube_Part
+f 36 35 39 40
+g Mesh5 Side_E Tube_Part
+f 37 38 34 33
+g Mesh6 Side_D Tube_Part
+f 41 42 43 44
+g Mesh6 Side_D Tube_Part
+f 46 45 48 47
+g Mesh6 Side_D Tube_Part
+f 45 41 44 48
+g Mesh6 Side_D Tube_Part
+f 42 46 47 43
+g Mesh6 Side_D Tube_Part
+f 44 43 47 48
+g Mesh6 Side_D Tube_Part
+f 45 46 42 41
+g Mesh7 Side_U Tube_Part
+f 49 50 51 52
+g Mesh7 Side_U Tube_Part
+f 54 53 56 55
+g Mesh7 Side_U Tube_Part
+f 53 49 52 56
+g Mesh7 Side_U Tube_Part
+f 50 54 55 51
+g Mesh7 Side_U Tube_Part
+f 52 51 55 56
+g Mesh7 Side_U Tube_Part
+f 53 54 50 49
+g Mesh20 Wall_Plate
+f 57 58 59 60
+g Mesh21 Wall_Plate
+f 61 62 63 64
+g Mesh22 Wall_Plate
+f 65 66 67 68
+g Mesh23 Wall_Plate
+f 69 70 71 72
+g Mesh24 Center_Plate_N
+f 73 74 75 76
+g Mesh20 Wall_Plate
+f 77 78 79 80
+g Mesh21 Wall_Plate
+f 81 82 83 84
+g Mesh22 Wall_Plate
+f 85 86 87 88
+g Mesh23 Wall_Plate
+f 89 90 91 92
+g Mesh24 Center_Plate_S
+f 93 94 95 96
+g Mesh20 Wall_Plate
+f 97 98 99 100
+g Mesh21 Wall_Plate
+f 101 102 103 104
+g Mesh22 Wall_Plate
+f 105 106 107 108
+g Mesh23 Wall_Plate
+f 109 110 111 112
+g Mesh24 Center_Plate_W
+f 113 114 115 116
+g Mesh20 Wall_Plate
+f 117 118 119 120
+g Mesh21 Wall_Plate
+f 121 122 123 124
+g Mesh22 Wall_Plate
+f 125 126 127 128
+g Mesh23 Wall_Plate
+f 129 130 131 132
+g Mesh24 Center_Plate_E
+f 133 134 135 136
+g Mesh20 Wall_Plate
+f 137 138 139 140
+g Mesh21 Wall_Plate
+f 141 142 143 144
+g Mesh22 Wall_Plate
+f 145 146 147 148
+g Mesh23 Wall_Plate
+f 149 150 151 152
+g Mesh24 Center_Plate_D
+f 153 154 155 156
+g Mesh20 Wall_Plate
+f 157 158 159 160
+g Mesh21 Wall_Plate
+f 161 162 163 164
+g Mesh22 Wall_Plate
+f 165 166 167 168
+g Mesh23 Wall_Plate
+f 169 170 171 172
+g Mesh24 Center_Plate_U
+f 173 174 175 176

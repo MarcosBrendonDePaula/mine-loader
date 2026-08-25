@@ -146,7 +146,7 @@ class ObjPackTest {
     }
 
     @Test
-    void oModeloDoItemNaoHerdaDaMalha(@TempDir Path root, @TempDir Path out) throws IOException {
+    void oItemDesenhaAMalhaEmVezDeUmCubo(@TempDir Path root, @TempDir Path out) throws IOException {
         writeMod(root, "");
         Path pack = assemble(root, out);
 
@@ -154,18 +154,18 @@ class ObjPackTest {
                 pack.resolve("assets/tenda/models/item/tenda.json"),
                 StandardCharsets.UTF_8)).getAsJsonObject();
 
-        // O crash que este caso existe para nao deixar voltar: com "parent": "tenda:block/tenda",
-        // o pai do item passa a ser a malha, e o jogo exige que o pai de um modelo JSON seja outro
-        // modelo JSON. A mensagem e "BlockModel parent has to be a block model" e o cliente nao
-        // abre -- nao e um bloco feio, e o jogo inteiro fora do ar.
-        String parent = item.get("parent").getAsString();
-        assertFalse(parent.equals("tenda:block/tenda"),
-                "o item nao pode herdar do modelo OBJ; herdou de " + parent);
-        assertEquals("minecraft:block/cube_all", parent);
+        // O item aponta a malha direto. HERDAR dela derrubava o cliente inteiro -- o jogo exige que
+        // o pai de um modelo JSON seja outro JSON, e a mensagem "BlockModel parent has to be a
+        // block model" nao e um bloco feio: e o cliente que nao abre. Apontar nao e herdar.
+        assertEquals("tenda:block/tenda.obj", item.get("lua_obj").getAsString());
+        assertFalse(item.get("parent").getAsString().equals("tenda:block/tenda"),
+                "o item nao pode herdar do modelo do bloco");
 
-        // E ele traz a propria textura, senao herdaria de um pai que nao a define.
-        assertEquals("tenda:block/tenda_v0",
-                item.getAsJsonObject("textures").get("all").getAsString());
+        // O parent de cubo continua ali como reserva, para o item nao sumir se a malha falhar.
+        assertEquals("minecraft:block/cube_all", item.get("parent").getAsString());
+
+        // Sem recorte: um item nao tem vizinho, entao nao tem estado de conexao para escolher peca.
+        assertEquals(0, item.getAsJsonArray("lua_obj_groups").size());
     }
 
     @Test

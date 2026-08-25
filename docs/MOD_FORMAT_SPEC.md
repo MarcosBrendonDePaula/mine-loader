@@ -199,6 +199,56 @@ resultado possível é o catálogo inteiro de uma vez — um cano com as seis co
 | `connected` | naquele lado, quando ele está ligado a um vizinho |
 | `disconnected` | naquele lado, quando ele está livre |
 
+**Cada condição aceita uma lista de peças, não uma só.** A face livre de um cano precisa de duas: a
+parede, no atlas do corpo, e o decalque que mostra o tipo, na imagem do bloco. Com uma peça por
+condição sempre faltaria uma das duas — e faltando a parede, a face fica aberta e o interior escuro
+aparece como um buraco.
+
+Cada peça aceita:
+
+| Campo | O que faz |
+|---|---|
+| `groups` | nomes de grupo, ou prefixos deles; `%s` vira a direção |
+| `texture` | a imagem desta peça; sem ela, vale a do bloco |
+| `uv_scale` | encolhe a coordenada de textura em torno do centro (`0.75` = os doze avos do meio) |
+| `keep_within` | desenha só a parte que cai nesta caixa, `[x1,y1,z1,x2,y2,z2]` |
+| `expand` | infla a peça a partir do centro do bloco (`1.001`) |
+| `double_sided` | desenha cada face também pelo avesso |
+
+**`keep_within` existe porque nem todo nome serve.** Num arquivo de verdade a face de um cano é um
+mosaico de placas chamadas `Plate23`, `Plate_Side2` — nomes que a ferramenta de modelagem gerou, sem
+lado nenhum. A região é o que as separa. Ela é declarada apontando para o **norte** e o loader gira
+para os outros cinco, como faz com o braço.
+
+**`expand` evita que duas superfícies briguem pelo mesmo pixel.** Um decalque colado numa parede
+ocupa exatamente os mesmos pixels que ela, e o resultado cintila conforme quem joga anda — um
+defeito que não aparece em captura parada. Um milésimo à frente resolve.
+
+**`double_sided` é para malha oca.** A manga de um cano são quatro paredes finas, e o jogo só
+desenha a face pelo lado para o qual ela aponta: metade some conforme o ângulo, e o que sobra parece
+um bloco com pedaços faltando. Custa o dobro de faces, por isso é declarado e não automático.
+
+**Sem oclusão de ambiente, nas duas plataformas.** O cálculo de AO parte do princípio de que a face
+está encostada na parede do cubo; numa malha ela fica no meio do bloco, e o cálculo a escurece até o
+preto. Os dois renderizadores erram diferente com AO ligado — o do Fabric passa pelo Indigo, o do
+NeoForge pelo caminho vanilla —, e é assim que o mesmo modelo aparece certo numa plataforma e
+errado na outra.
+
+### Como conferir sem abrir o jogo
+
+```bash
+tools/inspecionar-modelo.sh logistica:cano        # o que cada estado desenha
+tools/inspecionar-modelo.sh logistica:cano.obj    # os grupos do arquivo, com as caixas
+```
+
+Ela lê o pacote gerado na mesma ordem que o cliente — escala, recorte por nome, recorte por região,
+inflar — e diz quantas faces cada peça tem e onde. **Grita quando um recorte não casa com grupo
+nenhum**, que é o defeito mais caro desta parte: o modelo sai vazio, o bloco desenha a reserva, e o
+resultado parece um cubo comum sem nada no log.
+
+O que ela **não** responde: se a textura ficou esticada, se há superfícies brigando, se a
+iluminação ficou estranha. Isso só a tela diz.
+
 Em `connected` e `disconnected`, **`%s` vira a direção** em maiúsculas: `N`, `S`, `E`, `W`, `U`,
 `D`. É a nomenclatura que as ferramentas de modelo usam nos nomes de grupo.
 
