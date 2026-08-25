@@ -144,6 +144,29 @@ regras próprias, e o loader só cobre bloco e item.
 Espécie **nasce** sozinha (`entities[].spawn`): bioma ou tag de bioma, peso, tamanho de grupo,
 faixa de luz e de altura. O que ainda falta é o mesmo para **bloco** — minério gerado no terreno.
 
+### Achados ao portar o Logistic Pipes
+
+O `examples/logistica` foi escrito como teste de esforço: um mod real, portado de um mod real, para
+descobrir o que falta antes que quem escreve um mod descubra. O que apareceu:
+
+**Manifesto que declara `events` sem `entrypoint` é aceito em silêncio.** O loader registra os
+blocos, não executa script nenhum, e o mapeamento de eventos aponta para funções que não podem
+existir. Nada reclama, e o sintoma é um mod que carrega e não faz nada — o modo de falhar mais caro
+possível, porque parece que o loader está quebrado. Precisa ser recusado na carga.
+
+**Não há tique agendado por posição.** Um cano que move item ao longo do tempo precisaria de "volte
+a me chamar nesta posição daqui a N tiques". Hoje só existe `block_random_tick`, que é aleatório, e
+o agendador global `mod.after`, que não sabe de posição. O porte contorna entregando na hora — o
+item some de um baú e aparece no outro, sem viagem —, e é a maior diferença visível para o
+original.
+
+**Não há como ler um inventário por slot pela rede.** `container_at` soma por item, o que basta para
+um estoque, e não permite reproduzir filtros por slot como os módulos de chassi do original.
+
+**Falta evento de bloco quebrado com o inventário ainda íntegro.** Uma rede precisa saber que um cano
+sumiu para se reconfigurar; hoje a varredura é refeita a cada abertura de tela, que é caro e só
+acontece quando alguém olha.
+
 ### Comportamento
 
 **Eventos de entidade: nascimento, dano, morte e domesticação existem** (`entity_spawned`,

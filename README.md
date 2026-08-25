@@ -102,6 +102,7 @@ diferente do loader.
 | `ferraria` | Ferramentas e armaduras declaradas no manifesto, sem uma linha de Java |
 | `gerenciador` | Lista os mods do loader numa tela e instala novos por link |
 | `bestiario` | Espécie declarada por script: gera variantes num laço e herda a de outro mod |
+| `logistica` | Rede de canos que encontra e entrega itens — porte da ideia central do Logistic Pipes |
 
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
