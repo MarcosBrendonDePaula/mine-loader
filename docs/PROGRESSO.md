@@ -45,6 +45,16 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
       miolo. As caixas de um braco giram juntas, como uma peca so. Junto, a condicao que decide o
       que e um bloco que conecta saiu de tres copias para uma, no nucleo.
 
+- [x] **Modelo `.obj` de bloco, nas duas plataformas.** O formato do jogo descreve caixas, e uma
+      malha nao e uniao de caixas -- sem isso, portar um mod que desenha assim esbarra no desenho.
+      O leitor mora no nucleo justamente para o mesmo arquivo virar o mesmo desenho nos dois lados;
+      o NeoForge tem leitor proprio e nao e ele que roda.
+
+- [x] **`obj_parts`: recortar o catalogo por conexao.** Um OBJ de mod costuma trazer o miolo, a
+      manga de cada lado e as placas no mesmo arquivo. O mod declara o que desenhar em cada estado,
+      e a textura e **por peca** -- o corpo le o atlas proprio da malha, e a imagem que identifica o
+      bloco aparece so onde o mod mandar.
+
 - [x] **Pastas de mod fora do jogo** (`MINE_LOADER_MODS`, ou `-Pmods=`). O loader carrega direto da
       pasta apontada, sem copiar. Copiar era o que se fazia, e a copia envelhecia: o servidor rodava
       contra um script velho dizendo que passou.
@@ -107,6 +117,11 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
 **Nada em aberto no código.** O tique agendado fechou e está verificado nos quatro níveis: 6 casos
 no núcleo, um GameTest em **cada** plataforma que confere a fila do jogo e a recusa em bloco
 vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
+
+**Sobre a malha, o que falta e de olho:** os dois clientes montam as 65 pecas com numeros
+identicos (164 no miolo, 40 na manga, 2 na placa), mas **numeros iguais nao sao telas iguais** --
+comparar Fabric e NeoForge lado a lado ainda nao foi feito. E o item na mao continua sendo um cubo:
+o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 
 **Duas pendências de olho, não de código:**
 

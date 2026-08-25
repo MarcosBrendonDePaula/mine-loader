@@ -356,8 +356,8 @@ O arquivo é encaixado no bloco automaticamente. Se ele for um **catálogo de pe
 manga de cada lado, as placas —, `obj_parts` diz o que desenhar em cada estado; veja
 `MOD_FORMAT_SPEC.md`.
 
-**Hoje só o cliente Fabric desenha malha.** A declaração é aceita nos dois lados, e no NeoForge o
-bloco aparece como o cubo de reserva.
+Vale nas duas plataformas, com o mesmo arquivo virando o mesmo desenho — é para isso que o leitor
+mora no núcleo em vez de cada lado usar o seu.
 
 ## Desenvolver um mod que mora em outro repositório
 

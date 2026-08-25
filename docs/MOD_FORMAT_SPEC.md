@@ -218,6 +218,13 @@ do meio da imagem. Serve para uma placa mostrar só o miolo de uma textura de bl
 **`obj_parts` exige `connects_to`**, porque as condições falam de lados ligados e livres. Sem ele o
 modelo é desenhado inteiro.
 
+**As duas plataformas leem o mesmo arquivo pelo mesmo código.** O NeoForge tem um leitor de OBJ
+próprio e não é ele que roda aqui: as regras de escala, UV e normal dele são dele, o Fabric não tem
+equivalente, e ele não sabe recortar por grupo. O mesmo arquivo produziria dois desenhos, e a matriz
+diria "sim" nos dois lados mentindo. O que muda é só a porta de entrada — no Fabric o modelo é
+interceptado pelo id, no NeoForge o jogo entrega o JSON a quem o campo `loader` apontar —, e o
+pacote gerado declara os dois caminhos no mesmo arquivo.
+
 ### Forma de um bloco que conecta
 
 | Campo | O que é |

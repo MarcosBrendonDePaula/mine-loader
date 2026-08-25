@@ -122,6 +122,11 @@ public class NeoForgeLuaLoader {
             // Sem desenhista a especie existe e nao aparece: o log fica verde e so quem
             // esta olhando percebe que nao ha nada onde o servidor diz haver um bicho.
             dev.lualoader.neoforge.client.NeoForgeEntityRenderers.install(modBus);
+
+            // Um bloco com malha declarada aparece como o cubo de reserva ate este leitor existir,
+            // e o mesmo manifesto desenharia diferente em cada plataforma -- que e o que a matriz
+            // de compatibilidade existe para nao deixar acontecer em silencio.
+            dev.lualoader.neoforge.client.NeoForgeObjModels.install(modBus);
             dev.lualoader.neoforge.client.NeoForgeGameScreenOverlay.register();
         }
 

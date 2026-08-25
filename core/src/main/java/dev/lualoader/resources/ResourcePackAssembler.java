@@ -1453,7 +1453,11 @@ public final class ResourcePackAssembler {
             lista.append("\"").append(grupo).append("\"");
         }
 
+        // `loader` e como o NeoForge entrega o modelo a quem sabe le-lo; o Fabric nao tem esse
+        // campo, e la o modelo e interceptado pelo id antes de o JSON ser lido. Declarar os dois
+        // caminhos no mesmo arquivo e o que faz o mesmo pacote servir as duas plataformas.
         return "{" + NEWLINE
+                + "  \"loader\": \"lua_loader:obj\"," + NEWLINE
                 + "  \"parent\": \"minecraft:block/cube_all\"," + NEWLINE
                 + "  \"lua_obj\": \"" + objRef + "\"," + NEWLINE
                 + "  \"lua_obj_groups\": [" + lista + "]," + NEWLINE
