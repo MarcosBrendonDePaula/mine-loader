@@ -1018,11 +1018,9 @@ public final class ResourcePackAssembler {
         }
     }
 
-    /** Se o bloco declara nucleo e a quem se conectar. */
+    /** Se o bloco declara nucleo e a quem se conectar. A regra mora no nucleo. */
     private static boolean connects(ModManifest.BlockDefinition block) {
-        return block.shape != null
-                && block.shape.core != null && block.shape.core.size() == 6
-                && block.shape.connectsTo != null && !block.shape.connectsTo.isEmpty();
+        return dev.lualoader.content.BlockShapes.connects(block);
     }
 
     /**
@@ -1040,10 +1038,13 @@ public final class ResourcePackAssembler {
         String coreModel = namespace + ":block/" + blockId + "_core";
         String armModel = namespace + ":block/" + blockId + "_arm";
 
-        writeBoxModel(generatedRoot, namespace, blockId + "_core", block.shape.core, texture);
-        boolean hasArm = block.shape.arm != null && block.shape.arm.size() == 6;
+        var coreBoxes = dev.lualoader.content.BlockShapes.coreBoxes(block.shape);
+        var armBoxes = dev.lualoader.content.BlockShapes.armBoxes(block.shape);
+
+        writeBoxModel(generatedRoot, namespace, blockId + "_core", coreBoxes, texture);
+        boolean hasArm = !armBoxes.isEmpty();
         if (hasArm) {
-            writeBoxModel(generatedRoot, namespace, blockId + "_arm", block.shape.arm, texture);
+            writeBoxModel(generatedRoot, namespace, blockId + "_arm", armBoxes, texture);
         }
 
         StringBuilder parts = new StringBuilder();
@@ -1090,8 +1091,16 @@ public final class ResourcePackAssembler {
     }
 
     /** Um modelo de uma caixa so, com a mesma textura nas seis faces. */
+    /**
+     * Escreve um modelo com uma caixa por elemento, todas com a mesma textura.
+     *
+     * <p>Varias caixas, e nao uma: o cano do mod que motivou isto tem placas nas faces alem do
+     * miolo. Um elemento por caixa e o formato que o jogo entende, e a alternativa -- um modelo por
+     * caixa, combinados no blockstate -- multiplicaria os arquivos sem ganhar nada.
+     */
     private void writeBoxModel(Path generatedRoot, String namespace, String name,
-                               java.util.List<Float> box, String texture) throws IOException {
+                               java.util.List<dev.lualoader.content.BlockShapes.Box> boxes,
+                               String texture) throws IOException {
         String[] lados = {"north", "south", "east", "west", "up", "down"};
         StringBuilder faces = new StringBuilder();
         for (int index = 0; index < lados.length; index++) {
@@ -1100,17 +1109,31 @@ public final class ResourcePackAssembler {
                     .append("\": { \"texture\": \"#all\" }");
         }
 
+        StringBuilder elementos = new StringBuilder();
+        boolean primeiro = true;
+        for (var box : boxes) {
+            if (box == null) continue;
+            if (!primeiro) elementos.append(",").append(NEWLINE);
+            primeiro = false;
+
+            elementos.append("    { \"from\": [")
+                    .append(number((float) box.fromX())).append(", ")
+                    .append(number((float) box.fromY())).append(", ")
+                    .append(number((float) box.fromZ())).append("],").append(NEWLINE)
+                    .append("      \"to\": [")
+                    .append(number((float) box.toX())).append(", ")
+                    .append(number((float) box.toY())).append(", ")
+                    .append(number((float) box.toZ())).append("],").append(NEWLINE)
+                    .append("      \"faces\": {").append(NEWLINE).append(faces).append(NEWLINE)
+                    .append("      } }");
+        }
+
         write(generatedRoot.resolve("assets").resolve(namespace)
                         .resolve("models/block").resolve(name + ".json"),
                 "{" + NEWLINE
                         + "  \"textures\": { \"all\": \"" + texture + "\","
                         + " \"particle\": \"" + texture + "\" }," + NEWLINE
-                        + "  \"elements\": [" + NEWLINE
-                        + "    { \"from\": [" + number(box.get(0)) + ", " + number(box.get(1))
-                        + ", " + number(box.get(2)) + "]," + NEWLINE
-                        + "      \"to\": [" + number(box.get(3)) + ", " + number(box.get(4))
-                        + ", " + number(box.get(5)) + "]," + NEWLINE
-                        + "      \"faces\": {" + NEWLINE + faces + NEWLINE + "      } }" + NEWLINE
+                        + "  \"elements\": [" + NEWLINE + elementos + NEWLINE
                         + "  ]" + NEWLINE + "}" + NEWLINE);
     }
 

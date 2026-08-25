@@ -40,6 +40,11 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
       aceitam o índice. É o que destrava o filtro por slot dos módulos de chassi, e a máquina com
       entrada e saída separadas.
 
+- [x] **Nucleo e braco com varias caixas** (`shape.cores`, `shape.arms`). Uma caixa por peca cobre
+      cano, cerca e muro, e nao cobre o cano do Logistic Pipes -- que tem placas nas faces alem do
+      miolo. As caixas de um braco giram juntas, como uma peca so. Junto, a condicao que decide o
+      que e um bloco que conecta saiu de tres copias para uma, no nucleo.
+
 - [x] **Pastas de mod fora do jogo** (`MINE_LOADER_MODS`, ou `-Pmods=`). O loader carrega direto da
       pasta apontada, sem copiar. Copiar era o que se fazia, e a copia envelhecia: o servidor rodava
       contra um script velho dizendo que passou.

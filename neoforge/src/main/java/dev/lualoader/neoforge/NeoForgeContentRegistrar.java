@@ -174,8 +174,8 @@ public final class NeoForgeContentRegistrar {
                         // Um bloco que conecta calcula a propria forma a partir do estado, entao
                         // ignora outline e collision declarados -- nucleo e braco os substituem.
                         block = new NeoForgeConnectedBlock(settingsOf(definition), values.luminance,
-                                dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
-                                dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
+                                dev.lualoader.content.BlockShapes.coreBoxes(definition.shape),
+                                dev.lualoader.content.BlockShapes.armBoxes(definition.shape),
                                 definition.shape.connectsTo,
                                 withData);
                     } else {

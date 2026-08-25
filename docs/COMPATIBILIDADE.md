@@ -114,6 +114,7 @@ núcleo não conhecer Minecraft.
 | Bloco que conecta e guarda dados ao mesmo tempo | sim | sim | Antes cada plataforma escolhia uma das duas, e a conexao sumia sem aviso |
 | Pastas de mod extras (`MINE_LOADER_MODS`) | sim | sim | Carrega direto da pasta apontada, sem copiar |
 | `entrypoint` vindo de `remote_base` | sim | sim | Era o unico pedaco de um mod que ainda exigia arquivo local |
+| `shape.cores` e `shape.arms` (varias caixas) | sim | sim | As caixas de um braco giram juntas, como uma peca so |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |

@@ -233,6 +233,26 @@ public final class ModManifest {
         public List<Float> arm = new ArrayList<>();
 
         /**
+         * O nucleo com mais de uma caixa, para quem precisa de detalhe.
+         *
+         * <p>Uma caixa so cobre cano, cerca e muro. Nao cobre o cano do Logistic Pipes, que tem
+         * placas nas faces alem do miolo -- e esse foi o caso real que trouxe este campo. Quando
+         * declarado, vence {@link #core}.
+         */
+        public List<List<Float>> cores = new ArrayList<>();
+
+        /**
+         * O braco com mais de uma caixa, tambem apontando para o <b>norte</b>.
+         *
+         * <p>Cada caixa gira junto com as outras, entao o conjunto se comporta como uma peca so. E
+         * o que permite um braco ser tubo mais colar, em vez de um paralelepipedo -- a diferenca
+         * entre parecer um cano e ser o cano do mod original.
+         *
+         * <p>Quando declarado, vence {@link #arm}.
+         */
+        public List<List<Float>> arms = new ArrayList<>();
+
+        /**
          * A quem este bloco se conecta: ids de bloco, ou tags com {@code #}.
          *
          * <p>Vazio nao significa "a todos": significa que nada foi declarado, e o bloco nao conecta

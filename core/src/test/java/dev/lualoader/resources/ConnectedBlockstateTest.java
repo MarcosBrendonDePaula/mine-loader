@@ -220,6 +220,59 @@ class ConnectedBlockstateTest {
     }
 
     @Test
+    void oNucleoEOBracoAceitamVariasCaixas(@TempDir Path root, @TempDir Path out)
+            throws IOException {
+        // O cano do mod original tem placas nas faces alem do miolo, e um colar na ponta de cada
+        // braco. Com uma caixa por peca isso nao tem como ser declarado.
+        writeMod(root, """
+                {
+                  "cores": [[5, 5, 5, 11, 11, 11], [4, 4, 4, 12, 12, 5]],
+                  "arms":  [[5, 5, 0, 11, 11, 5], [4, 4, 0, 12, 12, 2]],
+                  "connects_to": ["tubos:cano"]
+                }""");
+
+        JsonObject nucleo = assemble(root, out, "assets/tubos/models/block/cano_core.json");
+        assertEquals(2, nucleo.getAsJsonArray("elements").size(),
+                "o nucleo deveria ter as duas caixas declaradas");
+
+        JsonObject braco = JsonParser.parseString(Files.readString(
+                        out.resolve("pack").resolve("assets/tubos/models/block/cano_arm.json"),
+                        StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonArray elementos = braco.getAsJsonArray("elements");
+        assertEquals(2, elementos.size(), "o braco deveria ter as duas caixas declaradas");
+
+        // O colar e mais largo que o tubo, e e disso que vem o desenho.
+        JsonArray tubo = elementos.get(0).getAsJsonObject().getAsJsonArray("from");
+        JsonArray colar = elementos.get(1).getAsJsonObject().getAsJsonArray("from");
+        assertEquals(5, tubo.get(0).getAsInt());
+        assertEquals(4, colar.get(0).getAsInt(), "o colar deveria ser mais largo que o tubo");
+
+        // E continua sendo uma peca so no blockstate: um "apply" por lado, e nao um por caixa.
+        JsonArray partes = assemble(root, out, "assets/tubos/blockstates/cano.json")
+                .getAsJsonArray("multipart");
+        assertEquals(7, partes.size(), "o nucleo mais seis bracos, e nao seis vezes duas caixas");
+    }
+
+    @Test
+    void aListaDeCaixasVenceACaixaUnica(@TempDir Path root, @TempDir Path out) throws IOException {
+        // Declarados os dois, vale a lista. Misturar daria o dobro de geometria sem ninguem pedir.
+        writeMod(root, """
+                {
+                  "core": [0, 0, 0, 16, 16, 16],
+                  "cores": [[5, 5, 5, 11, 11, 11]],
+                  "arm": [0, 0, 0, 16, 16, 16],
+                  "arms": [[5, 5, 0, 11, 11, 5]],
+                  "connects_to": ["tubos:cano"]
+                }""");
+
+        JsonObject nucleo = assemble(root, out, "assets/tubos/models/block/cano_core.json");
+        JsonArray elementos = nucleo.getAsJsonArray("elements");
+        assertEquals(1, elementos.size());
+        assertEquals(5, elementos.get(0).getAsJsonObject().getAsJsonArray("from").get(0).getAsInt(),
+                "deveria ter vindo da lista, e nao da caixa unica");
+    }
+
+    @Test
     void semConnectsToVoltaAoFormatoDeVariantes(@TempDir Path root, @TempDir Path out)
             throws IOException {
         // Sem a quem conectar, o bloco nao conecta -- e precisa continuar sendo desenhado pelo

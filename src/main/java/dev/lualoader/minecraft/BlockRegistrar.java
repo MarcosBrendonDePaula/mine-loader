@@ -81,8 +81,8 @@ public final class BlockRegistrar {
                     block = new ConnectedBlock(settings,
                             values.hardness, values.resistance, values.slipperiness,
                             values.velocityMultiplier, values.jumpVelocityMultiplier,
-                            dev.lualoader.content.BlockShapes.boxOf(definition.shape.core),
-                            dev.lualoader.content.BlockShapes.boxOf(definition.shape.arm),
+                            dev.lualoader.content.BlockShapes.coreBoxes(definition.shape),
+                            dev.lualoader.content.BlockShapes.armBoxes(definition.shape),
                             definition.shape.connectsTo,
                             withData);
                     if (withData) dataBlocks.add(block);

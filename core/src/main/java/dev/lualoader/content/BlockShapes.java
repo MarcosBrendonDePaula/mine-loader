@@ -181,15 +181,96 @@ public final class BlockShapes {
      * que este repositorio ja registra como o pior de forma declarada.
      */
     public static List<Box> connected(Box core, Box arm, Collection<String> connected) {
-        List<Box> boxes = new ArrayList<>();
-        boxes.add(core);
+        return connected(core == null ? List.of() : List.of(core),
+                arm == null ? List.of() : List.of(arm),
+                connected);
+    }
 
-        if (arm != null) {
+    /**
+     * A mesma forma, com nucleo e braco de varias caixas.
+     *
+     * <p>Uma caixa por peca cobre cano, cerca e muro, e nao cobre o cano do Logistic Pipes -- que
+     * tem placas nas faces alem do miolo, e um colar na ponta de cada braco. As caixas de um braco
+     * giram <b>juntas</b>, entao o conjunto se comporta como uma peca so; girar cada uma por conta
+     * daria pedacos apontando para lados diferentes.
+     */
+    public static List<Box> connected(List<Box> core, List<Box> arm, Collection<String> connected) {
+        List<Box> boxes = new ArrayList<>();
+        if (core != null) {
+            for (Box caixa : core) {
+                if (caixa != null) boxes.add(caixa);
+            }
+        }
+
+        if (arm != null && !arm.isEmpty()) {
             for (String side : SIDES) {
-                if (connected.contains(side)) boxes.add(rotate(arm, side));
+                if (!connected.contains(side)) continue;
+                for (Box caixa : arm) {
+                    if (caixa != null) boxes.add(rotate(caixa, side));
+                }
             }
         }
         return List.copyOf(boxes);
+    }
+
+    /**
+     * As caixas declaradas, ignorando as que nao tem seis numeros.
+     *
+     * <p>Ignorar em vez de recusar aqui e de proposito: a recusa com mensagem mora no validador do
+     * manifesto, que sabe o id do bloco e consegue dizer onde esta o erro. Aqui, no meio da
+     * aritmetica, so daria uma excecao sem contexto.
+     */
+    public static List<Box> boxesOf(List<List<Float>> declaradas) {
+        if (declaradas == null || declaradas.isEmpty()) return List.of();
+
+        List<Box> caixas = new ArrayList<>();
+        for (List<Float> numeros : declaradas) {
+            Box caixa = boxOf(numeros);
+            if (caixa != null) caixas.add(caixa);
+        }
+        return List.copyOf(caixas);
+    }
+
+    /**
+     * As caixas do nucleo de um bloco que conecta, ja com a regra {@code cores} vence {@code core}.
+     */
+    public static List<Box> coreBoxes(dev.lualoader.manifest.ModManifest.ShapeDefinition shape) {
+        return shape == null ? List.of() : pick(shape.core, shape.cores);
+    }
+
+    /** As caixas do braco, ja com a regra {@code arms} vence {@code arm}. */
+    public static List<Box> armBoxes(dev.lualoader.manifest.ModManifest.ShapeDefinition shape) {
+        return shape == null ? List.of() : pick(shape.arm, shape.arms);
+    }
+
+    /**
+     * Se o bloco declara nucleo e a quem se conectar.
+     *
+     * <p>Mora aqui porque a resposta precisa ser a mesma no montador do pacote e nos dois
+     * adaptadores. Enquanto cada um tinha a sua copia, acrescentar {@code cores} significaria
+     * lembrar de tres lugares -- e o que ficasse para tras registraria um bloco sem as propriedades
+     * de conexao, que e o defeito silencioso de sempre.
+     */
+    public static boolean connects(dev.lualoader.manifest.ModManifest.BlockDefinition block) {
+        if (block == null || block.shape == null) return false;
+
+        return !coreBoxes(block.shape).isEmpty()
+                && block.shape.connectsTo != null && !block.shape.connectsTo.isEmpty();
+    }
+
+    /**
+     * Escolhe entre a caixa unica e a lista de caixas, na regra de sempre: a lista vence.
+     *
+     * <p>Existe para os tres consumidores -- o montador do pacote e os dois adaptadores -- nao
+     * repetirem a escolha. Repetida, ela divergiria no primeiro ajuste, e o sintoma seria um bloco
+     * desenhado de um jeito e com colisao de outro.
+     */
+    public static List<Box> pick(List<Float> uma, List<List<Float>> varias) {
+        List<Box> lista = boxesOf(varias);
+        if (!lista.isEmpty()) return lista;
+
+        Box unica = boxOf(uma);
+        return unica == null ? List.of() : List.of(unica);
     }
 
     /** Uma caixa a partir dos seis numeros declarados, ou {@code null} quando nao ha. */

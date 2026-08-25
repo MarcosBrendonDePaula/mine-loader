@@ -413,6 +413,31 @@ public final class ModLoader {
         }
     }
 
+    /**
+     * Confere uma lista de caixas declaradas.
+     *
+     * <p>Um metodo so para os cinco campos que aceitam caixa. Enquanto a regra vivia dentro do laco
+     * de {@code boxes}, os outros campos entravam sem conferencia nenhuma -- e uma caixa invertida
+     * desenha do avesso, com as faces apontando para dentro, que e um defeito dificil de ligar a
+     * causa.
+     */
+    private void validarCaixas(String campo, List<List<Float>> caixas) {
+        if (caixas == null) return;
+
+        for (List<Float> caixa : caixas) {
+            require(caixa != null && caixa.size() == 6,
+                    "cada caixa de " + campo + " precisa de seis numeros: x1,y1,z1,x2,y2,z2");
+            for (Float valor : caixa) {
+                require(valor != null && valor >= 0 && valor <= 16,
+                        "coordenada de " + campo + " fora do bloco (0 a 16): " + valor);
+            }
+            require(caixa.get(0) < caixa.get(3) && caixa.get(1) < caixa.get(4)
+                            && caixa.get(2) < caixa.get(5),
+                    "caixa invertida em " + campo
+                            + ": cada coordenada final precisa ser maior que a inicial");
+        }
+    }
+
     /** Classes de ferramenta que o loader sabe registrar. */
     private static final Set<String> TOOL_TYPES =
             Set.of("pickaxe", "axe", "shovel", "hoe", "sword");
@@ -799,19 +824,23 @@ public final class ModLoader {
                                 + dev.lualoader.content.BlockShapes.names());
             }
 
-            for (List<Float> caixa : block.shape.boxes) {
-                require(caixa != null && caixa.size() == 6,
-                        "cada caixa de shape.boxes precisa de seis numeros: x1,y1,z1,x2,y2,z2");
-                for (Float valor : caixa) {
-                    require(valor != null && valor >= 0 && valor <= 16,
-                            "coordenada de caixa fora do bloco (0 a 16): " + valor);
-                }
-                // Uma caixa invertida desenha do avesso: as faces apontam para dentro e a peca
-                // fica invisivel de fora, que e um defeito dificil de ligar a causa.
-                require(caixa.get(0) < caixa.get(3) && caixa.get(1) < caixa.get(4)
-                                && caixa.get(2) < caixa.get(5),
-                        "caixa invertida: cada coordenada final precisa ser maior que a inicial");
+            validarCaixas("shape.boxes", block.shape.boxes);
+            validarCaixas("shape.cores", block.shape.cores);
+            validarCaixas("shape.arms", block.shape.arms);
+
+            // As duas formas antigas passam pela mesma regra: enquanto so `boxes` era conferido,
+            // um `core` com cinco numeros era ignorado em silencio e o bloco saia sem forma.
+            if (block.shape.core != null && !block.shape.core.isEmpty()) {
+                validarCaixas("shape.core", List.of(block.shape.core));
             }
+            if (block.shape.arm != null && !block.shape.arm.isEmpty()) {
+                validarCaixas("shape.arm", List.of(block.shape.arm));
+            }
+
+            // Braco sem nucleo nao tem em que se apoiar: o bloco seria so bracos soltos no ar.
+            require(dev.lualoader.content.BlockShapes.armBoxes(block.shape).isEmpty()
+                            || !dev.lualoader.content.BlockShapes.coreBoxes(block.shape).isEmpty(),
+                    "shape declara braco e nao declara nucleo em " + block.id);
         }
         if (block.inventory != null) {
             // O teto e o do bau grande, e nao um numero escolhido aqui: a janela do jogo desenha

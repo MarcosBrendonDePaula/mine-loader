@@ -69,9 +69,7 @@ public final class NeoForgeStateProperties {
 
     /** Se o bloco declara nucleo e a quem se conectar. */
     public static boolean connects(ModManifest.BlockDefinition definition) {
-        return definition.shape != null
-                && definition.shape.core != null && definition.shape.core.size() == 6
-                && definition.shape.connectsTo != null && !definition.shape.connectsTo.isEmpty();
+        return dev.lualoader.content.BlockShapes.connects(definition);
     }
 
     /**

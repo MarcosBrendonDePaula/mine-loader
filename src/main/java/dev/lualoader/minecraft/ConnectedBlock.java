@@ -47,8 +47,15 @@ public class ConnectedBlock extends DeclarativeDataBlock {
      */
     private final boolean withData;
 
-    private final BlockShapes.Box core;
-    private final BlockShapes.Box arm;
+    /**
+     * As caixas do nucleo e as do braco.
+     *
+     * <p>Listas, e nao uma caixa cada: o cano do Logistic Pipes tem placas nas faces alem do miolo,
+     * e um colar na ponta de cada braco. As caixas de um braco giram juntas, entao o conjunto se
+     * comporta como uma peca so.
+     */
+    private final java.util.List<BlockShapes.Box> core;
+    private final java.util.List<BlockShapes.Box> arm;
 
     /** Ids de bloco a que este se conecta. */
     private final Set<Identifier> blockIds;
@@ -68,15 +75,15 @@ public class ConnectedBlock extends DeclarativeDataBlock {
     public ConnectedBlock(Settings settings,
                           float hardness, float resistance, float slipperiness,
                           float velocityMultiplier, float jumpVelocityMultiplier,
-                          BlockShapes.Box core, BlockShapes.Box arm, List<String> connectsTo,
+                          java.util.List<BlockShapes.Box> core, java.util.List<BlockShapes.Box> arm, List<String> connectsTo,
                           boolean withData) {
         super(settings, hardness, resistance, slipperiness,
                 velocityMultiplier, jumpVelocityMultiplier);
 
         this.withData = withData;
 
-        this.core = core;
-        this.arm = arm;
+        this.core = core == null ? java.util.List.of() : java.util.List.copyOf(core);
+        this.arm = arm == null ? java.util.List.of() : java.util.List.copyOf(arm);
 
         Set<Identifier> ids = new LinkedHashSet<>();
         Set<TagKey<Block>> tagKeys = new LinkedHashSet<>();

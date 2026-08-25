@@ -44,8 +44,15 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
      */
     private final boolean withData;
 
-    private final BlockShapes.Box core;
-    private final BlockShapes.Box arm;
+    /**
+     * As caixas do nucleo e as do braco.
+     *
+     * <p>Listas, e nao uma caixa cada: o cano do Logistic Pipes tem placas nas faces alem do miolo,
+     * e um colar na ponta de cada braco. As caixas de um braco giram juntas, entao o conjunto se
+     * comporta como uma peca so.
+     */
+    private final java.util.List<BlockShapes.Box> core;
+    private final java.util.List<BlockShapes.Box> arm;
 
     private final Set<ResourceLocation> blockIds;
     private final Set<TagKey<Block>> tags;
@@ -59,14 +66,14 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
     private final Map<String, VoxelShape> shapeCache = new ConcurrentHashMap<>();
 
     public NeoForgeConnectedBlock(Properties properties, int luminance,
-                                  BlockShapes.Box core, BlockShapes.Box arm,
+                                  java.util.List<BlockShapes.Box> core, java.util.List<BlockShapes.Box> arm,
                                   List<String> connectsTo, boolean withData) {
         super(properties, luminance, null, null);
 
         this.withData = withData;
 
-        this.core = core;
-        this.arm = arm;
+        this.core = core == null ? java.util.List.of() : java.util.List.copyOf(core);
+        this.arm = arm == null ? java.util.List.of() : java.util.List.copyOf(arm);
 
         Set<ResourceLocation> ids = new LinkedHashSet<>();
         Set<TagKey<Block>> tagKeys = new LinkedHashSet<>();

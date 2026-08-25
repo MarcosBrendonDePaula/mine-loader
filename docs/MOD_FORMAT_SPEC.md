@@ -144,6 +144,26 @@ A declaração de bloco é composta por identidade, material, configurações, e
 | `drops` | objeto | Pode ser recarregado quando convertido em dados |
 | `behavior` | objeto | Depende do callback e do tipo de bloco |
 
+### Forma de um bloco que conecta
+
+| Campo | O que é |
+|---|---|
+| `core` | o miolo, uma caixa `[x1,y1,z1,x2,y2,z2]` |
+| `cores` | o miolo com **várias** caixas; quando declarado, vence `core` |
+| `arm` | o braço, uma caixa, desenhado apontando para o **norte** |
+| `arms` | o braço com **várias** caixas; quando declarado, vence `arm` |
+| `connects_to` | ids de bloco, ou tags com `#` |
+
+Uma caixa por peça cobre cano, cerca e muro. Não cobre um cano com placas nas faces além do miolo,
+nem um braço que é tubo mais colar — e foi esse o caso real que trouxe `cores` e `arms`.
+
+**As caixas de um braço giram juntas.** O conjunto se comporta como uma peça só: girar cada uma por
+conta daria pedaços apontando para lados diferentes. No blockstate continua sendo **um** `apply` por
+lado, e não um por caixa.
+
+O braço é declarado uma vez, apontando para o norte, e o loader gira para os outros cinco lados.
+Declarar seis daria seis listas para manter em sincronia, e o primeiro ajuste esqueceria uma.
+
 O loader deve retornar uma mensagem de diagnóstico quando um campo solicitado não for suportado dinamicamente. Não deve aceitar silenciosamente uma alteração que o jogo não consiga aplicar.
 
 ## 5. Recursos e texturas

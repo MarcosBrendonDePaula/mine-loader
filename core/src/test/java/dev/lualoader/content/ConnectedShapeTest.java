@@ -150,6 +150,78 @@ class ConnectedShapeTest {
         assertEquals(List.of(NUCLEO), forma);
     }
 
+    // ------------------------------------------------------- nucleo e braco de varias caixas
+
+    /** Um colar na ponta do braco, como o do cano do mod original. */
+    private static final BlockShapes.Box COLAR = new BlockShapes.Box(4, 4, 0, 12, 12, 2);
+
+    @Test
+    void asCaixasDeUmBracoGiramJuntas() {
+        List<BlockShapes.Box> forma = BlockShapes.connected(
+                List.of(NUCLEO), List.of(BRACO, COLAR), Set.of("east"));
+
+        assertEquals(3, forma.size(), "o nucleo mais as duas caixas do braco");
+
+        // Girar cada caixa por conta daria pedacos apontando para lados diferentes: o tubo para
+        // leste e o colar para o norte. Elas precisam sair as duas no mesmo lado.
+        BlockShapes.Box tubo = forma.get(1);
+        BlockShapes.Box colar = forma.get(2);
+        assertEquals(BlockShapes.rotate(BRACO, "east"), tubo);
+        assertEquals(BlockShapes.rotate(COLAR, "east"), colar);
+
+        // E as duas ficam na metade leste do bloco, que e para onde o braco aponta.
+        assertTrue(tubo.toX() > 8, "o tubo deveria estar a leste: " + tubo);
+        assertTrue(colar.toX() > 8, "o colar deveria estar a leste: " + colar);
+    }
+
+    @Test
+    void cadaLadoLigadoAcrescentaOConjuntoInteiro() {
+        List<BlockShapes.Box> forma = BlockShapes.connected(
+                List.of(NUCLEO), List.of(BRACO, COLAR), Set.of("north", "south", "up"));
+
+        // Um nucleo mais tres lados de duas caixas cada.
+        assertEquals(7, forma.size());
+    }
+
+    @Test
+    void oNucleoTambemPodeTerVariasCaixas() {
+        BlockShapes.Box placa = new BlockShapes.Box(4, 4, 4, 12, 12, 5);
+        List<BlockShapes.Box> forma =
+                BlockShapes.connected(List.of(NUCLEO, placa), List.of(), Set.of("north"));
+
+        // As duas do nucleo, e nenhum braco porque nao ha braco declarado -- mesmo com um lado
+        // ligado. Um lado ligado sem braco declarado nao pode inventar geometria.
+        assertEquals(List.of(NUCLEO, placa), forma);
+    }
+
+    @Test
+    void aListaVenceACaixaUnica() {
+        // A regra existe uma vez so, no nucleo, porque o montador do pacote e os dois adaptadores
+        // precisam da mesma resposta. Divergindo, o bloco sairia desenhado de um jeito e com
+        // colisao de outro.
+        List<BlockShapes.Box> escolhidas = BlockShapes.pick(
+                List.of(6f, 6f, 6f, 10f, 10f, 10f),
+                List.of(List.of(0f, 0f, 0f, 16f, 16f, 2f), List.of(0f, 0f, 14f, 16f, 16f, 16f)));
+        assertEquals(2, escolhidas.size(), "declarada a lista, e ela que vale");
+
+        // Sem lista, a caixa unica continua valendo -- os manifestos que ja existem nao mudam.
+        assertEquals(List.of(NUCLEO), BlockShapes.pick(List.of(6f, 6f, 6f, 10f, 10f, 10f), List.of()));
+
+        // E sem nenhuma das duas, nao ha forma nenhuma.
+        assertTrue(BlockShapes.pick(null, null).isEmpty());
+    }
+
+    @Test
+    void umaCaixaTortaNaListaNaoDerrubaAsOutras() {
+        // A recusa com mensagem mora no validador do manifesto, que sabe o id do bloco. Aqui, no
+        // meio da aritmetica, uma excecao so daria erro sem contexto.
+        List<BlockShapes.Box> caixas = BlockShapes.boxesOf(List.of(
+                List.of(0f, 0f, 0f, 16f, 16f, 2f),
+                List.of(1f, 2f, 3f),
+                List.of(0f, 0f, 14f, 16f, 16f, 16f)));
+        assertEquals(2, caixas.size(), "a caixa com tres numeros deveria ter sido ignorada");
+    }
+
     @Test
     void seisNumerosViramCaixaEORestoNao() {
         assertEquals(NUCLEO, BlockShapes.boxOf(List.of(6f, 6f, 6f, 10f, 10f, 10f)));
