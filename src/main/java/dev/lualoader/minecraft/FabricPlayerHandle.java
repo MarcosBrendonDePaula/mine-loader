@@ -197,6 +197,17 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
+    public int[] lookingAt(double maxDistance) {
+        // NONE para liquido: quem mira num bloco dentro d'agua quer o bloco, e nao a superficie.
+        var resultado = player.raycast(maxDistance, 0f, false);
+        if (!(resultado instanceof net.minecraft.util.hit.BlockHitResult hit)) return null;
+        if (resultado.getType() != net.minecraft.util.hit.HitResult.Type.BLOCK) return null;
+
+        var pos = hit.getBlockPos();
+        return new int[]{pos.getX(), pos.getY(), pos.getZ(), hit.getSide().getId()};
+    }
+
+    @Override
     public void teleport(double x, double y, double z) {
         player.teleport(player.getServerWorld(), x, y, z,
                 java.util.Set.of(), player.getYaw(), player.getPitch());

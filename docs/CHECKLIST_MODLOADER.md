@@ -181,7 +181,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [ ] Largar item solto no mundo, sem passar pelo inventário de alguém
 - [ ] Ler e emitir sinal de redstone
 - [x] Tique agendado por posição (`schedule_block` / `on_scheduled`) — "volte aqui em N tiques"
-- [ ] Raycast — o primeiro bloco que uma linha atravessa
+- [x] Raycast — o primeiro bloco que uma linha atravessa (`player.looking_at`)
 - [ ] Carregar e manter chunk sob demanda
 
 ## 6. API de jogador
@@ -195,7 +195,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Mensagem, action bar, título e som direcionado
 - [x] Contar, dar, tirar e limpar item
 - [x] Item declarado ao dar — nome, lore, dano, encantamento, `custom_model_data`
-- [ ] **Direção do olhar** — sem ela não há mira nem seleção à distância
+- [x] **Direção do olhar** — `player.looking_at` devolve o bloco mirado e a face atingida
 - [ ] Ler efeitos ativos
 - [ ] Postura — agachado, correndo, voando, nadando
 - [ ] Velocidade e vetor de movimento

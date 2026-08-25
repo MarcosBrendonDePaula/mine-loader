@@ -636,7 +636,15 @@ class PlatformBridgeTest {
 
         runtime.triggerAll("player_joined", player);
 
-        assertTrue(player.received.isEmpty(), "ler o item na mao exige player.read");
+        // O que este caso protege e o vazamento: o item na mao nao pode chegar a quem nao declarou
+        // player.read. O jogador passou a receber um AVISO de que a chamada falhou -- que e outra
+        // coisa, e existe para um mod quebrado nao virar silencio dentro do jogo.
+        for (String mensagem : player.received) {
+            assertFalse(mensagem.startsWith("mao: "),
+                    "o item na mao vazou sem permissao: " + mensagem);
+        }
+        assertTrue(player.received.stream().anyMatch(m -> m.contains("permiss")),
+                "quem jogou deveria saber que o mod tentou algo sem permissao: " + player.received);
     }
 
     @Test

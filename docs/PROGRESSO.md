@@ -171,6 +171,33 @@ o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 
 ---
 
+## Onde a sessão parou
+
+**Publicado e verde:** build, 18/18 GameTests em cada plataforma, suíte do núcleo, e 10/10 na
+bateria do mod migrado.
+
+**Fechado nesta rodada, tudo saído de jogar de verdade:**
+
+- **`player.looking_at`** — o bloco mirado e a face atingida. Fecha dois itens do checklist
+  (raycast e direção do olhar), e faz um comando não precisar de coordenada digitada.
+- **Erro de script avisa quem clicou.** Um erro de Lua num callback é registrado e não propagado, o
+  que impede um mod quebrado de derrubar o jogo — mas quem clicava via o clique não fazer nada.
+  Custou uma investigação inteira: uma cor declarada como número derrubava a montagem de uma tela,
+  o log tinha a resposta na primeira linha, e dentro do jogo o sintoma era silêncio absoluto.
+- **O diagnóstico de manifesto passou a olhar itens**, não só blocos — um item podia declarar a
+  textura no formato de bloco e cair no substituto sem uma linha de aviso.
+
+**O que está em aberto, em ordem de quanto atrapalha:**
+
+1. **O desenho da malha no Fabric.** Ver a seção própria, abaixo. O NeoForge desenha; o Fabric não.
+   Uma nota importante de método: o AO foi desligado nos dois lados "para não divergir por
+   configuração", e isso **quebrou o lado que funcionava**. Foi restaurado no NeoForge. Quando um
+   lado funciona e o outro não, o lado bom é a referência — não se mexe nele.
+2. **O chassi não tem caso na bateria.** Foi verificado à mão: 32 barras saíram sozinhas de um baú
+   e chegaram ao outro. Sem caso automático, quebra em silêncio.
+3. **Configurar exige comando.** Abastecedor, satélite, fabricador e os slots do chassi não têm
+   tela de configuração; clicar neles só mostra o estado e o comando a usar.
+
 ## A refinar, achado ao portar
 
 Coisas que o loader faz de um jeito mais simples do que precisaria, encontradas usando-o de verdade.

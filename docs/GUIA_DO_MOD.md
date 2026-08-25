@@ -342,6 +342,26 @@ declarar a permissão dela é erro em tempo de execução.
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
 | `entity.register` | Declarar espécie nova por script. Mais forte que as três acima: acrescenta um tipo ao registro do jogo, que vale para o mundo inteiro e não se desfaz sem reiniciar |
 
+## Saber para onde quem joga está olhando
+
+```lua
+local alvo = ctx.player.looking_at()      -- alcance de 5 blocos, o de construção
+local longe = ctx.player.looking_at(20)   -- até 64
+
+if alvo ~= nil then
+    ctx.server.broadcast(alvo.x .. "," .. alvo.y .. "," .. alvo.z .. " lado " .. alvo.side)
+end
+```
+
+Devolve `x`, `y`, `z` e `side` (`"up"`, `"down"`, `"north"`, `"south"`, `"west"`, `"east"`), ou
+**nil** quando a linha de visão não encontra bloco. Exige `player.read`.
+
+**`nil` e não zero:** olhar para o céu é uma resposta legítima, e devolver uma posição faria o mod
+agir sobre a origem do mundo sem ninguém ter mirado nela.
+
+Serve para um comando não pedir coordenada digitada — mirar é o gesto natural, e a alternativa é
+abrir o F3 e anotar três números do bloco que se está vendo na frente.
+
 ## Desenhar um bloco com malha
 
 Quando caixas não bastam — um cano, uma máquina, qualquer coisa arredondada — o bloco pode apontar

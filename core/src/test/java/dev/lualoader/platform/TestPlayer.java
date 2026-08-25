@@ -96,6 +96,19 @@ public class TestPlayer implements PlayerHandle {
         return new float[]{18.0f, 20.0f};
     }
 
+    /**
+     * Para onde o teste diz que este jogador olha, ou {@code null} quando olha para o vazio.
+     *
+     * <p>Publico e mutavel de proposito: o caso interessante nao e mirar, e o que o mod faz com a
+     * resposta -- inclusive quando ela nao vem.
+     */
+    public int[] lookingAt;
+
+    @Override
+    public int[] lookingAt(double maxDistance) {
+        return lookingAt;
+    }
+
     @Override
     public void teleport(double x, double y, double z) {
         where = new int[]{(int) x, (int) y, (int) z};

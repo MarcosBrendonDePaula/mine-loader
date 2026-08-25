@@ -118,6 +118,8 @@ núcleo não conhecer Minecraft.
 | Modelo `.obj` de bloco | sim | sim | O leitor mora no nucleo, e as duas plataformas usam o mesmo |
 | `obj_parts` -- pecas por conexao | sim | sim | Mesmos numeros de face nos dois: 164 no miolo, 40 na manga, 2 na placa |
 | Malha desenhada corretamente na tela | **com defeito** | sim | Ver "A malha desenha errado no Fabric", abaixo |
+| `player.looking_at` -- o bloco mirado | sim | sim | Raycast do jogo em cada lado, mesmo resultado |
+| Erro de script avisa quem clicou | sim | sim | Antes so ia para o log, e no jogo o sintoma era silencio |
 | `item_used`, `item_used_on_block` | sim | sim | |
 | `client_screen_opened`, `client_screen_closed` | sim | sim | Relatados pelo cliente; ver `EVENTS.md` |
 | Clique em menu | sim | sim | |

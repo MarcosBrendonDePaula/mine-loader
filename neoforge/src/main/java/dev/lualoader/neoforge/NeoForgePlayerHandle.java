@@ -225,6 +225,17 @@ public class NeoForgePlayerHandle implements PlayerHandle {
     }
 
     @Override
+    public int[] lookingAt(double maxDistance) {
+        // NONE para liquido: quem mira num bloco dentro d'agua quer o bloco, e nao a superficie.
+        var resultado = player.pick(maxDistance, 0f, false);
+        if (!(resultado instanceof net.minecraft.world.phys.BlockHitResult hit)) return null;
+        if (resultado.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return null;
+
+        var pos = hit.getBlockPos();
+        return new int[]{pos.getX(), pos.getY(), pos.getZ(), hit.getDirection().get3DDataValue()};
+    }
+
+    @Override
     public void teleport(double x, double y, double z) {
         player.teleportTo(x, y, z);
     }

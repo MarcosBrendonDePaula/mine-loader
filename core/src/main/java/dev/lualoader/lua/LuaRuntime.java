@@ -589,9 +589,11 @@ public final class LuaRuntime {
             } catch (LuaError error) {
                 logger.error("Erro Lua no mod {} durante {}: {}",
                         script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (BridgeException error) {
                 logger.error("Erro de plataforma no mod {} durante {}: {}",
                         script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}",
                         script.mod().manifest().id, event, error);
@@ -679,9 +681,11 @@ public final class LuaRuntime {
             } catch (LuaError error) {
                 logger.error("Erro Lua no mod {} durante {}: {}",
                         script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (BridgeException error) {
                 logger.error("Erro de plataforma no mod {} durante {}: {}",
                         script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}",
                         script.mod().manifest().id, event, error);
@@ -741,8 +745,10 @@ public final class LuaRuntime {
                 }
             } catch (LuaError error) {
                 logger.error("Erro Lua no mod {} durante {}: {}", script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (BridgeException error) {
                 logger.error("Erro de plataforma no mod {} durante {}: {}", script.mod().manifest().id, event, error.getMessage());
+                reportToPlayer(player, script.mod(), event, error.getMessage());
             } catch (RuntimeException error) {
                 logger.error("Erro Java na ponte Lua do mod {} durante {}", script.mod().manifest().id, event, error);
             } finally {
@@ -1216,6 +1222,31 @@ public final class LuaRuntime {
             return (LuaFunction) returned;
         } catch (LuaError error) {
             throw new IOException("erro no script " + reference + ": " + error.getMessage(), error);
+        }
+    }
+
+    /**
+     * Conta a quem esta jogando que o script daquele mod falhou.
+     *
+     * <p><b>Por que isto existe.</b> Um erro de Lua num callback e registrado e nao propagado --
+     * o que impede um mod quebrado de derrubar o jogo, e e a regra certa. Mas quem esta jogando so
+     * ve o clique nao fazer nada: sem mensagem, um defeito de uma linha vira uma investigacao de
+     * hipoteses. Aconteceu nesta sessao com uma cor no formato errado, que derrubava a tela inteira
+     * e nao aparecia em lugar nenhum dentro do jogo.
+     *
+     * <p>A mensagem vai so para quem causou a acao, e nao para todo mundo: e a pessoa que clicou
+     * quem precisa saber que o clique falhou.
+     */
+    private void reportToPlayer(PlayerHandle player, ModLoader.LoadedMod mod,
+                                String event, String message) {
+        if (player == null) return;
+
+        try {
+            player.sendMessage("[" + mod.manifest().id + "] falhou em " + event
+                    + ": " + (message == null ? "erro sem mensagem" : message));
+        } catch (RuntimeException ignored) {
+            // Avisar sobre a falha nao pode virar outra falha. Se a plataforma nao aceita a
+            // mensagem agora -- jogador saindo, conexao fechando --, o log ja tem o registro.
         }
     }
 
@@ -2107,6 +2138,14 @@ public final class LuaRuntime {
      * {@code player.inventory}: sao poderes diferentes, e ate agora {@code player.read} era uma
      * permissao que nao protegia nada.
      */
+    /**
+     * Os lados na ordem em que o jogo os numera.
+     *
+     * <p>O contrato devolve numero porque e o que as duas plataformas tem em comum; o Lua recebe
+     * nome, porque quem escreve o mod compara com "up", e nao com 1.
+     */
+    private static final String[] SIDE_NAMES = {"down", "up", "north", "south", "west", "east"};
+
     private LuaTable playerApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
         LuaTable playerApi = new LuaTable();
         playerApi.set("name", LuaValue.valueOf(player.name()));
@@ -2151,6 +2190,32 @@ public final class LuaRuntime {
                 table.set("x", LuaValue.valueOf(position[0]));
                 table.set("y", LuaValue.valueOf(position[1]));
                 table.set("z", LuaValue.valueOf(position[2]));
+                return table;
+            }
+        });
+        playerApi.set("looking_at", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.read");
+
+                // Cinco blocos e o alcance de construcao do jogo. Um mod que queira mirar mais
+                // longe diz quanto, e o teto existe para um script nao varrer o mundo inteiro
+                // procurando o primeiro bloco de uma linha.
+                double alcance = args.narg() >= 1 ? args.arg(1).checkdouble() : 5.0;
+                if (alcance <= 0) throw new LuaError("looking_at exige um alcance positivo");
+                if (alcance > 64) throw new LuaError("looking_at aceita no maximo 64 blocos");
+
+                int[] alvo = player.lookingAt(alcance);
+
+                // Nil, e nao uma posicao qualquer: olhar para o ceu e uma resposta legitima, e
+                // devolver zero faria o mod agir sobre a origem do mundo sem ninguem pedir.
+                if (alvo == null) return LuaValue.NIL;
+
+                LuaTable table = new LuaTable();
+                table.set("x", LuaValue.valueOf(alvo[0]));
+                table.set("y", LuaValue.valueOf(alvo[1]));
+                table.set("z", LuaValue.valueOf(alvo[2]));
+                table.set("side", LuaValue.valueOf(SIDE_NAMES[alvo[3] % SIDE_NAMES.length]));
                 return table;
             }
         });

@@ -56,6 +56,23 @@ public interface PlayerHandle {
     void teleport(double x, double y, double z);
 
     /**
+     * O bloco para onde quem joga esta olhando.
+     *
+     * <p>Devolve {@code [x, y, z, lado]}, onde o lado e a face atingida em numero -- a ordem do
+     * jogo: 0 baixo, 1 cima, 2 norte, 3 sul, 4 oeste, 5 leste. Devolve {@code null} quando a linha
+     * de visao nao encontra bloco nenhum dentro do alcance.
+     *
+     * <p><b>Por que isto faltava fazer diferenca.</b> Sem mira, todo comando de mod pede
+     * coordenada digitada, e quem joga tem que abrir o F3 para descobrir onde esta o bloco que esta
+     * vendo na frente. E a diferenca entre "clique e pronto" e "anote tres numeros".
+     *
+     * <p>Atravessa liquido, e nao para na agua: quem mira num bloco dentro d'agua quer o bloco.
+     *
+     * @param maxDistance alcance em blocos; o jogo usa cinco para o alcance de construcao
+     */
+    int[] lookingAt(double maxDistance);
+
+    /**
      * Abre um menu de itens para o jogador.
      *
      * <p>Usa a tela de container do próprio jogo, o que dispensa um renderizador novo no cliente e
