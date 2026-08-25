@@ -875,18 +875,23 @@ public final class ResourcePackAssembler {
         // variante troca textura e o modelo declarado ja traz as suas.
         DeclaredModel declaredModel = assembleDeclaredModel(mod, block, generatedRoot);
         if (declaredModel != null) {
-            // Um modelo declarado vence a forma por estado, e o aviso importa: um cano com desenho
-            // proprio e `connects_to` teria dois desenhos disputando o mesmo bloco, e o multipart
-            // simplesmente ignoraria o modelo -- o mod pareceria nao ter sido aplicado.
-            if (dev.lualoader.content.BlockShapes.connects(block)) {
-                logger.warn("Bloco {} declara modelo proprio e tambem shape.connects_to;"
-                                + " o modelo vence e os bracos por conexao nao serao desenhados",
-                        namespace + ":" + blockId);
-            }
             // Quem escreve as pecas ja escreveu o blockstate multipart que escolhe entre elas.
             // Escrever de novo aqui trocava esse multipart por variantes, e o bloco voltava a
             // desenhar o catalogo inteiro -- o cano com as seis conexoes sempre abertas.
             if (!declaredModel.blockstateEscrito()) {
+                // So aqui o aviso vale: um modelo unico e `connects_to` sao dois desenhos
+                // disputando o mesmo bloco, e o modelo vence -- o cano fica com as conexoes
+                // congeladas no que o arquivo desenhou.
+                //
+                // Quando as pecas escreveram o blockstate, o oposto e verdade: cada peca ja saiu
+                // com `when` na propriedade do lado, e o braco aparece e some com a conexao. Avisar
+                // ali dizia ao autor do mod que o recurso nao funcionava justamente na vez em que
+                // ele funciona, e mandava procurar defeito onde nao havia.
+                if (dev.lualoader.content.BlockShapes.connects(block)) {
+                    logger.warn("Bloco {} declara modelo proprio e tambem shape.connects_to;"
+                                    + " o modelo vence e os bracos por conexao nao serao desenhados",
+                            namespace + ":" + blockId);
+                }
                 writeDeclaredBlockstate(generatedRoot, namespace, blockId, block, declaredModel.id());
             }
             return;
@@ -1064,8 +1069,13 @@ public final class ResourcePackAssembler {
 
         if (hasArm) {
             for (String side : dev.lualoader.content.BlockShapes.SIDES) {
+                // `block|inventory` e um OU do formato multipart do jogo: o braco de caixa e um
+                // so, e cresce para os dois tipos de vizinho. Quem quer bracos diferentes usa
+                // `obj_parts`, que tem uma peca por valor.
                 parts.append(",").append(NEWLINE)
-                        .append("    { \"when\": { \"").append(side).append("\": \"true\" },")
+                        .append("    { \"when\": { \"").append(side).append("\": \"")
+                        .append(dev.lualoader.content.BlockShapes.LINK_BLOCK).append("|")
+                        .append(dev.lualoader.content.BlockShapes.LINK_INVENTORY).append("\" },")
                         .append(" \"apply\": { \"model\": \"").append(armModel).append("\"");
                 appendArmRotation(parts, side);
                 parts.append(" } }");
@@ -1368,13 +1378,32 @@ public final class ResourcePackAssembler {
                     .append(namespace).append(":block/").append(nome).append("\" } }");
         }
 
+        // A peca do lado do inventario so entra quando o bloco pede ligacao a inventario. Escreve-la
+        // sempre encheria o blockstate de todo cano do mundo com uma condicao que nunca acontece.
+        //
+        // Quando entra e o mod nao declarou peca propria, vale a de `connected`: um mod escrito
+        // antes desta distincao desenha o mesmo braco dos dois lados, em vez de ficar sem braco
+        // nenhum no lado do bau -- que seria a regressao silenciosa de sempre.
+        boolean ligaAInventario =
+                dev.lualoader.content.BlockShapes.connectsToInventory(block.shape);
+        var bracoInventario = partes.connectedInventory == null || partes.connectedInventory.isEmpty()
+                ? partes.connected
+                : partes.connectedInventory;
+
         for (String lado : dev.lualoader.content.BlockShapes.SIDES) {
             String letra = LETRA_DO_LADO.get(lado);
 
             appendParts(multipart, mod, generatedRoot, namespace, block, textura, objRef,
-                    partes.connected, letra, lado, true);
+                    partes.connected, letra, lado,
+                    dev.lualoader.content.BlockShapes.LINK_BLOCK);
+            if (ligaAInventario) {
+                appendParts(multipart, mod, generatedRoot, namespace, block, textura, objRef,
+                        bracoInventario, letra, lado,
+                        dev.lualoader.content.BlockShapes.LINK_INVENTORY);
+            }
             appendParts(multipart, mod, generatedRoot, namespace, block, textura, objRef,
-                    partes.disconnected, letra, lado, false);
+                    partes.disconnected, letra, lado,
+                    dev.lualoader.content.BlockShapes.LINK_NONE);
         }
 
         write(generatedRoot.resolve("assets").resolve(namespace)
@@ -1394,7 +1423,7 @@ public final class ResourcePackAssembler {
     private void appendParts(StringBuilder multipart, ModLoader.LoadedMod mod, Path generatedRoot,
                              String namespace, ModManifest.BlockDefinition block, String textura,
                              String objRef, java.util.List<ModManifest.ObjPartDefinition> pecas,
-                             String letra, String lado, boolean ligado) throws IOException {
+                             String letra, String lado, String ligacao) throws IOException {
         if (pecas == null) return;
 
         int indice = 0;
@@ -1407,7 +1436,7 @@ public final class ResourcePackAssembler {
             }
             if (grupos.isEmpty()) continue;
 
-            String sufixo = (ligado ? "on" : "off") + indice++;
+            String sufixo = ligacao + indice++;
             String nome = block.id + "_" + sufixo + "_" + letra.toLowerCase(java.util.Locale.ROOT);
             // A regiao gira junto com o lado, como o braco: declarada uma vez apontando para o
             // norte, e o loader vira para os outros cinco.
@@ -1421,7 +1450,7 @@ public final class ResourcePackAssembler {
 
             if (multipart.length() > 0) multipart.append(",").append(NEWLINE);
             multipart.append("    { \"when\": { \"").append(lado).append("\": \"")
-                    .append(ligado).append("\" },")
+                    .append(ligacao).append("\" },")
                     .append(" \"apply\": { \"model\": \"")
                     .append(namespace).append(":block/").append(nome).append("\" } }");
         }

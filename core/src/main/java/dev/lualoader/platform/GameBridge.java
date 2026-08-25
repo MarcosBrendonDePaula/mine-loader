@@ -192,6 +192,27 @@ public interface GameBridge {
     java.util.List<String> recipesUsing(String itemId, int limit);
 
     /**
+     * O que sai de um arranjo de itens numa bancada — a pergunta que o jogador faz ao montar.
+     *
+     * <p>{@link #recipesFor} e {@link #recipesUsing} respondem <b>pelo resultado</b>: como se obtém
+     * isto, e para que isto serve. Nenhuma das duas responde no sentido que um cano de fabricação
+     * precisa — <i>tenho estes nove slots preenchidos, o que isso vira?</i> — e por isso um mod só
+     * conseguia fabricar escolhendo uma receita pelo nome do produto, nunca montando um padrão.
+     *
+     * <p>Quem decide é o jogo, e não o loader: a mesma busca que a bancada usa, no mesmo mundo, com
+     * as receitas do modpack inteiro. Um casamento escrito aqui saberia só as receitas que o autor
+     * do loader conhecia.
+     *
+     * @param items nove posições, da esquerda para a direita e de cima para baixo; cadeia vazia ou
+     *              {@code null} para uma posição vazia. Listas menores são completadas com vazio, e
+     *              a largura é sempre três — é o formato da bancada, e mudá-lo por parâmetro daria
+     *              duas convenções para a mesma coisa
+     * @return {@code "item;quantidade"} do que sai, ou {@code null} quando aquele arranjo não faz
+     *         nada. <b>Nada é consumido:</b> isto é uma pergunta, e quem tira do baú é o script
+     */
+    String craftingResult(java.util.List<String> items);
+
+    /**
      * Itens que um bloco ou uma entidade pode derrubar.
      *
      * <p>É a terceira pergunta de um catálogo, e para boa parte do jogo é a verdadeira: minério,
@@ -426,6 +447,11 @@ public interface GameBridge {
 
         @Override
         public java.util.List<String> recipesFor(String itemId, int limit) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public String craftingResult(java.util.List<String> items) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
 

@@ -121,7 +121,10 @@ class ConnectedBlockstateTest {
                 if (!parte.getAsJsonObject("when").has(lado)) continue;
 
                 achou = true;
-                assertEquals("true", parte.getAsJsonObject("when").get(lado).getAsString());
+                // `block|inventory`: o braco de caixa e um so, e cresce para os dois tipos de
+                // vizinho. Quem quer bracos diferentes usa `obj_parts`.
+                assertEquals("block|inventory",
+                        parte.getAsJsonObject("when").get(lado).getAsString());
                 assertEquals("tubos:block/cano_arm",
                         parte.getAsJsonObject("apply").get("model").getAsString());
             }

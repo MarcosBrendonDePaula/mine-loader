@@ -1863,6 +1863,34 @@ public final class LuaRuntime {
                         requireIdentifier(args.arg(1).tojstring()), recipeLimit(args.arg(2))));
             }
         });
+        // O que sai de um arranjo de nove slots -- a pergunta que o jogador faz ao montar na
+        // bancada. As outras duas operacoes de receita respondem pelo resultado ("como faco X?"), e
+        // nenhuma delas serve a um cano de fabricacao, que tem o padrao e quer saber o produto.
+        serverApi.set("crafting_result", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                LuaValue tabela = args.arg(1);
+                if (!tabela.istable()) throw new LuaError("crafting_result exige uma tabela de itens");
+
+                java.util.List<String> slots = new java.util.ArrayList<>(9);
+                for (int slot = 1; slot <= 9; slot++) {
+                    LuaValue valor = tabela.get(slot);
+                    // Nil e cadeia vazia sao a mesma coisa: a posicao vazia. Exigir a distincao
+                    // faria toda tela ter que preencher os nove buracos com "".
+                    slots.add(valor.isnil() ? "" : valor.tojstring().trim());
+                }
+
+                String resultado = bridge.craftingResult(slots);
+                if (resultado == null) return LuaValue.NIL;
+
+                int corte = resultado.lastIndexOf(';');
+                LuaTable saida = new LuaTable();
+                saida.set("item", LuaValue.valueOf(resultado.substring(0, corte)));
+                saida.set("count", LuaValue.valueOf(Integer.parseInt(resultado.substring(corte + 1))));
+                return saida;
+            }
+        });
         serverApi.set("spawn_entity", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {

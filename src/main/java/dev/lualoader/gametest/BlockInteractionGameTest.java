@@ -258,14 +258,22 @@ public class BlockInteractionGameTest implements FabricGameTest {
         });
     }
 
-    /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
+    /**
+     * Le a ligacao daquele lado, no estado que esta no mundo.
+     *
+     * <p>A propriedade tem tres valores, e nao dois: um lado pode estar livre, ligado a um bloco da
+     * lista, ou ligado a um inventario. Aqui interessa so se ha ligacao -- o teste do braco proprio
+     * do inventario e do desenho, e vive no montador do pacote.
+     */
+    @SuppressWarnings("unchecked")
     private static boolean conectado(TestContext context, BlockPos relative, String side) {
         var state = context.getWorld().getBlockState(context.getAbsolutePos(relative));
 
         for (var property : state.getProperties()) {
-            if (property.getName().equals(side)
-                    && property instanceof net.minecraft.state.property.BooleanProperty booleano) {
-                return state.get(booleano);
+            if (property.getName().equals(side) && property.getType() == String.class) {
+                String valor = state.get(
+                        (net.minecraft.state.property.Property<String>) property);
+                return !dev.lualoader.content.BlockShapes.LINK_NONE.equals(valor);
             }
         }
         throw new AssertionError("o cano nao tem a propriedade " + side

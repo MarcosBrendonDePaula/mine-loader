@@ -69,7 +69,8 @@ public final class BlockInteractionEvents {
                 pos.getX(),
                 pos.getY(),
                 pos.getZ(),
-                state.get(DeclarativeBlock.LUA_VARIANT),
+                state.contains(DeclarativeBlock.LUA_VARIANT)
+                        ? state.get(DeclarativeBlock.LUA_VARIANT) : 0,
                 registrar.variantCount(id)
         );
         // O evento carrega a dimensao em que aconteceu, para o script atuar no lugar certo.

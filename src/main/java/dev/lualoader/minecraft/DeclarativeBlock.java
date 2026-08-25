@@ -124,9 +124,21 @@ public class DeclarativeBlock extends Block {
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(LUA_VARIANT, LUA_LUMINANCE);
-
         DeclarativeStateProperties declared = PENDING.get();
+
+        // A luminosidade so entra quando o bloco a declara -- estatica ou por script. Ela custa
+        // dezesseis valores, e era registrada em todo bloco declarativo: quinze mods de exemplo
+        // criavam 128 mil blockstates, contra os cerca de 26 mil do Minecraft inteiro.
+        if (declared == null || declared.hasLuminance()) {
+            builder.add(LUA_LUMINANCE);
+        }
+
+        // A variante so entra quando o bloco declara mais de uma textura. Ela custa dezesseis
+        // valores, e um bloco de textura unica nunca sai da variante zero -- registra-la ali
+        // multiplicava por dezesseis todos os outros estados do bloco, sem nada em troca.
+        if (declared == null || declared.hasVariant()) {
+            builder.add(LUA_VARIANT);
+        }
         if (declared == null) return;
         for (Property<?> property : declared.properties().values()) {
             builder.add(property);

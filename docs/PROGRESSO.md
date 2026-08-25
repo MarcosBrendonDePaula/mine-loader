@@ -173,6 +173,75 @@ o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 
 ## Onde a sessão parou
 
+**O desenho do cano estava lendo o arquivo errado.** O OBJ do original tem um vocabulário que o
+manifesto não usava, e as contagens de face provam: desenhávamos `Edge_M_` e `Corner_M_` — 164 faces
+que são as **doze arestas e os oito cantos** do miolo. O corpo é `Spacer`, e estava de fora. Era um
+arame com a silhueta certa.
+
+Junto, três descobertas que valem mais que o conserto:
+
+- **`Side_BC_%s` é o braço para o inventário.** No Logistic Pipes `BC` é BuildCraft — o vizinho que
+  não é cano. O original tem **dois** braços por lado, 92 faces cada, e nunca pedimos o segundo. Era
+  por isso que o cano não crescia braço para o baú.
+- **O `keep_within` resolvia um problema que não existe.** A nota anterior dizia que "as placas do
+  original não têm lado no nome, e só a região as distingue". Têm: a linha `g` traz
+  `Texture_Side_W3` junto de `Side_Texture_Plate63`. A máquina de recorte inteira compensava uma
+  leitura equivocada do arquivo.
+- **O aviso `os bracos por conexao nao serao desenhados` era falso.** Ele disparava antes de olhar
+  se as peças já haviam escrito o blockstate multipart — ou seja, gritava justamente na vez em que
+  o recurso funciona.
+
+**O que ainda falta no desenho, e por quê.** `Corner_M_`, `Corner_I_` e `Corner_I3_` ocupam a
+**mesma caixa**: são três variantes do mesmo canto, e o original escolhe conforme quais dos três
+lados vizinhos estão ligados. `Mount_N_U` e `Support_N_U` ficam na costura entre dois lados. O
+`obj_parts` só sabe dizer "este lado está ligado" — falta condição **por par** e **por trio** de
+lados. Enquanto não existir, as junções ficam com o canto errado.
+
+### O custo de estado, que era grande e ninguém tinha medido
+
+Quinze mods de exemplo criavam **128.416 blockstates**. O Minecraft inteiro tem cerca de 26.000.
+
+Duas propriedades do loader eram registradas em **todo** bloco declarativo, dezesseis valores cada:
+`lua_variant` e `lua_luminance`. Zero dos quinze blocos declarava luminosidade, e exatamente um a
+mudava por script. Agora as duas são declaradas — `variant_textures` com mais de uma, e
+`state.dynamic_luminance` — e quem chama a operação sem declarar recebe a recusa dizendo o que
+fazer, em vez da mensagem do Minecraft sobre propriedade ausente.
+
+| | estados dos mods Lua |
+|---|---|
+| antes | 128.416 |
+| depois | **9.396** |
+
+**Medido no servidor, não estimado.** Com um GC forçado e o histograma do heap: 226 MB de dado vivo,
+dos quais `BlockState` e o cache dele são 5,2 MB **somando todos os mods da instância**, e o LuaJ
+inteiro é 0,4 MB. O consumo é do jogo — Metaspace de 123 MB do AE2, heap comprometido que o G1 não
+devolve, e o daemon do Gradle, que é outro JVM e costuma ser confundido com o servidor.
+
+### Fechado nesta rodada
+
+- **`connects_to: "@items"`** — o cano liga a qualquer coisa que guarde item, **por capability**. Era
+  a discordância de fundo: a rede alcançava o baú perguntando à capability, e o desenho procurava um
+  id numa lista. O lado deixou de ser booleano e passou a ter três valores (`none`/`block`/
+  `inventory`), nos dois adaptadores — é o que permite escolher entre os dois braços.
+- **`obj_parts.connected_inventory`** — peça própria do lado do baú, caindo na de `connected` quando
+  o mod não declara.
+- **`ctx.server.crafting_result(padrão)`** — recebe nove slots e devolve o que sai, perguntando ao
+  próprio jogo. As outras duas operações de receita respondem **pelo resultado**, e nenhuma servia a
+  um cano de fabricação, que tem o padrão e quer o produto.
+- **Tela do fabricador com bancada 3×3**, no elemento `grid` que já existia. Fecha o item 3 da lista
+  de pendências: era o único bloco cuja configuração exigia comando e agora tem tela.
+- **Cache de recurso remoto consultado antes do download.** Ele era indexado pelo hash do conteúdo, e
+  o conteúdo só se conhecia depois de baixar: economizava disco e não economizava rede. Com `sha256`
+  declarado, agora nem abre a conexão — e todo recurso remoto passou a ser guardado, não só textura.
+- **`/mod logistica mapa`** — a rede inteira com a vizinhança de cada cano, e os canos que existem
+  por perto e não entraram nela.
+
+Bateria do mod em **13/13**, com três casos novos. Um deles corrigiu uma premissa minha: **uma tora
+sozinha na bancada faz quatro tábuas** — receita sem formato ignora posição, e eu a tinha usado como
+exemplo de arranjo que não produz nada.
+
+## Onde a sessão parou (rodada anterior)
+
 **Publicado e verde:** build, 18/18 GameTests em cada plataforma, suíte do núcleo, e 10/10 na
 bateria do mod migrado.
 

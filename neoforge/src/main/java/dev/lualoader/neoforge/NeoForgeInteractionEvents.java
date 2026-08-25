@@ -122,7 +122,8 @@ public final class NeoForgeInteractionEvents {
         BlockEventData data = new BlockEventData(
                 id.toString(),
                 pos.getX(), pos.getY(), pos.getZ(),
-                state.getValue(NeoForgeDeclarativeBlock.VARIANT),
+                state.hasProperty(NeoForgeDeclarativeBlock.VARIANT)
+                        ? state.getValue(NeoForgeDeclarativeBlock.VARIANT) : 0,
                 content.variantCount(id));
 
         return run(serverLevel,

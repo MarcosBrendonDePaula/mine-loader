@@ -65,6 +65,15 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
      */
     private final Map<String, VoxelShape> shapeCache = new ConcurrentHashMap<>();
 
+    /**
+     * Se este bloco cresce braço em direção a qualquer coisa que guarde item.
+     *
+     * <p>Declarado com {@code "@items"} em {@code connects_to}. É o critério que a própria rede de
+     * um mod de logística usa — capability, e não id —, e tê-lo aqui é o que faz o desenho e a rede
+     * concordarem sobre onde há ligação.
+     */
+    private final boolean toInventory;
+
     public NeoForgeConnectedBlock(Properties properties, int luminance,
                                   java.util.List<BlockShapes.Box> core, java.util.List<BlockShapes.Box> arm,
                                   List<String> connectsTo, boolean withData) {
@@ -77,10 +86,13 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
 
         Set<ResourceLocation> ids = new LinkedHashSet<>();
         Set<TagKey<Block>> tagKeys = new LinkedHashSet<>();
+        boolean inventario = false;
         for (String entry : connectsTo == null ? List.<String>of() : connectsTo) {
             if (entry == null || entry.isBlank()) continue;
 
-            if (entry.startsWith("#")) {
+            if (BlockShapes.INVENTORY_TOKEN.equals(entry.trim())) {
+                inventario = true;
+            } else if (entry.startsWith("#")) {
                 ResourceLocation parsed = ResourceLocation.tryParse(entry.substring(1));
                 if (parsed != null) tagKeys.add(TagKey.create(BuiltInRegistries.BLOCK.key(), parsed));
             } else {
@@ -90,6 +102,7 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
         }
         this.blockIds = Set.copyOf(ids);
         this.tags = Set.copyOf(tagKeys);
+        this.toInventory = inventario;
 
         registerDefaultState(withAllDisconnected(defaultBlockState()));
     }
@@ -99,15 +112,17 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
             Direction.WEST, "west", Direction.EAST, "east",
             Direction.UP, "up", Direction.DOWN, "down"));
 
-    private BooleanProperty propertyOf(String side) {
-        return (BooleanProperty) declaredProperties().get(side);
+    @SuppressWarnings("unchecked")
+    private net.minecraft.world.level.block.state.properties.Property<String> propertyOf(String side) {
+        return (net.minecraft.world.level.block.state.properties.Property<String>)
+                declaredProperties().get(side);
     }
 
     private BlockState withAllDisconnected(BlockState state) {
         BlockState result = state;
         for (String side : BlockShapes.SIDES) {
-            BooleanProperty property = propertyOf(side);
-            if (property != null) result = result.setValue(property, false);
+            var property = propertyOf(side);
+            if (property != null) result = result.setValue(property, BlockShapes.LINK_NONE);
         }
         return result;
     }
@@ -125,11 +140,12 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
 
         BlockPos pos = context.getClickedPos();
         for (Direction direction : Direction.values()) {
-            BooleanProperty property = propertyOf(SIDE_OF.get(direction));
+            var property = propertyOf(SIDE_OF.get(direction));
             if (property == null) continue;
 
+            BlockPos neighbor = pos.relative(direction);
             state = state.setValue(property,
-                    connectsTo(context.getLevel().getBlockState(pos.relative(direction))));
+                    linkTo(context.getLevel().getBlockState(neighbor), context.getLevel(), neighbor));
         }
         return state;
     }
@@ -143,23 +159,50 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
     @Override
     protected BlockState updateShape(BlockState state, Direction direction, BlockState neighbor,
                                      LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
-        BooleanProperty property = propertyOf(SIDE_OF.get(direction));
+        var property = propertyOf(SIDE_OF.get(direction));
         if (property == null) {
             return super.updateShape(state, direction, neighbor, level, pos, neighborPos);
         }
-        return state.setValue(property, connectsTo(neighbor));
+        return state.setValue(property, linkTo(neighbor, level, neighborPos));
     }
 
-    private boolean connectsTo(BlockState neighbor) {
-        if (neighbor == null || neighbor.isAir()) return false;
+    /**
+     * Que tipo de ligação este bloco faz com aquele vizinho.
+     *
+     * <p>A lista declarada vem primeiro: um baú que também esteja nomeado por id conta como bloco,
+     * e não como inventário. É o que permite a um mod tratar um caso especial sem perder a regra
+     * geral.
+     */
+    private String linkTo(BlockState neighbor, LevelAccessor level, BlockPos pos) {
+        if (neighbor == null || neighbor.isAir()) return BlockShapes.LINK_NONE;
 
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(neighbor.getBlock());
-        if (blockIds.contains(id)) return true;
+        if (blockIds.contains(id)) return BlockShapes.LINK_BLOCK;
 
         for (TagKey<Block> tag : tags) {
-            if (neighbor.is(tag)) return true;
+            if (neighbor.is(tag)) return BlockShapes.LINK_BLOCK;
         }
-        return false;
+
+        if (toInventory && hasItems(level, pos)) return BlockShapes.LINK_INVENTORY;
+        return BlockShapes.LINK_NONE;
+    }
+
+    /**
+     * Se há inventário naquela posição.
+     *
+     * <p>A capability primeiro, porque é o que a ponte do loader responde a um mod — e o desenho
+     * discordar da rede é justamente o defeito que este caminho existe para fechar. Ela precisa de
+     * um {@link net.minecraft.world.level.Level} de verdade, e a atualização de vizinho às vezes
+     * chega com uma região de geração; nesse caso vale o contêiner do bloco, que cobre baú, barril
+     * e forno.
+     */
+    private boolean hasItems(LevelAccessor level, BlockPos pos) {
+        if (level instanceof net.minecraft.world.level.Level real
+                && real.getCapability(net.neoforged.neoforge.capabilities.Capabilities
+                        .ItemHandler.BLOCK, pos, null) != null) {
+            return true;
+        }
+        return level.getBlockEntity(pos) instanceof net.minecraft.world.Container;
     }
 
     @Override
@@ -181,8 +224,13 @@ public class NeoForgeConnectedBlock extends NeoForgeDeclarativeDataBlock {
         StringBuilder key = new StringBuilder();
 
         for (String side : BlockShapes.SIDES) {
-            BooleanProperty property = propertyOf(side);
-            boolean on = property != null && state.getValue(property);
+            var property = propertyOf(side);
+            String link = property == null ? BlockShapes.LINK_NONE : state.getValue(property);
+
+            // A colisao nao distingue os dois tipos de braco: os dois ocupam o mesmo espaco, e a
+            // diferenca entre eles e so de desenho. Distinguir aqui multiplicaria a cache de formas
+            // por nada.
+            boolean on = !BlockShapes.LINK_NONE.equals(link);
             if (on) connected.add(side);
             key.append(on ? '1' : '0');
         }

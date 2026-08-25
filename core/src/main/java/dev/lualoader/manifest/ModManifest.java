@@ -190,6 +190,21 @@ public final class ModManifest {
         public List<StatePropertyDefinition> properties = new ArrayList<>();
         @SerializedName("default")
         public Map<String, String> defaults = new LinkedHashMap<>();
+
+        /**
+         * Se o bloco muda de luminosidade em tempo de execucao.
+         *
+         * <p>Precisa ser dito porque a propriedade custa <b>dezesseis valores</b> -- um
+         * multiplicador de 16 sobre todos os outros estados do bloco. Ela era registrada em todo
+         * bloco declarativo, e a conta ficava assim: quinze mods de exemplo criavam 128 mil
+         * blockstates, contra os cerca de 26 mil do Minecraft inteiro. Nenhum dos quinze blocos
+         * declarava luminosidade, e exatamente um a mudava por script.
+         *
+         * <p>Declarar {@code luminance} maior que zero ja liga isto: um bloco que nasce aceso e o
+         * caso em que faze-lo apagar depois e natural.
+         */
+        @SerializedName("dynamic_luminance")
+        public boolean dynamicLuminance = false;
     }
 
     public static final class StatePropertyDefinition {
@@ -319,8 +334,19 @@ public final class ModManifest {
     public static final class ObjPartsDefinition {
         /** Pecas desenhadas em qualquer estado -- o miolo. */
         public List<ObjPartDefinition> core = new ArrayList<>();
-        /** Pecas desenhadas no lado ligado, com {@code %s} pela direcao. */
+        /** Pecas desenhadas no lado ligado a outro bloco da lista, com {@code %s} pela direcao. */
         public List<ObjPartDefinition> connected = new ArrayList<>();
+        /**
+         * Pecas desenhadas no lado ligado a um <b>inventario</b>, com {@code %s} pela direcao.
+         *
+         * <p>Um braco proprio, e nao o mesmo de {@code connected}: o mod original desenha os dois
+         * diferentes -- {@code Side_N} para outro cano e {@code Side_BC_N} para o que guarda item --
+         * porque a ponta que encaixa num bau tem colar e a que encaixa num cano nao tem.
+         *
+         * <p>Vazio significa "use o de {@code connected}". E o que mantem um mod que nao conhece
+         * essa distincao desenhando como antes, em vez de perder o braco no lado do bau.
+         */
+        public List<ObjPartDefinition> connectedInventory = new ArrayList<>();
         /** Pecas desenhadas no lado livre, com {@code %s} pela direcao. */
         public List<ObjPartDefinition> disconnected = new ArrayList<>();
     }

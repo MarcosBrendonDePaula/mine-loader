@@ -43,7 +43,8 @@
     ],
     "default": {
       "polished": "false"
-    }
+    },
+    "dynamic_luminance": true
   },
   "shape": {
     "collision": "full_cube",

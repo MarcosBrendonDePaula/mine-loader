@@ -117,6 +117,12 @@ núcleo não conhecer Minecraft.
 | `shape.cores` e `shape.arms` (varias caixas) | sim | sim | As caixas de um braco giram juntas, como uma peca so |
 | Modelo `.obj` de bloco | sim | sim | O leitor mora no nucleo, e as duas plataformas usam o mesmo |
 | `obj_parts` -- pecas por conexao | sim | sim | Mesmos numeros de face nos dois: 164 no miolo, 40 na manga, 2 na placa |
+| `connects_to: "@items"` -- ligar a inventario | sim | sim | Por capability, e nao por id: alcanca o bau de qualquer mod. O lado vira uma propriedade de tres valores (`none`/`block`/`inventory`), e nao um booleano |
+| `obj_parts.connected_inventory` -- braco proprio do lado do bau | sim | sim | Vazio cai no de `connected`, entao um mod escrito antes disto desenha igual em vez de perder o braco |
+| `crafting_result(padrao)` -- o que sai de nove slots | sim | sim | A mesma busca da bancada, no mesmo mundo: vale receita de qualquer mod, com e sem formato. Pergunta pura -- nao consome nada |
+| Cache de recurso remoto consultado **antes** do download | sim | sim | So com `sha256` declarado; a chave e o conteudo, e sem o hash nao ha o que consultar. Antes o download acontecia sempre |
+| `state.dynamic_luminance` -- luz que muda por script | sim | sim | Sem ela a propriedade nao e registrada. Era 16 valores em **todo** bloco declarativo; `set_block_luminance` num bloco que nao declara agora e recusado com o motivo |
+| `lua_variant` so quando o bloco declara variantes | sim | sim | Ela custa 16 valores; um bloco de textura unica pagava um multiplicador de 16 a toa. `set_block_variant` num bloco sem variantes agora e recusado com o motivo |
 | Malha desenhada corretamente na tela | **com defeito** | sim | Ver "A malha desenha errado no Fabric", abaixo |
 | `player.looking_at` -- o bloco mirado | sim | sim | Raycast do jogo em cada lado, mesmo resultado |
 | Erro de script avisa quem clicou | sim | sim | Antes so ia para o log, e no jogo o sintoma era silencio |

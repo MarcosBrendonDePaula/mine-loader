@@ -73,6 +73,18 @@ public class NeoForgeDeclarativeBlock extends Block {
     private final net.minecraft.world.phys.shapes.VoxelShape outline;
     private final net.minecraft.world.phys.shapes.VoxelShape collision;
 
+    /**
+     * A luz de cada estado: do proprio estado quando o bloco declara que ela muda, senao o valor fixo.
+     *
+     * <p>O {@code hasProperty} nao e defensividade: um bloco que nao declara luminosidade dinamica
+     * nao recebe a propriedade -- ela custa dezesseis valores e quase nenhum bloco a usa --, e
+     * pedi-la ali estouraria em todo calculo de luz do jogo.
+     */
+    private static java.util.function.ToIntFunction<BlockState> luzDe(int declaredLuminance) {
+        int fixa = Math.max(0, Math.min(15, declaredLuminance));
+        return state -> state.hasProperty(LUMINANCE) ? state.getValue(LUMINANCE) : fixa;
+    }
+
     public NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties, int declaredLuminance) {
         this(properties, declaredLuminance, null, null);
     }
@@ -80,11 +92,18 @@ public class NeoForgeDeclarativeBlock extends Block {
     public NeoForgeDeclarativeBlock(BlockBehaviour.Properties properties, int declaredLuminance,
                                     net.minecraft.world.phys.shapes.VoxelShape outline,
                                     net.minecraft.world.phys.shapes.VoxelShape collision) {
-        // A luz sai do estado, e nao do valor fixo: e o que permite um script acender um bloco so.
-        super(properties.lightLevel(state -> state.getValue(LUMINANCE)));
-        BlockState base = getStateDefinition().any()
-                .setValue(VARIANT, 0)
-                .setValue(LUMINANCE, Math.max(0, Math.min(15, declaredLuminance)));
+        // A luz sai do estado quando o bloco declara que ela muda; senao vale o valor fixo.
+        //
+        // O `hasProperty` nao e defensividade: um bloco que nao declara luminosidade dinamica nao
+        // recebe a propriedade, e pedi-la ali estouraria em todo calculo de luz do jogo.
+        // O valor fixo e calculado na propria chamada: `super` precisa ser a primeira instrucao, e
+        // uma variavel local antes dela nao compila.
+        super(properties.lightLevel(luzDe(declaredLuminance)));
+
+        int fixa = Math.max(0, Math.min(15, declaredLuminance));
+        BlockState base = getStateDefinition().any();
+        if (base.hasProperty(LUMINANCE)) base = base.setValue(LUMINANCE, fixa);
+        if (base.hasProperty(VARIANT)) base = base.setValue(VARIANT, 0);
 
         NeoForgeStateProperties declared = PENDING.get();
         if (declared != null) {
@@ -233,9 +252,21 @@ public class NeoForgeDeclarativeBlock extends Block {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(VARIANT, LUMINANCE);
-
         NeoForgeStateProperties declared = PENDING.get();
+
+        // A luminosidade so entra quando o bloco a declara -- estatica ou por script. Ela custa
+        // dezesseis valores, e era registrada em todo bloco declarativo: quinze mods de exemplo
+        // criavam 128 mil blockstates, contra os cerca de 26 mil do Minecraft inteiro.
+        if (declared == null || declared.hasLuminance()) {
+            builder.add(LUMINANCE);
+        }
+
+        // A variante so entra quando o bloco declara mais de uma textura. Ela custa dezesseis
+        // valores, e um bloco de textura unica nunca sai da variante zero -- registra-la ali
+        // multiplicava por dezesseis todos os outros estados do bloco, sem nada em troca.
+        if (declared == null || declared.hasVariant()) {
+            builder.add(VARIANT);
+        }
         if (declared == null) return;
         for (var property : declared.properties().values()) {
             builder.add(property);

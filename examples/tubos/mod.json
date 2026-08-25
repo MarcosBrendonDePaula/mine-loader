@@ -126,7 +126,8 @@
           5
         ],
         "connects_to": [
-          "tubos:tubo"
+          "tubos:tubo",
+          "@items"
         ]
       }
     }

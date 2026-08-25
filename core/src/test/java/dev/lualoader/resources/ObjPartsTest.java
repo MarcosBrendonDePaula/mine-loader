@@ -106,8 +106,8 @@ class ObjPartsTest {
         assertTrue(blockstate.has("multipart"), "deveria ser multipart, veio " + blockstate);
         JsonArray partes = blockstate.getAsJsonArray("multipart");
 
-        // O miolo mais, por lado, uma peca de ligado e duas de livre.
-        assertEquals(1 + 6 * 3, partes.size(), "uma entrada por peca de cada estado");
+        // O miolo mais, por lado: uma peca de cano, uma de inventario e duas de livre.
+        assertEquals(1 + 6 * 4, partes.size(), "uma entrada por peca de cada estado");
 
         boolean achouLigado = false;
         boolean achouLivre = false;
@@ -120,11 +120,50 @@ class ObjPartsTest {
 
             // A condicao NEGATIVA e o que faz um bloco fechar a face que ninguem usa. Enquanto so a
             // positiva era escrita, o bloco so sabia crescer braco.
-            if (quando.get("north").getAsString().equals("true")) achouLigado = true;
+            if (quando.get("north").getAsString().equals("block")) achouLigado = true;
             else achouLivre = true;
         }
         assertTrue(achouLigado, "faltou a peca do lado ligado");
         assertTrue(achouLivre, "faltou a peca do lado livre -- a face ficaria aberta");
+    }
+
+    /**
+     * O lado do inventário é um terceiro estado, e não o mesmo do cano.
+     *
+     * <p>Enquanto a propriedade era booleana, o desenho só sabia dizer "ligado" — e a rede de um mod
+     * de logística já distinguia as duas coisas, porque ela pergunta por capability e não por id. O
+     * resultado era um cano encostado num baú sem braço nenhum, com a rede funcionando mesmo assim:
+     * duas verdades sobre a mesma ligação, e o jogador vendo a errada.
+     *
+     * <p>O exemplo não declara peça própria para esse lado, e é de propósito: sem
+     * {@code connected_inventory}, vale a de {@code connected}. Um mod escrito antes desta distinção
+     * desenha o mesmo braço dos dois lados, em vez de perder o braço do lado do baú.
+     */
+    @Test
+    void oLadoDoInventarioTemPecaPropria(@TempDir Path out) throws IOException {
+        Path pack = assemble(out);
+        JsonObject blockstate = json(pack, "assets/tubos/blockstates/tubo.json");
+        JsonArray partes = blockstate.getAsJsonArray("multipart");
+
+        // O miolo mais, por lado: uma peca de cano, uma de inventario e duas de livre.
+        assertEquals(1 + 6 * 4, partes.size(), "uma entrada por peca de cada estado");
+
+        boolean achouInventario = false;
+        for (int i = 0; i < partes.size(); i++) {
+            JsonObject parte = partes.get(i).getAsJsonObject();
+            if (!parte.has("when")) continue;
+
+            JsonObject quando = parte.getAsJsonObject("when");
+            if (quando.has("north") && quando.get("north").getAsString().equals("inventory")) {
+                achouInventario = true;
+            }
+        }
+        assertTrue(achouInventario, "faltou a peca do lado ligado a um inventario");
+
+        // E a peca existe de verdade, com a malha do braco: a condicao sozinha apontaria para um
+        // modelo que o jogo procura e nao acha, e o bloco sairia roxo.
+        ObjModel manga = malhaDe(pack, json(pack, "assets/tubos/models/block/tubo_inventory0_n.json"));
+        assertTrue(manga.faces().size() > 0, "o braco do lado do inventario veio vazio");
     }
 
     @Test
@@ -138,13 +177,13 @@ class ObjPartsTest {
 
         // A manga vai do miolo ate a BORDA do bloco. Se parar antes, dois tubos vizinhos ficam com
         // um vao entre eles -- e o desenho vira dois blocos com pernas em vez de um tubo.
-        ObjModel manga = malhaDe(pack, json(pack, "assets/tubos/models/block/tubo_on0_n.json"));
+        ObjModel manga = malhaDe(pack, json(pack, "assets/tubos/models/block/tubo_block0_n.json"));
         double[] m = caixa(manga);
         assertEquals(0, m[2], 0.01, "a manga do norte encosta na borda");
         assertEquals(4, m[5], 0.01, "e encontra o miolo");
 
         // A do sul e o espelho, para as duas se encontrarem entre blocos vizinhos.
-        double[] s = caixa(malhaDe(pack, json(pack, "assets/tubos/models/block/tubo_on0_s.json")));
+        double[] s = caixa(malhaDe(pack, json(pack, "assets/tubos/models/block/tubo_block0_s.json")));
         assertEquals(12, s[2], 0.01);
         assertEquals(16, s[5], 0.01);
     }
@@ -152,7 +191,7 @@ class ObjPartsTest {
     @Test
     void aRegiaoSeparaOQueONomeNaoSepara(@TempDir Path out) throws IOException {
         Path pack = assemble(out);
-        JsonObject peca = json(pack, "assets/tubos/models/block/tubo_off0_n.json");
+        JsonObject peca = json(pack, "assets/tubos/models/block/tubo_none0_n.json");
 
         // As placas da parede se chamam "Wall_Plate" em todos os seis lados -- e assim num arquivo
         // de verdade, onde a ferramenta gera os nomes. So a regiao diz de que lado cada uma e.
@@ -176,9 +215,9 @@ class ObjPartsTest {
         // A regiao e declarada uma vez, apontando para o norte, e o loader gira para os outros
         // cinco. Sem isso o mod escreveria seis caixas para manter em sincronia.
         double[] norte = caixa(malhaDe(pack,
-                json(pack, "assets/tubos/models/block/tubo_off0_n.json")));
+                json(pack, "assets/tubos/models/block/tubo_none0_n.json")));
         double[] cima = caixa(malhaDe(pack,
-                json(pack, "assets/tubos/models/block/tubo_off0_u.json")));
+                json(pack, "assets/tubos/models/block/tubo_none0_u.json")));
 
         assertEquals(4, norte[2], 0.01, "no norte a parede fica num plano de z");
         assertEquals(4, norte[5], 0.01);
@@ -189,7 +228,7 @@ class ObjPartsTest {
     @Test
     void oDecalqueFicaNaFrenteDaParede(@TempDir Path out) throws IOException {
         Path pack = assemble(out);
-        JsonObject peca = json(pack, "assets/tubos/models/block/tubo_off1_n.json");
+        JsonObject peca = json(pack, "assets/tubos/models/block/tubo_none1_n.json");
 
         assertTrue(peca.has("lua_obj_expand"), "sem inflar, o decalque briga com a parede");
 
@@ -209,7 +248,7 @@ class ObjPartsTest {
         // Cada peca aponta a propria imagem. Um modelo de malha costuma ter um atlas para o corpo,
         // com as coordenadas embutidas no arquivo, e usar a imagem que identifica o bloco so em
         // algumas faces -- pintar tudo igual faz o corpo virar uma mancha de cor.
-        for (String nome : List.of("tubo_core0", "tubo_on0_n", "tubo_off0_n", "tubo_off1_n")) {
+        for (String nome : List.of("tubo_core0", "tubo_block0_n", "tubo_none0_n", "tubo_none1_n")) {
             JsonObject peca = json(pack, "assets/tubos/models/block/" + nome + ".json");
             String textura = peca.getAsJsonObject("textures").get("all").getAsString();
 

@@ -244,6 +244,80 @@ public final class BlockShapes {
     }
 
     /**
+     * O token que significa "qualquer bloco que guarde item", em {@code connects_to}.
+     *
+     * <p>Existe porque um cano nao se liga a uma <i>lista de ids</i>: ele se liga ao que tem
+     * inventario, e essa lista nao da para escrever -- ela inclui o bau de qualquer mod instalado.
+     * Sem isto, o desenho e a rede usavam criterios diferentes: a rede perguntava a capability e
+     * alcancava o bau, e o braco procurava um id na lista e nunca crescia. O jogador via um cano
+     * encostado no bau sem se ligar a ele, e a rede funcionando mesmo assim.
+     */
+    public static final String INVENTORY_TOKEN = "@items";
+
+    /** Nenhuma ligacao naquele lado. */
+    public static final String LINK_NONE = "none";
+
+    /** Ligado a um bloco da lista declarada -- outro cano, na pratica. */
+    public static final String LINK_BLOCK = "block";
+
+    /** Ligado a um inventario, achado por capability e nao por id. */
+    public static final String LINK_INVENTORY = "inventory";
+
+    /**
+     * Os tres valores de uma propriedade de lado.
+     *
+     * <p>Tres, e nao dois: o mod original desenha bracos diferentes para cano e para inventario --
+     * {@code Side_N} e {@code Side_BC_N} no arquivo dele. Um booleano nao tem como dizer qual.
+     * Sao 3^6 = 729 estados por bloco, contra os 4096 que dois booleanos por lado dariam.
+     */
+    public static final List<String> LINK_VALUES = List.of(LINK_NONE, LINK_BLOCK, LINK_INVENTORY);
+
+    /**
+     * Se o bloco precisa da propriedade de variante no blockstate.
+     *
+     * <p>Ela existe para trocar a textura em tempo de execucao, e custa <b>dezesseis valores</b> --
+     * um multiplicador de 16 sobre todos os outros estados do bloco. Um bloco com uma textura so
+     * nunca troca de variante, e pagava esse multiplicador a toa: um cano com seis lados de tres
+     * valores passava de 11.664 estados para 186.624, e o registro ficava lento e comia memoria
+     * antes de qualquer coisa aparecer na tela.
+     *
+     * <p>Mora no nucleo porque os dois adaptadores precisam registrar o mesmo conjunto: um lado que
+     * registrasse a propriedade e o outro nao daria blockstates diferentes para o mesmo manifesto.
+     */
+    public static boolean needsVariant(dev.lualoader.manifest.ModManifest.BlockDefinition block) {
+        if (block == null || block.render == null || block.render.variantTextures == null) {
+            return false;
+        }
+        return block.render.variantTextures.size() > 1;
+    }
+
+    /**
+     * Se o bloco precisa da propriedade de luminosidade no blockstate.
+     *
+     * <p>Mesma historia da variante, e maior: dezesseis valores em todo bloco declarativo, usados
+     * por quase nenhum. Quem acende um bloco por script diz isso no manifesto, com
+     * {@code state.dynamic_luminance}, ou ja nasce aceso com {@code luminance}.
+     *
+     * <p>Um bloco de luz fixa nao precisa da propriedade: o valor declarado entra direto nas
+     * settings, e o estado nao tem o que guardar.
+     */
+    public static boolean needsLuminance(dev.lualoader.manifest.ModManifest.BlockDefinition block) {
+        if (block == null) return false;
+        if (block.settings != null && block.settings.luminance > 0) return true;
+        return block.state != null && block.state.dynamicLuminance;
+    }
+
+    /** Se o bloco pede ligacao a inventario, e nao so aos ids declarados. */
+    public static boolean connectsToInventory(dev.lualoader.manifest.ModManifest.ShapeDefinition shape) {
+        if (shape == null || shape.connectsTo == null) return false;
+
+        for (String entry : shape.connectsTo) {
+            if (INVENTORY_TOKEN.equals(entry == null ? null : entry.trim())) return true;
+        }
+        return false;
+    }
+
+    /**
      * Se o bloco declara nucleo e a quem se conectar.
      *
      * <p>Mora aqui porque a resposta precisa ser a mesma no montador do pacote e nos dois

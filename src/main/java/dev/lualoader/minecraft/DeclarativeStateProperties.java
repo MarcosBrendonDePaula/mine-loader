@@ -25,9 +25,34 @@ public final class DeclarativeStateProperties {
     private final Map<String, Property<?>> properties;
     private final Map<String, String> defaults;
 
-    private DeclarativeStateProperties(Map<String, Property<?>> properties, Map<String, String> defaults) {
+    /**
+     * Se este bloco recebe a propriedade de variante.
+     *
+     * <p>Fica separado do mapa porque a propriedade e do loader, e nao declarada pelo manifesto: o
+     * bloco base a acrescenta no {@code appendProperties}, e o mapa carrega so o que veio do JSON.
+     */
+    private final boolean variant;
+
+    /** Se este bloco recebe a propriedade de luminosidade. */
+    private final boolean luminance;
+
+    private DeclarativeStateProperties(Map<String, Property<?>> properties,
+                                       Map<String, String> defaults,
+                                       boolean variant, boolean luminance) {
         this.properties = properties;
         this.defaults = defaults;
+        this.variant = variant;
+        this.luminance = luminance;
+    }
+
+    /** Se este bloco recebe a propriedade de variante. */
+    public boolean hasVariant() {
+        return variant;
+    }
+
+    /** Se este bloco recebe a propriedade de luminosidade. */
+    public boolean hasLuminance() {
+        return luminance;
     }
 
     public static DeclarativeStateProperties from(ModManifest.BlockDefinition definition) {
@@ -47,18 +72,25 @@ public final class DeclarativeStateProperties {
         Property<?> facing = facingProperty(definition);
         if (facing != null) built.put("facing", facing);
 
-        // Um bloco que conecta ganha uma propriedade booleana por lado. Seis booleanos dao sessenta
-        // e quatro estados, e o jogo lida bem com isso -- e o mesmo que cerca e muro fazem.
+        // Um bloco que conecta ganha uma propriedade de tres valores por lado: livre, ligado a um
+        // bloco da lista, ou ligado a um inventario.
+        //
+        // Tres e nao dois porque o braco nao e o mesmo: o cano do mod original encaixa num bau com
+        // uma ponta diferente da que encaixa em outro cano, e um booleano nao tem como dizer qual
+        // desenhar. Sao 729 estados por bloco, contra os 4096 de dois booleanos por lado.
         if (connects(definition)) {
             for (String side : dev.lualoader.content.BlockShapes.SIDES) {
-                built.put(side, BooleanProperty.of(side));
+                built.put(side, NamedProperty.of(side,
+                        dev.lualoader.content.BlockShapes.LINK_VALUES));
             }
         }
 
         if (definition.state != null && definition.state.defaults != null) {
             defaults.putAll(definition.state.defaults);
         }
-        return new DeclarativeStateProperties(built, defaults);
+        return new DeclarativeStateProperties(built, defaults,
+                dev.lualoader.content.BlockShapes.needsVariant(definition),
+                dev.lualoader.content.BlockShapes.needsLuminance(definition));
     }
 
     /** Se o bloco declara nucleo e a quem se conectar. A regra mora no nucleo. */

@@ -289,11 +289,17 @@ public class NeoForgeGameBridge implements GameBridge {
         BlockPos pos = new BlockPos(x, y, z);
 
         BlockState current = level.getBlockState(pos);
-        BlockState next = current.is(block)
-                ? current.setValue(property, value)
-                : block.defaultBlockState().setValue(property, value);
+        BlockState base = current.is(block) ? current : block.defaultBlockState();
 
-        level.setBlockAndUpdate(pos, next);
+        // Um bloco de textura unica nao tem a propriedade de variante: ela custa dezesseis valores
+        // e so e registrada para quem declara mais de uma. Recusar com o motivo e o que evita a
+        // mensagem do Minecraft sobre propriedade ausente, que nao diz nada a quem escreveu o mod.
+        if (!base.hasProperty(property)) {
+            throw new BridgeException("o bloco " + blockId + " nao tem a propriedade "
+                    + property.getName() + "; ela so existe quando o manifesto a pede");
+        }
+
+        level.setBlockAndUpdate(pos, base.setValue(property, value));
     }
 
     @Override
@@ -734,6 +740,51 @@ public class NeoForgeGameBridge implements GameBridge {
             }
             return false;
         });
+    }
+
+    /**
+     * O que sai de um arranjo de nove slots, perguntando ao proprio jogo.
+     *
+     * <p>A mesma busca que a bancada usa, no mesmo mundo: assim vale a receita de qualquer mod
+     * instalado, e nao so as que o loader conheceria. Um casamento escrito aqui saberia apenas as
+     * receitas com formato -- e ficaria devendo as sem formato, as de tag e as que outro mod define
+     * em codigo.
+     *
+     * <p>Nada e consumido: {@code assemble} monta o resultado a partir da entrada e nao mexe nela.
+     */
+    @Override
+    public String craftingResult(List<String> items) {
+        net.minecraft.world.level.Level level = requireLevel();
+
+        java.util.List<ItemStack> pilhas = new ArrayList<>(9);
+        boolean vazio = true;
+        for (int slot = 0; slot < 9; slot++) {
+            String id = slot < items.size() && items.get(slot) != null ? items.get(slot).trim() : "";
+            if (id.isEmpty()) {
+                pilhas.add(ItemStack.EMPTY);
+                continue;
+            }
+
+            ResourceLocation parsed = parse(id);
+            if (!BuiltInRegistries.ITEM.containsKey(parsed)) {
+                throw new BridgeException("item desconhecido no arranjo: " + id);
+            }
+            pilhas.add(new ItemStack(BuiltInRegistries.ITEM.get(parsed)));
+            vazio = false;
+        }
+        // Uma bancada vazia nao produz nada, e perguntar ao livro de receitas custaria a varredura
+        // inteira para chegar a mesma resposta.
+        if (vazio) return null;
+
+        var entrada = net.minecraft.world.item.crafting.CraftingInput.of(3, 3, pilhas);
+        var achada = requireServer().getRecipeManager().getRecipeFor(
+                net.minecraft.world.item.crafting.RecipeType.CRAFTING, entrada, level);
+        if (achada.isEmpty()) return null;
+
+        ItemStack saida = achada.get().value().assemble(entrada, requireServer().registryAccess());
+        if (saida.isEmpty()) return null;
+
+        return BuiltInRegistries.ITEM.getKey(saida.getItem()) + ";" + saida.getCount();
     }
 
     private List<String> collectRecipes(int limit,

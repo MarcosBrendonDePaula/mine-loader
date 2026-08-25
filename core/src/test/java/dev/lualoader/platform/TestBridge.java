@@ -186,6 +186,67 @@ public abstract class TestBridge implements GameBridge {
         return filterRecipes(itemId, limit, false);
     }
 
+    /**
+     * O que sai de um arranjo, procurando entre as receitas declaradas acima.
+     *
+     * <p>O duble compara <b>ignorando as celulas vazias em volta</b>: a receita da espada e 1x3, e
+     * o jogador que a monta na coluna do meio de uma bancada 3x3 espera a mesma espada. Um
+     * casamento posicao a posicao recusaria isso, e o teste passaria a exigir do script um
+     * alinhamento que a bancada de verdade nao exige.
+     */
+    @Override
+    public String craftingResult(java.util.List<String> items) {
+        java.util.List<String> arranjo = recorta(items);
+        if (arranjo.isEmpty()) return null;
+
+        for (String recipe : recipes) {
+            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(recipe)
+                    .getAsJsonObject();
+
+            java.util.List<String> esperado = new java.util.ArrayList<>();
+            for (com.google.gson.JsonElement posicao : json.getAsJsonArray("ingredients")) {
+                com.google.gson.JsonArray opcoes = posicao.getAsJsonArray();
+                esperado.add(opcoes.isEmpty() ? "" : opcoes.get(0).getAsString());
+            }
+
+            if (esperado.equals(arranjo)) {
+                com.google.gson.JsonObject saida = json.getAsJsonObject("output");
+                return saida.get("item").getAsString() + ";"
+                        + (saida.has("count") ? saida.get("count").getAsInt() : 1);
+            }
+        }
+        return null;
+    }
+
+    /** O arranjo sem as linhas e colunas vazias das bordas, em ordem de leitura. */
+    private static java.util.List<String> recorta(java.util.List<String> items) {
+        String[][] grade = new String[3][3];
+        for (int i = 0; i < 9; i++) {
+            String valor = i < items.size() && items.get(i) != null ? items.get(i).trim() : "";
+            grade[i / 3][i % 3] = valor;
+        }
+
+        int primeiraLinha = 3, ultimaLinha = -1, primeiraColuna = 3, ultimaColuna = -1;
+        for (int linha = 0; linha < 3; linha++) {
+            for (int coluna = 0; coluna < 3; coluna++) {
+                if (grade[linha][coluna].isEmpty()) continue;
+                primeiraLinha = Math.min(primeiraLinha, linha);
+                ultimaLinha = Math.max(ultimaLinha, linha);
+                primeiraColuna = Math.min(primeiraColuna, coluna);
+                ultimaColuna = Math.max(ultimaColuna, coluna);
+            }
+        }
+        if (ultimaLinha < 0) return java.util.List.of();
+
+        java.util.List<String> recortado = new java.util.ArrayList<>();
+        for (int linha = primeiraLinha; linha <= ultimaLinha; linha++) {
+            for (int coluna = primeiraColuna; coluna <= ultimaColuna; coluna++) {
+                recortado.add(grade[linha][coluna]);
+            }
+        }
+        return recortado;
+    }
+
     private java.util.List<String> filterRecipes(String itemId, int limit, boolean asOutput) {
         java.util.List<String> found = new java.util.ArrayList<>();
         for (String recipe : recipes) {

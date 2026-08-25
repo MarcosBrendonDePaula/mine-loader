@@ -7,7 +7,6 @@ import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.registry.RegistryKeys;
-import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -64,6 +63,15 @@ public class ConnectedBlock extends DeclarativeDataBlock {
     private final Set<TagKey<Block>> tags;
 
     /**
+     * Se este bloco cresce braço em direção a qualquer coisa que guarde item.
+     *
+     * <p>Declarado com {@code "@items"} em {@code connects_to}. É o critério que a própria rede de
+     * um mod de logística usa — capability, e não id —, e tê-lo aqui é o que faz o desenho e a rede
+     * concordarem sobre onde há ligação.
+     */
+    private final boolean toInventory;
+
+    /**
      * A forma pronta de cada combinação de lados.
      *
      * <p>Calculada uma vez por estado e guardada: {@code getOutlineShape} é chamado a cada quadro
@@ -87,10 +95,13 @@ public class ConnectedBlock extends DeclarativeDataBlock {
 
         Set<Identifier> ids = new LinkedHashSet<>();
         Set<TagKey<Block>> tagKeys = new LinkedHashSet<>();
+        boolean inventario = false;
         for (String entry : connectsTo == null ? List.<String>of() : connectsTo) {
             if (entry == null || entry.isBlank()) continue;
 
-            if (entry.startsWith("#")) {
+            if (BlockShapes.INVENTORY_TOKEN.equals(entry.trim())) {
+                inventario = true;
+            } else if (entry.startsWith("#")) {
                 Identifier parsed = Identifier.tryParse(entry.substring(1));
                 if (parsed != null) tagKeys.add(TagKey.of(RegistryKeys.BLOCK, parsed));
             } else {
@@ -100,6 +111,7 @@ public class ConnectedBlock extends DeclarativeDataBlock {
         }
         this.blockIds = Set.copyOf(ids);
         this.tags = Set.copyOf(tagKeys);
+        this.toInventory = inventario;
 
         setDefaultState(withAllDisconnected(getDefaultState()));
     }
@@ -110,15 +122,16 @@ public class ConnectedBlock extends DeclarativeDataBlock {
             Direction.WEST, "west", Direction.EAST, "east",
             Direction.UP, "up", Direction.DOWN, "down"));
 
-    private BooleanProperty propertyOf(String side) {
-        return (BooleanProperty) declaredProperties().get(side);
+    @SuppressWarnings("unchecked")
+    private net.minecraft.state.property.Property<String> propertyOf(String side) {
+        return (net.minecraft.state.property.Property<String>) declaredProperties().get(side);
     }
 
     private BlockState withAllDisconnected(BlockState state) {
         BlockState result = state;
         for (String side : BlockShapes.SIDES) {
-            BooleanProperty property = propertyOf(side);
-            if (property != null) result = result.with(property, false);
+            var property = propertyOf(side);
+            if (property != null) result = result.with(property, BlockShapes.LINK_NONE);
         }
         return result;
     }
@@ -137,11 +150,12 @@ public class ConnectedBlock extends DeclarativeDataBlock {
 
         BlockPos pos = context.getBlockPos();
         for (Direction direction : Direction.values()) {
-            BooleanProperty property = propertyOf(SIDE_OF.get(direction));
+            var property = propertyOf(SIDE_OF.get(direction));
             if (property == null) continue;
 
+            BlockPos neighbor = pos.offset(direction);
             state = state.with(property,
-                    connectsTo(context.getWorld().getBlockState(pos.offset(direction))));
+                    linkTo(context.getWorld().getBlockState(neighbor), context.getWorld(), neighbor));
         }
         return state;
     }
@@ -156,25 +170,50 @@ public class ConnectedBlock extends DeclarativeDataBlock {
     protected BlockState getStateForNeighborUpdate(BlockState state, Direction direction,
                                                    BlockState neighborState, WorldAccess world,
                                                    BlockPos pos, BlockPos neighborPos) {
-        BooleanProperty property = propertyOf(SIDE_OF.get(direction));
+        var property = propertyOf(SIDE_OF.get(direction));
         if (property == null) {
             return super.getStateForNeighborUpdate(state, direction, neighborState,
                     world, pos, neighborPos);
         }
-        return state.with(property, connectsTo(neighborState));
+        return state.with(property, linkTo(neighborState, world, neighborPos));
     }
 
-    /** Se aquele vizinho é do tipo a que este bloco se liga. */
-    private boolean connectsTo(BlockState neighbor) {
-        if (neighbor == null || neighbor.isAir()) return false;
+    /**
+     * Que tipo de ligação este bloco faz com aquele vizinho.
+     *
+     * <p>A lista declarada vem primeiro: um baú que também esteja nomeado por id conta como bloco,
+     * e não como inventário. É o que permite a um mod tratar um caso especial sem perder a regra
+     * geral.
+     */
+    private String linkTo(BlockState neighbor, WorldAccess world, BlockPos pos) {
+        if (neighbor == null || neighbor.isAir()) return BlockShapes.LINK_NONE;
 
         Identifier id = Registries.BLOCK.getId(neighbor.getBlock());
-        if (blockIds.contains(id)) return true;
+        if (blockIds.contains(id)) return BlockShapes.LINK_BLOCK;
 
         for (TagKey<Block> tag : tags) {
-            if (neighbor.isIn(tag)) return true;
+            if (neighbor.isIn(tag)) return BlockShapes.LINK_BLOCK;
         }
-        return false;
+
+        if (toInventory && hasItems(world, pos)) return BlockShapes.LINK_INVENTORY;
+        return BlockShapes.LINK_NONE;
+    }
+
+    /**
+     * Se há inventário naquela posição.
+     *
+     * <p>A capability primeiro, porque é o que a ponte do loader responde a um mod — e o desenho
+     * discordar da rede é justamente o defeito que este caminho existe para fechar. Ela precisa de
+     * um {@link net.minecraft.world.World} de verdade, e a atualização de vizinho às vezes chega com
+     * uma região de geração; nesse caso vale o inventário do bloco, que cobre baú, barril e forno.
+     */
+    private boolean hasItems(WorldAccess world, BlockPos pos) {
+        if (world instanceof net.minecraft.world.World real
+                && net.fabricmc.fabric.api.transfer.v1.item.ItemStorage.SIDED
+                        .find(real, pos, null) != null) {
+            return true;
+        }
+        return world.getBlockEntity(pos) instanceof net.minecraft.inventory.Inventory;
     }
 
     @Override
@@ -196,8 +235,13 @@ public class ConnectedBlock extends DeclarativeDataBlock {
         StringBuilder key = new StringBuilder();
 
         for (String side : BlockShapes.SIDES) {
-            BooleanProperty property = propertyOf(side);
-            boolean on = property != null && state.get(property);
+            var property = propertyOf(side);
+            String link = property == null ? BlockShapes.LINK_NONE : state.get(property);
+
+            // A colisao nao distingue os dois tipos de braco: os dois ocupam o mesmo espaco, e a
+            // diferenca entre eles e so de desenho. Distinguir aqui multiplicaria a cache de formas
+            // por nada.
+            boolean on = !BlockShapes.LINK_NONE.equals(link);
             if (on) connected.add(side);
             key.append(on ? '1' : '0');
         }

@@ -351,15 +351,22 @@ public class NeoForgeBlockGameTest {
         });
     }
 
-    /** Le a propriedade booleana daquele lado, no estado que esta no mundo. */
+    /**
+     * Le a ligacao daquele lado, no estado que esta no mundo.
+     *
+     * <p>A propriedade tem tres valores, e nao dois: um lado pode estar livre, ligado a um bloco da
+     * lista, ou ligado a um inventario. Aqui interessa so se ha ligacao -- o teste do braco proprio
+     * do inventario e do desenho, e vive no montador do pacote.
+     */
+    @SuppressWarnings("unchecked")
     private static boolean conectado(GameTestHelper helper, BlockPos relative, String side) {
         BlockState state = helper.getLevel().getBlockState(helper.absolutePos(relative));
 
         for (var property : state.getProperties()) {
-            if (property.getName().equals(side)
-                    && property instanceof net.minecraft.world.level.block.state.properties
-                            .BooleanProperty booleano) {
-                return state.getValue(booleano);
+            if (property.getName().equals(side) && property.getValueClass() == String.class) {
+                String valor = state.getValue(
+                        (net.minecraft.world.level.block.state.properties.Property<String>) property);
+                return !dev.lualoader.content.BlockShapes.LINK_NONE.equals(valor);
             }
         }
         throw new AssertionError("o cano nao tem a propriedade " + side

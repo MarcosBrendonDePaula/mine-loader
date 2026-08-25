@@ -28,10 +28,34 @@ public final class NeoForgeStateProperties {
     private final Map<String, Property<?>> properties;
     private final Map<String, String> defaults;
 
+    /**
+     * Se este bloco recebe a propriedade de variante.
+     *
+     * <p>Fica separado do mapa porque a propriedade é do loader, e não declarada pelo manifesto: o
+     * bloco base a acrescenta na definição de estado, e o mapa carrega só o que veio do JSON.
+     */
+    private final boolean variant;
+
+    /** Se este bloco recebe a propriedade de luminosidade. */
+    private final boolean luminance;
+
     private NeoForgeStateProperties(Map<String, Property<?>> properties,
-                                    Map<String, String> defaults) {
+                                    Map<String, String> defaults,
+                                    boolean variant, boolean luminance) {
         this.properties = properties;
         this.defaults = defaults;
+        this.variant = variant;
+        this.luminance = luminance;
+    }
+
+    /** Se este bloco recebe a propriedade de variante. */
+    public boolean hasVariant() {
+        return variant;
+    }
+
+    /** Se este bloco recebe a propriedade de luminosidade. */
+    public boolean hasLuminance() {
+        return luminance;
     }
 
     public static NeoForgeStateProperties from(ModManifest.BlockDefinition definition) {
@@ -56,15 +80,21 @@ public final class NeoForgeStateProperties {
             built.put("facing", facing);
         }
 
-        // Um bloco que conecta ganha uma propriedade booleana por lado -- o mesmo que cerca e muro
-        // fazem. A lista de lados vem do nucleo: os dois adaptadores precisam concordar sobre qual
-        // propriedade e qual direcao.
+        // Um bloco que conecta ganha uma propriedade de tres valores por lado: livre, ligado a um
+        // bloco da lista, ou ligado a um inventario. A lista de lados e a de valores vem do nucleo:
+        // os dois adaptadores precisam concordar sobre qual propriedade, qual direcao e qual valor.
+        //
+        // Tres e nao dois porque o braco nao e o mesmo: o cano do mod original encaixa num bau com
+        // uma ponta diferente da que encaixa em outro cano, e um booleano nao tem como dizer qual.
         if (connects(definition)) {
             for (String side : dev.lualoader.content.BlockShapes.SIDES) {
-                built.put(side, BooleanProperty.create(side));
+                built.put(side, NeoForgeNamedProperty.of(side,
+                        dev.lualoader.content.BlockShapes.LINK_VALUES));
             }
         }
-        return new NeoForgeStateProperties(built, defaults);
+        return new NeoForgeStateProperties(built, defaults,
+                dev.lualoader.content.BlockShapes.needsVariant(definition),
+                dev.lualoader.content.BlockShapes.needsLuminance(definition));
     }
 
     /** Se o bloco declara nucleo e a quem se conectar. */

@@ -113,10 +113,15 @@ public final class FabricGameBridge implements GameBridge {
         var current = world.getBlockState(pos);
         // Preserva os demais estados do bloco; usar o estado padrao descartaria
         // luminancia e qualquer propriedade declarada no manifesto.
-        var state = current.isOf(block)
-                ? current.with(DeclarativeBlock.LUA_VARIANT, variant)
-                : block.getDefaultState().with(DeclarativeBlock.LUA_VARIANT, variant);
-        world.setBlockState(pos, state, 3);
+        // Um bloco de textura unica nao tem a propriedade: ela custa dezesseis valores e so e
+        // registrada para quem declara mais de uma. Recusar com o motivo e o que evita a mensagem
+        // de erro do Minecraft sobre propriedade ausente, que nao diz nada a quem escreveu o mod.
+        var base = current.isOf(block) ? current : block.getDefaultState();
+        if (!base.contains(DeclarativeBlock.LUA_VARIANT)) {
+            throw new BridgeException("o bloco " + blockId
+                    + " nao declara variantes de textura; set_block_variant nao se aplica");
+        }
+        world.setBlockState(pos, base.with(DeclarativeBlock.LUA_VARIANT, variant), 3);
     }
 
     @Override
@@ -135,10 +140,15 @@ public final class FabricGameBridge implements GameBridge {
         BlockPos pos = new BlockPos(x, y, z);
         var world = requireWorld();
         var current = world.getBlockState(pos);
-        var state = current.isOf(block)
-                ? current.with(DeclarativeBlock.LUA_LUMINANCE, luminance)
-                : block.getDefaultState().with(DeclarativeBlock.LUA_LUMINANCE, luminance);
-        world.setBlockState(pos, state, 3);
+        // Um bloco que nao declara luminosidade dinamica nao tem a propriedade: ela custa dezesseis
+        // valores e quase nenhum bloco a usa. Recusar com o motivo e o que evita a mensagem do
+        // Minecraft sobre propriedade ausente, que nao diz nada a quem escreveu o mod.
+        var base = current.isOf(block) ? current : block.getDefaultState();
+        if (!base.contains(DeclarativeBlock.LUA_LUMINANCE)) {
+            throw new BridgeException("o bloco " + blockId
+                    + " nao declara luminosidade dinamica; ponha state.dynamic_luminance no manifesto");
+        }
+        world.setBlockState(pos, base.with(DeclarativeBlock.LUA_LUMINANCE, luminance), 3);
     }
 
     @Override
@@ -569,6 +579,51 @@ public final class FabricGameBridge implements GameBridge {
             }
             return false;
         });
+    }
+
+    /**
+     * O que sai de um arranjo de nove slots, perguntando ao proprio jogo.
+     *
+     * <p>A mesma busca que a bancada usa, no mesmo mundo: assim vale a receita de qualquer mod
+     * instalado, e nao so as que o loader conheceria. Um casamento escrito aqui saberia apenas as
+     * receitas com formato -- e ficaria devendo as sem formato, as de tag e as que outro mod define
+     * em codigo.
+     *
+     * <p>Nada e consumido: {@code craft} monta o resultado a partir da entrada e nao mexe nela.
+     */
+    @Override
+    public String craftingResult(java.util.List<String> items) {
+        var world = requireWorld();
+
+        java.util.List<ItemStack> pilhas = new java.util.ArrayList<>(9);
+        boolean vazio = true;
+        for (int slot = 0; slot < 9; slot++) {
+            String id = slot < items.size() && items.get(slot) != null ? items.get(slot).trim() : "";
+            if (id.isEmpty()) {
+                pilhas.add(ItemStack.EMPTY);
+                continue;
+            }
+
+            Identifier parsed = parseIdentifier(id);
+            if (!Registries.ITEM.containsId(parsed)) {
+                throw new BridgeException("item desconhecido no arranjo: " + id);
+            }
+            pilhas.add(new ItemStack(Registries.ITEM.get(parsed)));
+            vazio = false;
+        }
+        // Uma bancada vazia nao produz nada, e perguntar ao livro de receitas custaria a varredura
+        // inteira para chegar a mesma resposta.
+        if (vazio) return null;
+
+        var entrada = net.minecraft.recipe.input.CraftingRecipeInput.create(3, 3, pilhas);
+        var achada = world.getServer().getRecipeManager().getFirstMatch(
+                net.minecraft.recipe.RecipeType.CRAFTING, entrada, world);
+        if (achada.isEmpty()) return null;
+
+        ItemStack saida = achada.get().value().craft(entrada, world.getRegistryManager());
+        if (saida.isEmpty()) return null;
+
+        return Registries.ITEM.getId(saida.getItem()) + ";" + saida.getCount();
     }
 
     /**
