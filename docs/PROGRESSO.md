@@ -108,6 +108,21 @@ Estão em `API_GAPS.md`, em ordem de quanto doem:
 
 ---
 
+## As tarefas, se a sessão retomar
+
+O acompanhamento fino vive na lista de tarefas da sessão, com passo a passo e verificação de cada
+uma. Este documento é o mapa; elas são o roteiro.
+
+| # | Tarefa | Estado |
+|---|---|---|
+| 14 | Forma do bloco variando com o estado — o cano que conecta | em andamento |
+| 15 | Recusar manifesto que declara `events` sem `entrypoint` | a fazer — o mais barato |
+| 16 | Tique agendado por posição | a fazer |
+| 17 | Ler inventário por slot | a fazer |
+| 18 | Evento de bloco quebrado com o inventário íntegro | a fazer |
+| 19 | Portar os canos que faltam do Logistic Pipes | a fazer |
+| 12 | UI por HTML e CSS | adiado por decisão |
+
 ## Como retomar
 
 ```bash
