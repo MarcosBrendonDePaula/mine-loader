@@ -16,6 +16,7 @@
 - [O que falta para um modder construir](docs/API_GAPS.md)
 - [Checklist de recursos e progressão](docs/CHECKLIST_MODLOADER.md)
 - [Instalar mods por link](docs/INSTALACAO.md)
+- [Progresso — o que foi feito e o que falta](docs/PROGRESSO.md)
 - [Roadmap de implementação](docs/ROADMAP.md)
 - [Pipeline de geração por IA](docs/AI_PIPELINE.md)
 

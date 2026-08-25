@@ -160,6 +160,12 @@ blocos, não executa script nenhum, e o mapeamento de eventos aponta para funç�
 existir. Nada reclama, e o sintoma é um mod que carrega e não faz nada — o modo de falhar mais caro
 possível, porque parece que o loader está quebrado. Precisa ser recusado na carga.
 
+**A forma de um bloco não varia com o estado.** `shape` é declarado uma vez, e vale para todas as
+variantes; `render.variant_textures` troca a textura por variante, e não a geometria. Um cano não
+tem como crescer braços em direção aos vizinhos, e a rede fica sendo peças soltas encostadas — que
+é a diferença visual mais gritante para o original. É o mesmo mecanismo que cerca, vidraça e muro
+do jogo usam, e nenhum deles é declarável hoje.
+
 **Não há tique agendado por posição.** Um cano que move item ao longo do tempo precisaria de "volte
 a me chamar nesta posição daqui a N tiques". Hoje só existe `block_random_tick`, que é aleatório, e
 o agendador global `mod.after`, que não sabe de posição. O porte contorna entregando na hora — o

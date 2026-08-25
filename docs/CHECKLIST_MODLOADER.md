@@ -129,6 +129,7 @@ As quatorze permissões: `chat.send`, `server.read`, `server.command.register`, 
 - [ ] Feature de superfície — árvore, arbusto, formação
 - [ ] Estrutura colocada pelo gerador (hoje só via `place_structure` chamado por script)
 - [x] Regra de spawn de mob por bioma (`entities[].spawn`)
+- [ ] Forma do bloco variando com o estado — cerca, vidraça, cano que conecta
 - [ ] Alteração de terreno declarada
 
 Nenhum item desta subseção existe. É o bloco mais coeso de tudo que falta, e o único cuja ausência

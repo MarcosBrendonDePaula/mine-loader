@@ -50,7 +50,8 @@
       },
       "settings": {
         "hardness": 0.8,
-        "resistance": 1.0
+        "resistance": 1.0,
+        "non_opaque": true
       },
       "render": {
         "textures": {
@@ -58,9 +59,32 @@
         }
       },
       "shape": {
-        "collision": "pillar",
-        "outline": "pillar",
-        "visual": "pillar"
+        "boxes": [
+          [
+            4,
+            4,
+            4,
+            12,
+            12,
+            12
+          ],
+          [
+            0,
+            5,
+            5,
+            16,
+            11,
+            11
+          ],
+          [
+            5,
+            5,
+            0,
+            11,
+            11,
+            16
+          ]
+        ]
       }
     },
     {
@@ -71,7 +95,8 @@
       },
       "settings": {
         "hardness": 0.8,
-        "resistance": 1.0
+        "resistance": 1.0,
+        "non_opaque": true
       },
       "render": {
         "textures": {
@@ -79,9 +104,32 @@
         }
       },
       "shape": {
-        "collision": "pillar",
-        "outline": "pillar",
-        "visual": "pillar"
+        "boxes": [
+          [
+            4,
+            4,
+            4,
+            12,
+            12,
+            12
+          ],
+          [
+            0,
+            5,
+            5,
+            16,
+            11,
+            11
+          ],
+          [
+            5,
+            5,
+            0,
+            11,
+            11,
+            16
+          ]
+        ]
       }
     },
     {
@@ -92,7 +140,8 @@
       },
       "settings": {
         "hardness": 0.8,
-        "resistance": 1.0
+        "resistance": 1.0,
+        "non_opaque": true
       },
       "render": {
         "textures": {
@@ -101,6 +150,34 @@
       },
       "behavior": {
         "on_use": "scripts/terminal_usado.lua"
+      },
+      "shape": {
+        "boxes": [
+          [
+            4,
+            4,
+            4,
+            12,
+            12,
+            12
+          ],
+          [
+            0,
+            5,
+            5,
+            16,
+            11,
+            11
+          ],
+          [
+            5,
+            5,
+            0,
+            11,
+            11,
+            16
+          ]
+        ]
       }
     }
   ],
