@@ -13,6 +13,20 @@ existe
 `COMPATIBILIDADE.md`. Uma lista que envelhece em silêncio é pior que nenhuma, porque alguém confia
 nela.
 
+**A régua definitiva, porém, é outra: um mod de verdade rodando.** O
+[Logistic Pipes](https://github.com/rs485/logisticspipes) é o **primeiro mod migrado** para este
+loader — a rede de canos que encontra e entrega itens está de pé em `examples/logistica`, escrita só
+em `mod.json` e Lua, sem uma linha de Java. Um porte autônomo, que reusa a arte do original e por
+isso é MMPL, vive em
+[`logistic-pipes-lua`](https://github.com/MarcosBrendonDePaula/logistic-pipes-lua).
+
+Ele importa mais que qualquer item riscado nesta lista, por duas razões. Primeiro porque o Logistic
+Pipes parou de ser atualizado pelo motivo que este loader existe para resolver: acompanhar as
+versões do Minecraft em Java custa caro, e um mod declarativo não paga esse preço — quem acompanha a
+versão é o loader. Segundo porque **portá-lo achou quatro lacunas que esta lista não tinha**, e
+todas estão em `API_GAPS.md`. Uma régua escrita de cabeça mede o que a gente imaginou; um mod real
+mede o que falta.
+
 **Tudo aqui foi conferido no código, não nos documentos.** Um recurso que existe só no Fabric conta
 como `[~]`, não como `[x]`: um mod que depende dele não roda nas duas plataformas, e a promessa
 central do loader é que rode. Onde a checagem contradisse um documento, a contradição está

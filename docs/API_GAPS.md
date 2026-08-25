@@ -146,8 +146,14 @@ faixa de luz e de altura. O que ainda falta é o mesmo para **bloco** — minér
 
 ### Achados ao portar o Logistic Pipes
 
-O `examples/logistica` foi escrito como teste de esforço: um mod real, portado de um mod real, para
-descobrir o que falta antes que quem escreve um mod descubra. O que apareceu:
+O Logistic Pipes é o **primeiro mod migrado** para este loader. Foi escolhido de propósito: ele
+parou de ser atualizado pelo motivo que o loader existe para resolver — acompanhar as versões do
+Minecraft em Java custa caro, e um mod declarativo não paga esse preço.
+
+O porte vive em `examples/logistica` e, com a arte do original, em
+[`logistic-pipes-lua`](https://github.com/MarcosBrendonDePaula/logistic-pipes-lua). Escrever um mod
+real, portado de um mod real, serve para descobrir o que falta antes que quem escreve um mod
+descubra. O que apareceu:
 
 **Manifesto que declara `events` sem `entrypoint` é aceito em silêncio.** O loader registra os
 blocos, não executa script nenhum, e o mapeamento de eventos aponta para funções que não podem

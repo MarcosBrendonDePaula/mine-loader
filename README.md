@@ -107,7 +107,8 @@ diferente do loader.
 O `catalogo` é o mais completo: usa quase toda a camada de interface e as consultas de conteúdo, e
 serve como referência de como as peças se combinam.
 
-O `logistica` existe por outro motivo: é um **teste de esforço**. Ele porta a ideia central de um mod
+O `logistica` existe por outro motivo: é o **primeiro mod migrado** para este loader, e um teste de
+esforço. Ele porta a ideia central de um mod
 de verdade — o [Logistic Pipes](https://github.com/rs485/logisticspipes) — e serve para descobrir o
 que falta na API antes que quem escreve um mod descubra. As quatro lacunas que ele encontrou estão
 em [`API_GAPS.md`](docs/API_GAPS.md).
