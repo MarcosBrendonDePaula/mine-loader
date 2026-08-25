@@ -259,7 +259,7 @@ iguais: é ali que a próxima plataforma encontra a lista de trabalho.
 | `player.move` | teleporte |
 | `player.menu` | abrir e atualizar janela |
 | `world.read` | ler bloco, hora, clima, altura do terreno |
-| `world.write` | escrever bloco, quebrar, preencher, hora, clima |
+| `world.write` | escrever bloco, quebrar, preencher, hora, clima, agendar tique numa posição |
 | `world.containers` | inventário de bloco |
 | `entity.read` | listar por raio, dados de uma entidade |
 | `entity.spawn` | criar entidade |

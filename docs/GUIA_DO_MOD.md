@@ -334,7 +334,7 @@ declarar a permissão dela é erro em tempo de execução.
 | `player.move` | Teleporte |
 | `player.menu` | Abrir, atualizar e fechar janelas |
 | `world.read` | Ler blocos e dados, tocar som, emitir partículas |
-| `world.write` | Alterar blocos, preencher, posicionar estrutura, gravar dados |
+| `world.write` | Alterar blocos, preencher, posicionar estrutura, gravar dados, agendar tique |
 | `world.containers` | Ler, inserir e extrair do inventário de um bloco |
 | `server.read` | Jogadores conectados, hora do dia, dimensão, mods carregados |
 | `server.command.register` | Registrar comandos |

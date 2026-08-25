@@ -83,6 +83,24 @@ conexão por isso seria transformar diferença de versão em falha.
 | `on_scheduled` | `block_scheduled` |
 | `on_break` | apelido antigo de `on_attack`, ainda aceito |
 
+**`block_scheduled` é o único que o próprio mod pede.** Os outros o jogo entrega quando algo
+acontece; este chega porque o script chamou `ctx.server.schedule_block(x, y, z, tiques)` naquela
+posição. É o que permite uma máquina processar ao longo do tempo, ou um cano mover um item passo a
+passo em vez de teleportá-lo.
+
+Três coisas que não são óbvias:
+
+- **Não se repete.** Cada tique vale uma vez; continuar é agendar o próximo de dentro do próprio
+  callback. Um evento que se repetisse obrigaria o loader a decidir quando parar, e essa decisão é
+  de quem escreve o mod.
+- **Só chega a bloco declarado por um mod.** Agendar num bloco do jogo é recusado na hora do pedido:
+  a fila aceitaria, mas o tique iria para o método do bloco vanilla, e nada chegaria ao script.
+- **A fila é a do jogo, e sobrevive ao save.** Ela é gravada com o chunk, então o que estava
+  agendado volta na próxima sessão — e um chunk descarregado leva junto o que estava marcado nele.
+
+O prazo vai de 1 a 24000 tiques, um dia de jogo. Zero e negativo são recusados porque o jogo os
+trataria como "agora", o que de dentro do próprio callback é recursão sem folga.
+
 ### De criatura
 
 | Evento | Quando dispara | Cancelável |
