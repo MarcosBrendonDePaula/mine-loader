@@ -35,7 +35,49 @@ public final class ManifestDiagnostics {
     public List<String> collectIgnored(ModManifest manifest) {
         List<String> ignored = new ArrayList<>();
         collectIgnoredBlocks(manifest, ignored);
+        collectIgnoredItems(manifest, ignored);
         return ignored;
+    }
+
+    /**
+     * O que um item declara e o loader nao aplica.
+     *
+     * <p>Existe porque so os blocos eram conferidos, e um item podia declarar o que quisesse sem
+     * ninguem reclamar. O caso real: um mod escreveu a textura do item no formato do bloco
+     * ({@code render.texture} em vez de {@code texture}), o loader caiu no substituto, e o item
+     * apareceu com a textura errada -- sem uma linha no log ligando uma coisa a outra.
+     *
+     * <p>Um campo desconhecido no JSON e silencioso por natureza: o conversor simplesmente o
+     * descarta. Este aviso e o unico lugar onde ele pode virar mensagem para quem escreveu o mod.
+     */
+    private void collectIgnoredItems(ModManifest manifest, List<String> ignored) {
+        if (manifest.items == null) return;
+
+        for (ModManifest.ItemEntryDefinition item : manifest.items) {
+            if (item == null) continue;
+            String prefix = "items[" + item.id + "].";
+
+            // A textura de um item e `texture`, e nao `render.texture` como a de um bloco. Escrever
+            // no formato do bloco nao da erro: o campo some, e o item sai com o substituto.
+            boolean semTextura = item.texture == null
+                    || ((item.texture.path == null || item.texture.path.isBlank())
+                        && (item.texture.url == null || item.texture.url.isBlank())
+                        && (item.texture.ref == null || item.texture.ref.isBlank()));
+
+            if (semTextura) {
+                ignored.add(prefix + "texture: nao declarada; o item usa o substituto."
+                        + " A textura de item e `texture`, e nao `render.texture` como a de bloco");
+            }
+
+            if (item.behavior != null
+                    && item.behavior.onUse != null && !item.behavior.onUse.isBlank()
+                    && item.behavior.onUseOnBlock != null && !item.behavior.onUseOnBlock.isBlank()) {
+                // Os dois juntos sao legitimos, mas so um dispara por clique, conforme o alvo.
+                // Dizer isso evita a duvida de por que um deles "nao roda".
+                ignored.add(prefix + "behavior: on_use e on_use_on_block juntos;"
+                        + " o clique em bloco dispara so on_use_on_block");
+            }
+        }
     }
 
     private void collectIgnoredBlocks(ModManifest manifest, List<String> ignored) {

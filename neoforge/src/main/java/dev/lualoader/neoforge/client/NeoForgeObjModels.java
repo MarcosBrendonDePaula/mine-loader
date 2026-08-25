@@ -263,20 +263,20 @@ public final class NeoForgeObjModels {
         }
 
         /**
-         * Sem oclusao de ambiente.
+         * Com oclusao de ambiente, que e como este lado desenhava certo.
          *
-         * <p>O calculo de AO parte do principio de que a face esta encostada na parede do cubo, e
-         * usa os blocos vizinhos para escurecer os cantos. Numa malha isso nao vale: a face de um
-         * cano fica no meio do bloco, e o resultado e ela escurecer ate ficar preta.
+         * <p>Desligar aqui foi um erro de metodo, e vale ficar escrito: o desenho do NeoForge estava
+         * bom, o do Fabric nao, e a simetria falou mais alto -- mexeu-se nos dois "para nao divergir
+         * por configuracao", e o lado bom quebrou junto.
          *
-         * <p>Os dois renderizadores erram diferente com AO ligado -- o do Fabric passa pelo Indigo,
-         * o do NeoForge pelo caminho vanilla --, e foi assim que o mesmo modelo apareceu certo numa
-         * plataforma e preto na outra. Desligar deixa as duas iguais, que e o ponto de o leitor
-         * morar no nucleo.
+         * <p>Os dois renderizadores tratam AO de forma diferente: aqui o caminho e o vanilla, e la
+         * passa pelo Indigo. Quando a mesma opcao produz resultados diferentes, o valor certo e por
+         * plataforma -- e a matriz de compatibilidade e onde essa diferenca fica registrada, em vez
+         * de escondida numa igualdade que nao existe.
          */
         @Override
         public boolean useAmbientOcclusion() {
-            return false;
+            return true;
         }
 
         @Override
