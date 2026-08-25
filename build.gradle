@@ -101,8 +101,12 @@ publishing {
  * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
  * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio. Foi o que
  * aconteceu com o bloco de inventario: o teste procurava um bloco que so existia em examples/.
+ *
+ * Sync, e nao Copy: Copy acrescenta e nunca remove, entao um exemplo que sai do repositorio
+ * continuava sendo carregado nos testes. Um mod fantasma que ninguem consegue achar no codigo e
+ * pior que um mod faltando.
  */
-tasks.register('sincronizaExemplosDoGametest', Copy) {
+tasks.register('sincronizaExemplosDoGametest', Sync) {
     from 'examples'
     into layout.buildDirectory.dir('gametest/mods-lua')
 }
@@ -164,4 +168,20 @@ tasks.register('linkExemplos') {
 
 tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
     dependsOn 'linkExemplos'
+
+    /*
+     * Pastas de mod fora do jogo, para desenvolver um mod que mora em outro repositorio.
+     *
+     *   ./gradlew :runClient -Pmods=E:/logistica-lua/logistica
+     *   MINE_LOADER_MODS=/caminho/do/mod ./gradlew :runClient
+     *
+     * Sem copiar nada para mods-lua. A copia era o que se fazia, e o servidor acabava rodando
+     * contra um script velho dizendo que passou -- o pior resultado possivel, porque parece
+     * verificacao.
+     */
+    def extras = project.findProperty('mods') ?: System.getenv('MINE_LOADER_MODS')
+    if (extras) {
+        systemProperty 'mineloader.mods', extras
+        doFirst { println "Pastas de mod extras: ${extras}" }
+    }
 }

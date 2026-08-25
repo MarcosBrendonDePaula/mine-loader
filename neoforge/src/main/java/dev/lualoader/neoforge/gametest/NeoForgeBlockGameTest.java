@@ -255,9 +255,9 @@ public class NeoForgeBlockGameTest {
     @GameTest(template = EMPTY)
     public static void oCanoConectaComOVizinho(GameTestHelper helper) {
         Block cano = BuiltInRegistries.BLOCK.get(
-                ResourceLocation.fromNamespaceAndPath("logistica", "cano"));
+                ResourceLocation.fromNamespaceAndPath("tubos", "tubo"));
         if (cano == null || cano == net.minecraft.world.level.block.Blocks.AIR) {
-            throw new AssertionError("o cano do exemplo nao foi registrado");
+            throw new AssertionError("o tubo do exemplo nao foi registrado");
         }
 
         BlockPos primeiro = new BlockPos(1, 1, 1);
@@ -305,9 +305,9 @@ public class NeoForgeBlockGameTest {
      */
     @GameTest(template = EMPTY)
     public static void oTiqueAgendadoEntraNaFilaDoJogo(GameTestHelper helper) {
-        Block cano = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("logistica:cano"));
+        Block cano = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("tubos:tubo"));
         if (cano == null || cano == net.minecraft.world.level.block.Blocks.AIR) {
-            throw new AssertionError("o cano do exemplo nao foi registrado");
+            throw new AssertionError("o tubo do exemplo nao foi registrado");
         }
 
         BlockPos relativa = new BlockPos(1, 1, 1);

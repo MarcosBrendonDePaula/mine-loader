@@ -867,7 +867,7 @@ public final class ResourcePackAssembler {
             variants.putAll(block.render.variantTextures);
         }
         if (variants.isEmpty()) {
-            variants.put("0", block.render == null ? null : block.render.texture);
+            variants.put("0", singleTexture(block));
         }
 
         // Um modelo declarado vence a geracao por forma: quem desenhou o bloco foi especifico, e
@@ -875,11 +875,16 @@ public final class ResourcePackAssembler {
         // variante troca textura e o modelo declarado ja traz as suas.
         String declaredModel = assembleDeclaredModel(mod, block, generatedRoot);
         if (declaredModel != null) {
-            writeBlockstate(generatedRoot, namespace, blockId, block, Map.of(0, declaredModel));
+            writeBlockstate(generatedRoot, namespace, blockId, block,
+                    Map.of(0, declaredModel), Map.of());
             return;
         }
 
         Map<Integer, String> models = new LinkedHashMap<>();
+        // A textura de cada variante, e nao so o modelo. Um bloco que conecta desenha caixas
+        // proprias e precisa da textura em si: passar o modelo no lugar dela escreve um nome que o
+        // jogo procura no atlas e nao acha, e o bloco sai roxo.
+        Map<Integer, String> textures = new LinkedHashMap<>();
         for (Map.Entry<String, ModManifest.TextureDefinition> entry : variants.entrySet()) {
             int variant = parseVariant(entry.getKey());
             if (variant < 0) {
@@ -916,12 +921,44 @@ public final class ResourcePackAssembler {
                             .resolve("models/block").resolve(blockId + suffix + ".json"),
                     blockModel(block, textureReference));
             models.put(variant, modelId);
+            textures.put(variant, textureReference);
         }
 
         if (models.isEmpty()) {
             models.put(0, "minecraft:block/stone");
+            textures.put(0, "minecraft:block/stone");
         }
-        writeBlockstate(generatedRoot, namespace, blockId, block, models);
+        writeBlockstate(generatedRoot, namespace, blockId, block, models, textures);
+    }
+
+    /**
+     * A textura unica de um bloco, aceitando as duas formas de declarar.
+     *
+     * <p>{@code render.texture} e a forma direta. {@code render.textures} nasceu para modelo
+     * declarado -- um desenho do Blockbench nomeia as proprias texturas --, mas quem escreve o mod
+     * usa o mesmo mapa com a chave {@code all} sem declarar modelo, porque {@code all} e o nome que
+     * o proprio jogo usa em {@code cube_all}. Isso era aceito e ignorado: o bloco caia no fallback
+     * generico, e nada no log dizia por que. Aceitar as duas custa este metodo.
+     *
+     * <p>Com mais de uma entrada e sem modelo declarado nao ha o que escolher -- o mapa so faz
+     * sentido junto com o desenho que nomeia as partes --, entao vale a primeira e o resto fica
+     * para o modelo declarado usar.
+     */
+    private static ModManifest.TextureDefinition singleTexture(ModManifest.BlockDefinition block) {
+        if (block.render == null) return null;
+
+        ModManifest.TextureDefinition direta = block.render.texture;
+        boolean declarada = direta != null
+                && ((direta.path != null && !direta.path.isBlank())
+                    || (direta.url != null && !direta.url.isBlank())
+                    || (direta.ref != null && !direta.ref.isBlank()));
+        if (declarada) return direta;
+
+        if (block.render.textures != null && !block.render.textures.isEmpty()) {
+            ModManifest.TextureDefinition all = block.render.textures.get("all");
+            return all != null ? all : block.render.textures.values().iterator().next();
+        }
+        return direta;
     }
 
     private static int parseVariant(String value) {
@@ -1079,14 +1116,20 @@ public final class ResourcePackAssembler {
 
     private void writeBlockstate(Path generatedRoot, String namespace, String blockId,
                                  ModManifest.BlockDefinition block,
-                                 Map<Integer, String> models) throws IOException {
+                                 Map<Integer, String> models,
+                                 Map<Integer, String> textures) throws IOException {
         String fallbackModel = models.getOrDefault(0, models.values().iterator().next());
 
         // Um bloco que conecta nao usa variantes: cada lado ligado acrescenta uma peca, e listar
         // as sessenta e quatro combinacoes daria sessenta e quatro entradas para manter em
         // sincronia. O formato multipart do jogo existe exatamente para isso.
         if (connects(block)) {
-            writeConnectedBlockstate(generatedRoot, namespace, blockId, block, fallbackModel);
+            // A textura, e nao o modelo. Enquanto era o modelo, o nucleo e o braco nomeavam uma
+            // textura que nao existe: todo bloco que conecta saia roxo, em qualquer manifesto.
+            String textura = textures.isEmpty()
+                    ? fallbackTexture(block)
+                    : textures.getOrDefault(0, textures.values().iterator().next());
+            writeConnectedBlockstate(generatedRoot, namespace, blockId, block, textura);
             return;
         }
 

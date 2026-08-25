@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "id": "tubos",
+  "name": "Tubos",
+  "version": "1.0.0",
+  "description": "Um cano que conecta com o vizinho e leva o item passo a passo. E o menor exemplo que exercita forma por estado, dados por posicao e tique agendado ao mesmo tempo.",
+  "authors": [
+    "Minecraft Lua Loader"
+  ],
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "world.read",
+    "world.write",
+    "world.containers",
+    "server.command.register"
+  ],
+  "creative_tab": {
+    "register": true,
+    "id": "main",
+    "name": "Tubos",
+    "icon": "tubos:tubo"
+  },
+  "resources": {
+    "tubo": {
+      "type": "image",
+      "from": "assets/tubo.png",
+      "fallback": "minecraft:block/iron_block"
+    }
+  },
+  "blocks": [
+    {
+      "id": "tubo",
+      "name": "Tubo",
+      "material": {
+        "sound": "metal"
+      },
+      "settings": {
+        "hardness": 0.5,
+        "resistance": 1.0,
+        "non_opaque": true
+      },
+      "render": {
+        "texture": {
+          "ref": "tubo"
+        }
+      },
+      "block_data": true,
+      "behavior": {
+        "on_scheduled": "scripts/tubo_tique.lua"
+      },
+      "shape": {
+        "core": [
+          5,
+          5,
+          5,
+          11,
+          11,
+          11
+        ],
+        "arm": [
+          5,
+          5,
+          0,
+          11,
+          11,
+          5
+        ],
+        "connects_to": [
+          "tubos:tubo"
+        ]
+      }
+    }
+  ],
+  "enabled": true,
+  "events": {
+    "loader_ready": "on_loader_ready"
+  }
+}

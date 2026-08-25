@@ -156,9 +156,9 @@ public class BlockInteractionGameTest implements FabricGameTest {
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void oCanoConectaComOVizinho(TestContext context) {
         var cano = net.minecraft.registry.Registries.BLOCK.get(
-                net.minecraft.util.Identifier.of("logistica", "cano"));
+                net.minecraft.util.Identifier.of("tubos", "tubo"));
         if (cano == null || cano == net.minecraft.block.Blocks.AIR) {
-            throw new AssertionError("o cano do exemplo nao foi registrado");
+            throw new AssertionError("o tubo do exemplo nao foi registrado");
         }
 
         BlockPos primeiro = new BlockPos(1, 1, 1);
@@ -212,9 +212,9 @@ public class BlockInteractionGameTest implements FabricGameTest {
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void oTiqueAgendadoEntraNaFilaDoJogo(TestContext context) {
         var cano = net.minecraft.registry.Registries.BLOCK.get(
-                Identifier.of("logistica", "cano"));
+                Identifier.of("tubos", "tubo"));
         if (cano == null || cano == net.minecraft.block.Blocks.AIR) {
-            throw new AssertionError("o cano do exemplo nao foi registrado");
+            throw new AssertionError("o tubo do exemplo nao foi registrado");
         }
 
         BlockPos relativa = new BlockPos(1, 1, 1);

@@ -91,6 +91,19 @@ processResources {
  * <p>Junction no Windows e link simbolico no resto, porque junction nao pede privilegio de
  * administrador, e symlink de diretorio no Windows pede.
  */
+/*
+ * O mesmo que no adaptador Fabric: pastas de mod fora do jogo, para desenvolver um mod que mora em
+ * outro repositorio. Vale nas duas plataformas de proposito -- um recurso de desenvolvimento que so
+ * funciona num lado faz quem escreve o mod testar so daquele lado.
+ */
+tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
+    def extras = project.findProperty('mods') ?: System.getenv('MINE_LOADER_MODS')
+    if (extras) {
+        systemProperty 'mineloader.mods', extras
+        doFirst { println "Pastas de mod extras: ${extras}" }
+    }
+}
+
 tasks.register('linkModsLua') {
     description = 'Aponta neoforge/run/mods-lua para a mesma pasta do adaptador Fabric.'
     group = 'lua loader'
@@ -139,7 +152,7 @@ tasks.withType(JavaCompile).configureEach {
  * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
  * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio.
  */
-tasks.register('sincronizaExemplosDoGametest', Copy) {
+tasks.register('sincronizaExemplosDoGametest', Sync) {
     from rootProject.file('examples')
     into layout.buildDirectory.dir('gametest/mods-lua')
 }

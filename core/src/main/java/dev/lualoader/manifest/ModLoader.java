@@ -166,41 +166,131 @@ public final class ModLoader {
         return true;
     }
 
+    /**
+     * A variavel de ambiente que acrescenta pastas de mod as do jogo.
+     *
+     * <p>Existe para desenvolver um mod que mora em outro repositorio sem copiar nada para dentro
+     * de {@code mods-lua}. Copiar era o que se fazia, e custou caro nesta sessao: a copia
+     * envelhecia e o servidor rodava contra um script velho dizendo que passou.
+     *
+     * <p>Aceita varias pastas, separadas pelo separador de caminho do sistema -- {@code ;} no
+     * Windows, {@code :} no resto. Cada uma pode ser a pasta de um mod (tem {@code mod.json}) ou
+     * uma pasta que contem varios.
+     */
+    public static final String EXTRA_DIRS_ENV = "MINE_LOADER_MODS";
+
+    /** O mesmo, como propriedade de sistema, para passar com {@code -D} num run do Gradle. */
+    public static final String EXTRA_DIRS_PROPERTY = "mineloader.mods";
+
+    /**
+     * As pastas extras declaradas no ambiente, na ordem em que foram escritas.
+     *
+     * <p>Publico porque a tela de mods tambem quer mostrar de onde cada mod veio: um mod que
+     * aparece na lista e nao esta em {@code mods-lua} confunde ate se saber que veio daqui.
+     */
+    public static List<Path> extraDirectories() {
+        String declarado = System.getProperty(EXTRA_DIRS_PROPERTY);
+        if (declarado == null || declarado.isBlank()) declarado = System.getenv(EXTRA_DIRS_ENV);
+        if (declarado == null || declarado.isBlank()) return List.of();
+
+        List<Path> pastas = new ArrayList<>();
+        for (String parte : declarado.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+            if (parte == null || parte.isBlank()) continue;
+            pastas.add(Path.of(parte.trim()).toAbsolutePath().normalize());
+        }
+        return List.copyOf(pastas);
+    }
+
+    /**
+     * Descobre os mods da pasta do jogo e das pastas extras do ambiente.
+     *
+     * <p><b>As extras vem primeiro, e de proposito.</b> Quem aponta uma pasta extra esta
+     * trabalhando naquele mod; se o mesmo id existir nas duas, a versao em desenvolvimento e a que
+     * vale. A copia ignorada e registrada no log com as duas origens -- silenciar isso daria dois
+     * mods iguais e nenhuma pista de qual esta rodando.
+     */
     public List<LoadedMod> discover(Path root) throws IOException {
         Files.createDirectories(root);
+
+        List<Path> extras = extraDirectories();
+        if (extras.isEmpty()) return discoverIn(List.of(root));
+
+        List<Path> todas = new ArrayList<>(extras);
+        todas.add(root);
+        return discoverIn(todas);
+    }
+
+    /** Descobre mods em varias pastas, na ordem dada. */
+    public List<LoadedMod> discoverIn(List<Path> roots) throws IOException {
         List<LoadedMod> result = new ArrayList<>();
         Set<String> ids = new HashSet<>();
+        Map<String, Path> origem = new java.util.LinkedHashMap<>();
 
-        try (var directories = Files.list(root)) {
-            for (Path directory : directories.sorted().toList()) {
-                if (!Files.isDirectory(directory)) continue;
-
-                Path manifestPath = directory.resolve("mod.json");
-                if (!Files.isRegularFile(manifestPath)) {
-                    logger.warn("Ignorando {}: mod.json não encontrado", directory);
-                    continue;
-                }
-
-                try {
-                    ModManifest manifest = readManifest(manifestPath, directory);
-                    validate(manifest, directory, ids);
-                    if (!manifest.enabled) {
-                        logger.info("Mod desabilitado: {}", manifest.id);
-                        continue;
-                    }
-                    ids.add(manifest.id);
-                    result.add(new LoadedMod(directory, manifest));
-                } catch (IOException | RuntimeException error) {
-                    // IOException inclui manifesto ilegivel e import quebrado. Sem este catch,
-                    // um unico mod defeituoso impediria a carga de todos os outros.
-                    logger.error("Falha ao carregar mod em {}: {}", directory, error.getMessage());
-                }
-            }
+        for (Path root : roots) {
+            if (root == null) continue;
+            collect(root, result, ids, origem);
         }
 
         // A ordem alfabetica de diretorio nao serve quando ha bibliotecas: quem e usado por
         // outro precisa carregar antes.
         return new ModDependencies(logger).resolve(result);
+    }
+
+    /** Uma pasta pode ser a de um mod, ou a pasta que contem varios. */
+    private void collect(Path root, List<LoadedMod> result, Set<String> ids, Map<String, Path> origem)
+            throws IOException {
+        // Apontar direto para a pasta do mod e o gesto natural de quem tem o mod num repositorio
+        // proprio: la ele e a raiz, e nao um item de uma lista.
+        if (Files.isRegularFile(root.resolve("mod.json"))) {
+            loadOne(root, result, ids, origem);
+            return;
+        }
+
+        if (!Files.isDirectory(root)) {
+            logger.warn("Pasta de mods nao encontrada: {}", root);
+            return;
+        }
+
+        try (var directories = Files.list(root)) {
+            for (Path directory : directories.sorted().toList()) {
+                if (!Files.isDirectory(directory)) continue;
+
+                if (!Files.isRegularFile(directory.resolve("mod.json"))) {
+                    logger.warn("Ignorando {}: mod.json não encontrado", directory);
+                    continue;
+                }
+                loadOne(directory, result, ids, origem);
+            }
+        }
+    }
+
+    private void loadOne(Path directory, List<LoadedMod> result, Set<String> ids,
+                         Map<String, Path> origem) {
+        try {
+            ModManifest manifest = readManifest(directory.resolve("mod.json"), directory);
+
+            // O id repetido entre pastas nao e erro de manifesto: e a copia antiga perdendo para a
+            // pasta de desenvolvimento. Dizer as duas origens e o que evita a duvida de qual rodou.
+            Path anterior = origem.get(manifest.id);
+            if (anterior != null) {
+                logger.info("Mod {} ja veio de {}; ignorando a copia em {}",
+                        manifest.id, anterior, directory);
+                return;
+            }
+
+            validate(manifest, directory, ids);
+            if (!manifest.enabled) {
+                logger.info("Mod desabilitado: {}", manifest.id);
+                return;
+            }
+            ids.add(manifest.id);
+            origem.put(manifest.id, directory);
+            result.add(new LoadedMod(directory, manifest));
+        } catch (IOException | RuntimeException error) {
+            // IOException inclui manifesto ilegivel e import quebrado. Sem este catch, um unico
+            // mod defeituoso impediria a carga de todos os outros.
+            logger.error("Falha ao carregar mod em {}: {}", directory, error.getMessage());
+        }
     }
 
     private ModManifest readManifest(Path path, Path modRoot) throws IOException {
@@ -259,7 +349,13 @@ public final class ModLoader {
         if (manifest.entrypoint != null && !manifest.entrypoint.isBlank()) {
             Path entrypoint = directory.resolve(manifest.entrypoint).toAbsolutePath().normalize();
             require(entrypoint.startsWith(root), "entrypoint sai da pasta do mod");
-            require(Files.isRegularFile(entrypoint), "entrypoint não encontrado: " + manifest.entrypoint);
+
+            // Com uma base remota declarada, o arquivo pode nao existir no disco: ele sera buscado
+            // na rede na hora de carregar, como ja acontece com modulo e comportamento de bloco.
+            // E o que permite instalar um mod publicado na web com um mod.json de poucas linhas.
+            boolean remoto = manifest.remoteBase != null && !manifest.remoteBase.isBlank();
+            require(remoto || Files.isRegularFile(entrypoint),
+                    "entrypoint não encontrado: " + manifest.entrypoint);
         }
 
         if (manifest.permissions != null) {

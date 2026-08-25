@@ -950,8 +950,27 @@ public final class LuaRuntime {
                 throw new IOException("entrypoint Lua sai da pasta do mod");
             }
 
-            try (Reader reader = Files.newBufferedReader(entrypoint, StandardCharsets.UTF_8)) {
-                LuaValue chunk = globals.load(reader, mod.manifest().id + "/" + mod.manifest().entrypoint);
+            // O script principal pode vir da base remota, como o modulo e o comportamento de bloco
+            // ja vinham. Enquanto so ele exigia arquivo local, um mod publicado na web podia ter
+            // tudo remoto menos o proprio comeco -- e a instalacao por um mod.json de poucas linhas
+            // ficava a um arquivo de distancia de funcionar.
+            String source;
+            if (Files.isRegularFile(entrypoint)) {
+                source = Files.readString(entrypoint, StandardCharsets.UTF_8);
+            } else {
+                byte[] bytes = new ManifestImports(mod.directory(), remoteCache)
+                        .withRemoteBase(mod.manifest().remoteBase)
+                        .readRelative(mod.manifest().entrypoint);
+                if (bytes == null) {
+                    throw new IOException("entrypoint nao encontrado: " + mod.manifest().entrypoint);
+                }
+                source = new String(bytes, StandardCharsets.UTF_8);
+                logger.info("Entrypoint {} do mod {} veio da base remota",
+                        mod.manifest().entrypoint, mod.manifest().id);
+            }
+
+            try {
+                LuaValue chunk = globals.load(source, mod.manifest().id + "/" + mod.manifest().entrypoint);
                 LuaValue returned = chunk.call();
                 if (returned.istable()) {
                     exported = (LuaTable) returned;

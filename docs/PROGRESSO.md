@@ -40,6 +40,14 @@ cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que pas
       aceitam o índice. É o que destrava o filtro por slot dos módulos de chassi, e a máquina com
       entrada e saída separadas.
 
+- [x] **Pastas de mod fora do jogo** (`MINE_LOADER_MODS`, ou `-Pmods=`). O loader carrega direto da
+      pasta apontada, sem copiar. Copiar era o que se fazia, e a copia envelhecia: o servidor rodava
+      contra um script velho dizendo que passou.
+
+- [x] **`entrypoint` vindo da base remota.** Era o unico pedaco de um mod que ainda exigia arquivo
+      local -- modulo, comportamento, textura e `$import` ja buscavam. Um mod publicado agora pode
+      ser instalado com um `mod.json` de poucas linhas.
+
 - [x] **Bloco que conecta e guarda dados ao mesmo tempo.** Eram exclusivos no registrador das duas
       plataformas: um cano com `block_data` perdia a conexão inteira, em silêncio. Descoberto ao
       fazer o item viajar — a carga precisa morar na posição do cano.
@@ -99,8 +107,12 @@ vanilla, e `tique_agendado` na bateria — **33/33 nas duas**.
 
 - Nada da forma que varia com o estado foi visto no `runClient`. O blockstate está certo no arquivo
   e a propriedade está certa no mundo, mas se o braço aparece no lugar, só a tela diz.
-- **O porte autônomo ficou para trás.** `logistic-pipes-lua` ainda tem a versão anterior do mod, sem
-  a viagem. Vale sincronizar antes de mexer nele.
+- **O mod migrado mudou de casa.** `examples/logistica` saiu do mine-loader: o mod vive em
+  [`logistic-pipes-lua`](https://github.com/MarcosBrendonDePaula/logistic-pipes-lua), com a arte do
+  original, e aqui se aponta a pasta com `-Pmods=`. Duas copias divergiriam no primeiro ajuste, e a
+  licenca do original (MMPL) nao permite trazer a arte para um repositorio MIT.
+- **`examples/tubos` ficou no lugar dele** como o exemplo minimo do mecanismo, e e o que os testes
+  usam: forma por estado, dados por posicao e tique agendado, sem mais nada em volta.
 
 ---
 

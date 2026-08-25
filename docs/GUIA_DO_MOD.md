@@ -342,6 +342,31 @@ declarar a permissão dela é erro em tempo de execução.
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
 | `entity.register` | Declarar espécie nova por script. Mais forte que as três acima: acrescenta um tipo ao registro do jogo, que vale para o mundo inteiro e não se desfaz sem reiniciar |
 
+## Desenvolver um mod que mora em outro repositório
+
+Um mod não precisa estar dentro de `mods-lua` para ser carregado. Aponte a pasta e o loader lê
+direto de lá:
+
+```bash
+./gradlew :runClient -Pmods=E:/meu-mod/logistica
+MINE_LOADER_MODS=/caminho/do/mod ./gradlew :runServer
+```
+
+Aceita várias pastas, separadas por `;` no Windows e `:` no resto. Cada uma pode ser **a pasta do
+mod** (a que tem `mod.json`) ou **uma pasta que contém vários**.
+
+**Por que isso existe.** A alternativa era copiar o mod para dentro de `mods-lua`, e a cópia
+envelhece: o servidor passa a rodar contra um script velho **dizendo que passou** — o pior resultado
+possível, porque parece verificação. Aconteceu neste repositório.
+
+Se o mesmo id existir na pasta extra e na pasta do jogo, **a pasta extra ganha** — quem apontou está
+trabalhando naquele mod. O log diz as duas origens, para não restar dúvida de qual está rodando.
+
+Para **publicar**, o caminho é outro: `remote_base` no manifesto faz o loader buscar os arquivos na
+web quando eles não existem no disco — `entrypoint`, módulos de `mod.import`, comportamento de
+bloco, textura, modelo e `$import`. Um mod publicado pode ser instalado com um `mod.json` de poucas
+linhas.
+
 ## Guardar informação
 
 São três lugares diferentes, e escolher o errado costuma ser a causa de bugs difíceis.

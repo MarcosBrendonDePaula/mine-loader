@@ -177,6 +177,34 @@ class ConnectedBlockstateTest {
     }
 
     @Test
+    void aTexturaDoNucleoEDoBracoExisteNoPacote(@TempDir Path root, @TempDir Path out)
+            throws IOException {
+        writeMod(root, CANO);
+
+        JsonObject nucleo = assemble(root, out, "assets/tubos/models/block/cano_core.json");
+        String textura = nucleo.getAsJsonObject("textures").get("all").getAsString();
+
+        // O defeito que este caso existe para nao deixar voltar: o montador passava o MODELO onde
+        // esperava a TEXTURA, entao o nucleo nomeava "tubos:block/cano_v0" -- que e um modelo. O
+        // jogo procura esse nome no atlas, nao acha, e desenha o cubo roxo. Todo bloco que conecta
+        // saia assim, em qualquer manifesto, e os outros casos daqui passavam porque nenhum
+        // perguntava se a imagem existe.
+        assertTrue(textura.startsWith("tubos:block/"),
+                "a textura deveria ser do proprio mod, veio " + textura);
+
+        Path imagem = out.resolve("pack").resolve("assets/tubos/textures/block/"
+                + textura.substring(textura.lastIndexOf('/') + 1) + ".png");
+        assertTrue(Files.isRegularFile(imagem),
+                "a textura nomeada pelo modelo precisa existir no pacote: " + imagem);
+
+        // O braco usa a mesma, senao um cano teria nucleo de um jeito e braco de outro.
+        JsonObject braco = JsonParser.parseString(Files.readString(
+                        out.resolve("pack").resolve("assets/tubos/models/block/cano_arm.json"),
+                        StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals(textura, braco.getAsJsonObject("textures").get("all").getAsString());
+    }
+
+    @Test
     void semBracoDeclaradoSoONucleoEDesenhado(@TempDir Path root, @TempDir Path out)
             throws IOException {
         // Um bloco que declara nucleo e nao declara braco e legitimo: e um poste.
