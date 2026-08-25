@@ -171,6 +171,25 @@ o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 
 ---
 
+## A refinar, achado ao portar
+
+Coisas que o loader faz de um jeito mais simples do que precisaria, encontradas usando-o de verdade.
+Nenhuma bloqueia; todas custam algo a quem escreve o mod.
+
+- **`inventory.size` tem que ser múltiplo de nove.** A regra vem da janela do jogo, que desenha
+  fileiras de nove, e a mensagem de recusa explica isso. Mas um bloco com três slots é legítimo — o
+  chassi do mod migrado tem de um a cinco no original — e hoje ele precisa declarar nove e ignorar o
+  resto. Sairia com uma tela própria em vez da janela do jogo, que é trabalho da camada de UI.
+
+- **Sem jogador, só o spawn tica.** Um bloco longe do spawn aceita `schedule_block` — a chamada
+  responde certo — e o tique nunca chega. Isso é do jogo, não do loader, mas o loader poderia
+  avisar: hoje o silêncio parece defeito do mod. Está registrado no `CLAUDE.md` como armadilha de
+  verificação, e "carregar e manter chunk sob demanda" já está em `API_GAPS.md`.
+
+- **Um erro de Lua em callback é logado, não propagado.** Já documentado, e mordeu de novo: o tique
+  do chassi não rodava e não havia nada no log apontando para a causa. Um contador de erros por
+  bloco, ou um aviso na primeira falha de cada handler, tornaria isso visível sem mudar a regra.
+
 ## O que falta
 
 ### Lacunas que a migração do Logistic Pipes encontrou

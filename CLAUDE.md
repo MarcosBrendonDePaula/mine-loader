@@ -157,6 +157,11 @@ O log fica em `build/servidor-<plataforma>.log`. Se o `grep` reclamar de arquivo
   publicados antes disso, e um comando enviado ali falha com `serverlevel is null` — que não se
   parece com "cedo demais". O script já espera pelos dois sinais; se escrever verificação nova,
   não presuma.
+- **Sem jogador, só o spawn tica.** Um bloco longe do spawn aceita `schedule_block` — a chamada
+  responde certo — e o tique nunca chega, porque o servidor só processa a fila de chunks que estão
+  tiquando. O sintoma é uma lógica que "não roda" com tudo aparentemente configurado, e custou uma
+  investigação inteira. Monte a verificação perto de 0,0; ler bloco distante também paga
+  carregamento de chunk, caro o bastante para estourar o orçamento de 20 ms.
 - **O seletor `@e` do console não enxerga entidades em todo servidor.** Para contar o que caiu no
   chão, use `entities_near` pela API do loader — é o caminho que um mod usaria, e responde.
 - **Um servidor órfão segura a porta e o mundo.** `parar` antes de `iniciar`, sempre. O script
