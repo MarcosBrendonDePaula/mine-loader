@@ -187,6 +187,28 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public void setSlot(int x, int y, int z, int slot, String itemId, int count) {
+        // Escreve no Container do bloco, e nao pela capability: a capability e o portao de maquina,
+        // e um inventario fantasma o fecha de proposito. Quem desenha e o mod dono do bloco.
+        if (!(requireLevel().getBlockEntity(new BlockPos(x, y, z))
+                instanceof NeoForgeDeclarativeBlockEntity entity)) {
+            throw new BridgeException("set_slot exige um bloco do loader em "
+                    + x + "," + y + "," + z);
+        }
+        if (slot < 0 || slot >= entity.getContainerSize()) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem "
+                    + entity.getContainerSize());
+        }
+
+        if (itemId == null || itemId.isBlank() || count <= 0) {
+            entity.setItem(slot, ItemStack.EMPTY);
+        } else {
+            entity.setItem(slot, new ItemStack(requireItem(itemId), count));
+        }
+        entity.setChanged();
+    }
+
+    @Override
     public int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
         if (slot < 0) return insertInto(x, y, z, itemId, count);
 

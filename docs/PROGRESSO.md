@@ -173,6 +173,71 @@ o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 
 ## Onde a sessão parou
 
+### A camada de tela ganhou o que faltava para mexer em item
+
+**O diagnóstico primeiro, porque é o que orienta o resto.** A camada de tela do loader mostra dados
+muito bem e **não mexe em itens**: não tem slot, arrastar, shift-clique nem inventário do jogador, e
+cada clique vai ao servidor e volta com a tela inteira redesenhada. Tentar imitar slot ali produziu
+uma tela que o jogador chamou de inutilizável — com razão.
+
+O caminho certo já existia e não estava sendo usado: **o inventário declarado no bloco**, que abre a
+janela do próprio jogo. O que faltava era poder descrevê-la.
+
+- **`inventory.ghost`** — slot que mostra um item sem guardar item nenhum. Clicar com item no cursor
+  copia a identidade e devolve o cursor intacto; mão vazia limpa. É a regra do `DummySlot` do
+  Logistic Pipes, lida no código dele. Máquina nunca mexe num inventário fantasma, mesmo com
+  `allow_insert` ligado: um funil esvaziando os slots apagaria a receita e a máquina pararia sem
+  erro nenhum.
+- **`set_slot`** — apareceu como consequência: ao fechar o portão para máquina, fechei também para o
+  mod dono, que precisa desenhar ali.
+- **`inventory.window: "3x3"`** — a janela do dispenser. **A forma é o que dá sentido a um padrão**;
+  nove slots numa fileira não dizem onde cada item fica.
+- **`inventory.layout`** — a janela declarada slot a slot: posição de cada um, do inventário do
+  jogador, arte de fundo e **botões**. As janelas do jogo são formas fechadas, e uma máquina
+  raramente tem uma delas — um cano de fabricação precisa de 3x3 **mais** um slot de saída, e
+  nenhuma janela vanilla oferece isso com um container qualquer.
+- **`type: "gui"`, `image` com recorte, painel `style: "sheet"`** — uma tela podia *nomear* uma
+  textura e um mod não tinha como *entregar* uma. Agora entrega, recorta de uma folha 256x256 e
+  estica em nove pedaços sem deformar o canto.
+
+**O layout não trafega.** O cliente lê o mesmo manifesto que o servidor; só a posição do bloco vai
+pela rede. E há **uma tela para todos os blocos** — o que muda é o manifesto que ela lê, a mesma
+ideia da tela genérica do loader.
+
+### Três defeitos que só apareceram jogando
+
+Todos da mesma família: **um erro de montagem de tela mata a tela inteira, e o sintoma dentro do jogo
+é o clique não fazer nada.**
+
+- **`count` acima de 64 derrubava a tela.** Aquele campo não é tamanho de pilha — é um número
+  desenhado sobre o ícone, e um terminal que mostra quanto a rede tem passa de 64 no primeiro baú
+  cheio. O teto virou 99999.
+- **Célula `nil` numa grade era pulada**, encurtando a lista e deslocando todas as seguintes — o
+  desenho saía torto e, pior, **o clique respondia pela célula errada**.
+- **`lua_variant` era escrito no blockstate de blocos que já não têm a propriedade.** Regressão
+  minha, do corte de estado: o jogo recusa a definição inteira com *Unknown blockstate property* e o
+  bloco fica **sem modelo**. Atingia todo bloco de textura única.
+
+### A árvore de pedido ficou correta e barata
+
+Duas descobertas, as duas saídas de pedir um baú no jogo:
+
+- **A árvore escolhia a primeira opção de uma posição de receita.** A receita do baú aceita tábua de
+  qualquer madeira, a lista da tag vem numa ordem que o mod não escolhe, e caía em selva — o plano
+  descia para tora de selva e desistia com "ninguém sabe fazer", com a base cheia de carvalho. Agora
+  escolhe **o que a rede tem**.
+- **`recipes_for` varre o livro de receitas inteiro**, e a árvore perguntava a cada nó. Com o AE2
+  instalado isso sozinho estourava os 20 ms. Passou a ser uma leitura por item, guardando o
+  **resolvido** e não a resposta crua: de até 2.304 cadeias por item para cerca de nove.
+
+**Sobre economia de memória, estudei o original.** `RequestTreeNode` é uma árvore de objetos Java sem
+limite de profundidade, sem teto de nós e sem orçamento de tempo — a única proteção contra receita
+circular é perguntar ao pai se aquele fabricador já foi usado no ramo. Eles rodam sem orçamento de
+callback e podem se dar a isso; **nós já temos duas proteções que eles não têm**, porque somos
+obrigados.
+
+## Onde a sessão parou (rodada anterior)
+
 **O desenho do cano estava lendo o arquivo errado.** O OBJ do original tem um vocabulário que o
 manifesto não usava, e as contagens de face provam: desenhávamos `Edge_M_` e `Corner_M_` — 164 faces
 que são as **doze arestas e os oito cantos** do miolo. O corpo é `Spacer`, e estava de fora. Era um

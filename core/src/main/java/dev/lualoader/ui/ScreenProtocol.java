@@ -84,6 +84,19 @@ public final class ScreenProtocol {
      */
     public static final int MAX_CELLS = 512;
 
+    /**
+     * O maior numero que um item de tela pode mostrar no canto.
+     *
+     * <p>Nao e um tamanho de pilha: e um <b>numero desenhado</b>. O limite era 64, e derrubava a
+     * montagem da tela inteira quando um terminal de armazenamento tentava mostrar quantos itens a
+     * rede tem -- que e justamente o que um terminal existe para mostrar. O jogo desenha a cadeia
+     * de digitos sem se importar com o valor.
+     *
+     * <p>O teto continua existindo porque o numero e escrito por cima do icone: alem de cinco
+     * digitos ele deixa de caber, e o que aparece na tela vira uma mancha.
+     */
+    public static final int MAX_ITEM_COUNT = 99999;
+
     /** Maior número de colunas de uma grade. */
     public static final int MAX_COLUMNS = 32;
 
@@ -123,7 +136,7 @@ public final class ScreenProtocol {
      * o painel acompanhar qualquer tamanho e dispensa o mod distribuir textura.
      */
     public static final Set<String> PANEL_STYLES =
-            Set.of("flat", "vanilla", "slot", "inset", "divider");
+            Set.of("flat", "vanilla", "slot", "inset", "divider", "sheet");
 
     /** Teto de sobreposições simultâneas por jogador. */
     public static final int MAX_OVERLAYS = 16;

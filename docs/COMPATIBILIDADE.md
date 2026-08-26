@@ -119,6 +119,14 @@ núcleo não conhecer Minecraft.
 | `obj_parts` -- pecas por conexao | sim | sim | Mesmos numeros de face nos dois: 164 no miolo, 40 na manga, 2 na placa |
 | `connects_to: "@items"` -- ligar a inventario | sim | sim | Por capability, e nao por id: alcanca o bau de qualquer mod. O lado vira uma propriedade de tres valores (`none`/`block`/`inventory`), e nao um booleano |
 | `obj_parts.connected_inventory` -- braco proprio do lado do bau | sim | sim | Vazio cai no de `connected`, entao um mod escrito antes disto desenha igual em vez de perder o braco |
+| `inventory.layout` -- janela declarada slot a slot | sim | sim | Posicao de cada slot, do inventario do jogador, arte de fundo e **botoes**. As janelas do jogo sao formas fechadas, e uma maquina raramente tem uma delas. O layout **nao trafega**: o cliente le o mesmo manifesto |
+| `inventory.window: "3x3"` | sim | sim | A janela do dispenser. A forma e o que da sentido a um padrao -- nove slots numa fileira nao dizem onde cada item fica |
+| Botao de janela declarada -> evento de tela | sim | sim | Mesmo canal dos eventos de tela desenhada: o nome da tela e o id do bloco, o valor e a posicao |
+| `inventory.ghost` -- slot fantasma | sim | sim | Mostra um item sem guardar item nenhum. Clicar com item no cursor copia a identidade e devolve o cursor intacto; mao vazia limpa. **Nada e consumido.** Maquina nunca mexe, mesmo com `allow_insert` ligado |
+| `set_slot(x, y, z, slot, item, qtd)` | sim | sim | Escreve um slot **substituindo**, e passa por cima do portao de maquina. E o que permite ao mod dono desenhar num inventario fantasma, que recusa funil e cano de proposito |
+| `image` com recorte (`u`, `v`, `sheet_w`, `sheet_h`) | sim | sim | Antes so desenhava o PNG inteiro com o tamanho exato do arquivo -- e toda folha de GUI do jogo e 256x256 com o painel num canto |
+| Recurso `type: "gui"` -- o mod entrega arte de tela | sim | sim | Aterrissa em `assets/<mod>/textures/gui/<nome>.png`, caminho fixo porque a tela precisa escreve-lo a mao. Uma tela podia **nomear** uma textura e um mod nao tinha como **entregar** uma |
+| Painel `style: "sheet"` -- moldura de nove pedacos | sim | sim | Cantos inteiros, bordas esticando num eixo, miolo nos dois. Espessura **por lado**, porque arte de mod e assimetrica |
 | `crafting_result(padrao)` -- o que sai de nove slots | sim | sim | A mesma busca da bancada, no mesmo mundo: vale receita de qualquer mod, com e sem formato. Pergunta pura -- nao consome nada |
 | Cache de recurso remoto consultado **antes** do download | sim | sim | So com `sha256` declarado; a chave e o conteudo, e sem o hash nao ha o que consultar. Antes o download acontecia sempre |
 | `state.dynamic_luminance` -- luz que muda por script | sim | sim | Sem ela a propriedade nao e registrada. Era 16 valores em **todo** bloco declarativo; `set_block_luminance` num bloco que nao declara agora e recusado com o motivo |

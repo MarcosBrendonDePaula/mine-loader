@@ -94,6 +94,10 @@ public final class ResourcePackAssembler {
         }
 
         for (ModLoader.LoadedMod mod : mods) {
+            assembleGuiSheets(mod, generatedRoot);
+        }
+
+        for (ModLoader.LoadedMod mod : mods) {
             if (mod.manifest().items == null) continue;
             for (ModManifest.ItemEntryDefinition item : mod.manifest().items) {
                 assembleItem(mod, item, generatedRoot);
@@ -133,6 +137,42 @@ public final class ResourcePackAssembler {
      *
      * <p>Sem receitas, todo item novo so chega ao jogador por comando, drop de bloco ou script.
      */
+    /**
+     * Escreve as folhas de interface declaradas, num caminho que a tela consegue nomear.
+     *
+     * <p>Uma tela podia <b>nomear</b> uma textura desde o comeco, e um mod nao tinha como
+     * <b>entregar</b> uma: todo recurso declarado virava textura de bloco ou de item, e o elemento
+     * {@code image} so alcancava o que o jogo ja trazia. Um mod que quisesse a propria arte de tela
+     * simplesmente nao tinha caminho.
+     *
+     * <p>O destino e fixo -- {@code assets/<mod>/textures/gui/<nome>.png} -- porque a tela precisa
+     * escrever esse caminho a mao. Um nome gerado pelo montador seria impossivel de adivinhar do
+     * lado do Lua.
+     */
+    private void assembleGuiSheets(ModLoader.LoadedMod mod, Path generatedRoot) throws IOException {
+        Map<String, ModManifest.ResourceDefinition> declared = mod.manifest().resources;
+        if (declared == null || declared.isEmpty()) return;
+
+        for (Map.Entry<String, ModManifest.ResourceDefinition> entry : declared.entrySet()) {
+            ModManifest.ResourceDefinition resource = entry.getValue();
+            if (resource == null || resource.type == null
+                    || !resource.type.trim().equalsIgnoreCase("gui")) {
+                continue;
+            }
+
+            byte[] bytes = remoteResources.resolveBytes(mod.directory(), resource,
+                    mod.manifest().remoteBase);
+
+            Path destino = generatedRoot.resolve("assets").resolve(mod.manifest().id)
+                    .resolve("textures/gui").resolve(entry.getKey() + ".png");
+            Files.createDirectories(destino.getParent());
+            Files.write(destino, bytes);
+
+            logger.info("Folha de interface {}:textures/gui/{}.png escrita ({} bytes)",
+                    mod.manifest().id, entry.getKey(), bytes.length);
+        }
+    }
+
     private void assembleRecipes(ModLoader.LoadedMod mod, Path generatedRoot) throws IOException {
         if (mod.manifest().recipes == null) return;
         String namespace = mod.manifest().id;
@@ -1160,6 +1200,37 @@ public final class ResourcePackAssembler {
     }
 
     /**
+     * Quantas variantes visuais o blockstate precisa listar.
+     *
+     * <p>Dezesseis quando o bloco tem a propriedade, uma quando nao tem. Escrever sempre dezesseis
+     * era o que o montador fazia, e virou defeito no momento em que a propriedade passou a ser
+     * opcional: o jogo recusa a definicao inteira com <i>Unknown blockstate property</i>, e o bloco
+     * fica sem modelo -- um cubo roxo, sem uma linha que ligue uma coisa a outra.
+     */
+    private static int variantCount(ModManifest.BlockDefinition block) {
+        return dev.lualoader.content.BlockShapes.needsVariant(block) ? 16 : 1;
+    }
+
+    /** A chave de uma variante, com a propriedade so quando ela existe. */
+    private static void appendVariantKey(StringBuilder blockstate,
+                                         ModManifest.BlockDefinition block,
+                                         int variant, String facing) {
+        boolean temVariante = dev.lualoader.content.BlockShapes.needsVariant(block);
+        boolean primeiro = true;
+
+        blockstate.append("    \"");
+        if (temVariante) {
+            blockstate.append("lua_variant=").append(variant);
+            primeiro = false;
+        }
+        if (facing != null) {
+            if (!primeiro) blockstate.append(",");
+            blockstate.append("facing=").append(facing);
+        }
+        blockstate.append("\"");
+    }
+
+    /**
      * O blockstate de um bloco com modelo proprio: uma variante por direcao, e nada de multipart.
      *
      * <p>Separado do caminho comum porque a pergunta ali e "este bloco conecta?", e aqui a resposta
@@ -1173,14 +1244,13 @@ public final class ResourcePackAssembler {
 
         StringBuilder blockstate = new StringBuilder("{" + NEWLINE + "  \"variants\": {" + NEWLINE);
         boolean primeira = true;
-        for (int variant = 0; variant <= 15; variant++) {
+        for (int variant = 0; variant < variantCount(block); variant++) {
             for (String facing : facings) {
                 if (!primeira) blockstate.append(",").append(NEWLINE);
                 primeira = false;
 
-                blockstate.append("    \"lua_variant=").append(variant);
-                if (facing != null) blockstate.append(",facing=").append(facing);
-                blockstate.append("\": {\"model\": \"").append(model).append("\"");
+                appendVariantKey(blockstate, block, variant, facing);
+                blockstate.append(": {\"model\": \"").append(model).append("\"");
                 appendRotation(blockstate, facing);
                 blockstate.append("}");
             }
@@ -1224,14 +1294,13 @@ public final class ResourcePackAssembler {
 
         StringBuilder blockstate = new StringBuilder("{\n  \"variants\": {\n");
         boolean primeira = true;
-        for (int variant = 0; variant <= 15; variant++) {
+        for (int variant = 0; variant < variantCount(block); variant++) {
             for (String facing : facings) {
                 if (!primeira) blockstate.append(",\n");
                 primeira = false;
 
-                blockstate.append("    \"lua_variant=").append(variant);
-                if (facing != null) blockstate.append(",facing=").append(facing);
-                blockstate.append("\": {\"model\": \"")
+                appendVariantKey(blockstate, block, variant, facing);
+                blockstate.append(": {\"model\": \"")
                         .append(models.getOrDefault(variant, fallbackModel)).append("\"");
                 appendRotation(blockstate, facing);
                 blockstate.append("}");

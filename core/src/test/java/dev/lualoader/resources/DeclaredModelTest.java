@@ -156,8 +156,13 @@ class DeclaredModelTest {
 
         assertTrue(blockstate.contains("bb_mod:block/mesa"),
                 "o blockstate deveria apontar para o modelo declarado: " + blockstate);
-        // Todas as variantes apontam para ele: a variante troca textura, e o modelo declarado ja
-        // traz as suas.
-        assertTrue(blockstate.contains("lua_variant=15"), "faltou variante: " + blockstate);
+        // E **sem** a propriedade de variante, porque este bloco nao declara variantes.
+        //
+        // O montador escrevia dezesseis entradas sempre, e isso virou defeito quando a propriedade
+        // passou a ser opcional: o jogo recusa a definicao inteira com "Unknown blockstate
+        // property" e o bloco fica sem modelo -- um cubo roxo, sem uma linha ligando uma coisa a
+        // outra. Um bloco de textura unica nao paga por uma propriedade que nao tem.
+        assertFalse(blockstate.contains("lua_variant"),
+                "bloco sem variantes nao deveria citar a propriedade: " + blockstate);
     }
 }

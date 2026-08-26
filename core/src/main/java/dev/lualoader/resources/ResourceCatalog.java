@@ -17,7 +17,7 @@ import java.util.Set;
  */
 public final class ResourceCatalog {
     /** Os tipos que o loader sabe resolver. */
-    public static final Set<String> TYPES = Set.of("image", "model", "sound", "script", "data");
+    public static final Set<String> TYPES = Set.of("image", "gui", "model", "sound", "script", "data");
 
     /** O mesmo padrao que uma textura declarada no lugar usa quando nao diz outro. */
     private static final String DEFAULT_FALLBACK = "minecraft:block/stone";

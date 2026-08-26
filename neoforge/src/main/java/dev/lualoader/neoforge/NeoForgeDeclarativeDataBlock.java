@@ -58,7 +58,13 @@ public class NeoForgeDeclarativeDataBlock extends NeoForgeDeclarativeBlock imple
             return super.useWithoutItem(state, level, pos, player, hit);
         }
 
-        player.openMenu(entity);
+        // Com janela declarada, a posicao vai junto: e o unico dado que o cliente precisa para
+        // achar o desenho no manifesto que ele ja tem.
+        if (declared.layout != null && player instanceof net.minecraft.server.level.ServerPlayer) {
+            player.openMenu(entity, buffer -> buffer.writeBlockPos(pos));
+        } else {
+            player.openMenu(entity);
+        }
         return InteractionResult.CONSUME;
     }
 

@@ -176,6 +176,23 @@ public abstract class TestBridge implements GameBridge {
     public final java.util.List<String> recipes = new java.util.ArrayList<>(java.util.List.of("""
             {"id":"minecraft:iron_sword","type":"minecraft:crafting_shaped",            "output":{"item":"minecraft:iron_sword","count":1},"width":1,"height":3,            "ingredients":[["minecraft:iron_ingot"],["minecraft:iron_ingot"],["minecraft:stick"]]}            """));
 
+    /**
+     * Desenha um slot no duble.
+     *
+     * <p>O duble guarda o inventario como um mapa de item para quantidade, sem posicao -- entao um
+     * slot desenhado aqui vira uma entrada como qualquer outra. E o bastante para o que os testes
+     * perguntam, e fingir posicao seria fingir uma estrutura que o duble nao tem.
+     */
+    @Override
+    public void setSlot(int x, int y, int z, int slot, String itemId, int count) {
+        java.util.Map<String, Integer> container = containers.get(x + "," + y + "," + z);
+        if (container == null) {
+            throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+        }
+        if (itemId == null || itemId.isBlank() || count <= 0) return;
+        container.merge(itemId, count, Integer::sum);
+    }
+
     @Override
     public java.util.List<String> recipesFor(String itemId, int limit) {
         return filterRecipes(itemId, limit, true);

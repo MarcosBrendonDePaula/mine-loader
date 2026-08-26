@@ -142,12 +142,122 @@ public final class ModManifest {
         public String title;
         /** Se clicar no bloco abre o inventario. Um mod que prefere reagir no script desliga. */
         public boolean openOnUse = true;
-        /** Se maquinas e funis podem inserir itens. */
+        /** Se maquinas e funis podem inserir itens. Nunca, num inventario fantasma. */
         public boolean allowInsert = true;
-        /** Se maquinas e funis podem retirar itens. */
+        /** Se maquinas e funis podem retirar itens. Nunca, num inventario fantasma. */
         public boolean allowExtract = true;
+
+        /** Se maquina pode inserir aqui. Um inventario fantasma recusa, e o manifesto nao decide. */
+        public boolean machineCanInsert() {
+            return allowInsert && !ghost;
+        }
+
+        /**
+         * Se maquina pode retirar daqui.
+         *
+         * <p>O fantasma recusa mesmo com {@code allow_extract} ligado, e nao e detalhe: um funil ou
+         * um cano esvaziando os slots apagaria a receita que alguem desenhou, e a maquina pararia
+         * sem erro nenhum -- o defeito silencioso de sempre. O que esta ali nao e estoque, e a
+         * quantidade que aparece nem existe.
+         */
+        public boolean machineCanExtract() {
+            return allowExtract && !ghost;
+        }
         /** Se o conteudo cai no chao quando o bloco e quebrado. */
         public boolean dropOnBreak = true;
+
+        /**
+         * Se os slots sao <b>fantasma</b>: mostram um item sem guardar item nenhum.
+         *
+         * <p>Serve para desenhar uma intencao -- um padrao de receita, um filtro, uma lista de
+         * itens desejados. Clicar com um item no cursor copia a <i>identidade</i> dele para o slot
+         * e devolve o cursor intacto; mao vazia limpa. <b>Nada e consumido, nunca.</b>
+         *
+         * <p>Era a lacuna que aparecia ao portar a tela de fabricacao do Logistic Pipes. Ele monta o
+         * padrao assim -- {@code DummySlot} com {@code canTakeStack} falso e limite de pilha zero --
+         * e sem isso um mod declarativo tem duas saidas ruins: exigir que o jogador <i>gaste</i> um
+         * item de cada tipo para desenhar a receita, ou inventar um gesto proprio numa tela sem
+         * slot, que foi o caminho que esta sessao tentou e o jogador chamou de inutilizavel.
+         *
+         * <p>Um inventario fantasma nunca aceita item de maquina: funil, cano e a propria API de
+         * containers sao recusados, porque o que esta ali nao e estoque.
+         */
+        public boolean ghost = false;
+
+        /**
+         * O formato da janela: {@code "rows"} (fileiras de nove) ou {@code "3x3"}.
+         *
+         * <p>A forma importa quando as posicoes tem significado. Um padrao de bancada e
+         * <b>posicional</b> -- a espada e duas barras em cima de um graveto, na coluna do meio -- e
+         * nove slots numa fileira unica nao dizem isso: o jogador olha e nao tem como desenhar.
+         *
+         * <p>{@code 3x3} usa a janela do dispenser, que o jogo ja desenha com essa forma e com o
+         * inventario do jogador embaixo. Exige exatamente nove slots.
+         */
+        public String window = "rows";
+
+        /**
+         * O desenho da janela, quando as fileiras do jogo nao servem.
+         *
+         * <p>Com {@code layout} declarado, {@code window} deixa de valer: a janela passa a ser
+         * montada slot a slot, na posicao que o mod disser, com a arte que ele trouxer e os botoes
+         * que ele pedir.
+         *
+         * <p>Existe porque as janelas do jogo sao formas fechadas -- fileiras de nove, ou 3x3 -- e
+         * uma maquina raramente tem essa forma. Um cano de fabricacao precisa de 3x3 <b>mais</b> um
+         * slot de saida, e nenhuma janela do jogo tem isso com um container qualquer: a da bancada
+         * monta os proprios inventarios e calcula pelo livro de receitas.
+         */
+        public LayoutDefinition layout;
+    }
+
+    /**
+     * O desenho de uma janela declarada: onde fica cada slot, o que desenhar atras, que botoes tem.
+     *
+     * <p>As coordenadas sao as do canto superior esquerdo de cada slot, como o jogo as conta -- um
+     * slot ocupa 18 por 18, e o item e desenhado um pixel para dentro. Sao as mesmas medidas que
+     * qualquer tela do jogo usa, entao portar o desenho de outro mod e copiar numeros.
+     */
+    public static final class LayoutDefinition {
+        /** Tamanho da janela. O padrao e o da tela do jogo. */
+        public int width = 176;
+        public int height = 166;
+
+        /** Onde fica cada slot do inventario do bloco, na ordem dos slots. */
+        public List<SlotDefinition> slots = new ArrayList<>();
+
+        /**
+         * Onde comeca o inventario do jogador, ou {@code null} para nao desenha-lo.
+         *
+         * <p>Sem ele nao ha de onde arrastar, e a janela vira decoracao: e o erro que esta sessao
+         * cometeu ao desenhar uma tela sem slot. As tres fileiras e a barra ficam onde o jogo as
+         * poe em relacao a este ponto.
+         */
+        public SlotDefinition player;
+
+        /** A folha de interface desenhada atras de tudo, referenciada como recurso. */
+        public TextureDefinition texture;
+
+        /** Botoes da janela. O clique chega ao script como acao de tela. */
+        public List<ButtonDefinition> buttons = new ArrayList<>();
+    }
+
+    /** Uma posicao em pixels, dentro da janela. */
+    public static final class SlotDefinition {
+        public int x;
+        public int y;
+    }
+
+    /** Um botao da janela declarada. */
+    public static final class ButtonDefinition {
+        /** O identificador que chega ao script no clique. */
+        public String id;
+        public int x;
+        public int y;
+        public int w = 60;
+        public int h = 20;
+        public String text = "";
+        public String tooltip;
     }
 
     public static final class MaterialDefinition {

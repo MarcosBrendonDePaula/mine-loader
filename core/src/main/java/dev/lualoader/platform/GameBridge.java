@@ -318,6 +318,24 @@ public interface GameBridge {
         playSound(soundId, x, y, z, volume, pitch);
     }
 
+    /**
+     * Escreve um slot de um inventario declarado, trocando o que estiver la.
+     *
+     * <p>Diferente de {@code insertInto}, que <b>acrescenta</b> respeitando o portao de maquina:
+     * isto <b>substitui</b>, e passa por cima desse portao. Existe por causa do inventario
+     * fantasma, que recusa funil e cano justamente para ninguem apagar o desenho -- e que, sem esta
+     * operacao, tambem nao poderia ser desenhado pelo proprio mod que o declarou.
+     *
+     * <p>O portao de maquina e sobre <i>automacao</i>, e nao sobre o script: um mod ja podia mexer
+     * em qualquer container com {@code insert_into}. Aqui ele ganha precisao de slot e a capacidade
+     * de limpar, que somar itens nao da.
+     *
+     * @param itemId o item a desenhar, ou vazio/{@code null} para limpar o slot
+     */
+    default void setSlot(int x, int y, int z, int slot, String itemId, int count) {
+        throw new BridgeException("set_slot nao existe neste adaptador");
+    }
+
     default int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
         if (slot < 0) return insertInto(x, y, z, itemId, count);
         throw new BridgeException("insert_into com slot nao existe neste adaptador");

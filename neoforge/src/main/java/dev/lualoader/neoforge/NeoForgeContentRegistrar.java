@@ -118,6 +118,21 @@ public final class NeoForgeContentRegistrar {
             }
         });
 
+        // A janela declarada: um tipo so para todos os blocos, e o mapa de quem tem desenho
+        // proprio. O mapa e preenchido dos dois lados, e e o que permite o layout nao trafegar.
+        event.register(Registries.MENU, registry -> {
+            for (ModManifest manifest : manifests) {
+                if (manifest.blocks == null) continue;
+                for (ModManifest.BlockDefinition block : manifest.blocks) {
+                    if (block == null || block.inventory == null) continue;
+                    NeoForgeDeclaredMenus.declare(manifest.id + ":" + block.id, block.inventory);
+                }
+            }
+            if (NeoForgeDeclaredMenus.anyDeclared()) {
+                registry.register(NeoForgeDeclaredMenus.ID, NeoForgeDeclaredMenus.create());
+            }
+        });
+
         event.register(Registries.CREATIVE_MODE_TAB, registry -> {
             for (ModManifest manifest : manifests) registerCreativeTab(manifest, registry::register);
         });

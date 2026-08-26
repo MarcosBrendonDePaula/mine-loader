@@ -26,7 +26,10 @@ public final class ScreenModel {
                           int color, int count, double progress, double scale,
                           String group, int columns, int cell, int content, List<Cell> cells,
                           String style, int border, int borderLight, int borderDark,
-                          boolean shadow, String entity) {
+                          boolean shadow, String entity,
+                          int u, int v, int sheetWidth, int sheetHeight,
+                          int sourceWidth, int sourceHeight,
+                          int borderTop, int borderRight, int borderBottom, int borderLeft) {
     }
 
     private final String title;
@@ -139,7 +142,34 @@ public final class ScreenModel {
                     colorOf(element, "border_light", 0xFFFFFFFF),
                     colorOf(element, "border_dark", 0xFF555555),
                     bool(element, "shadow", true),
-                    text(element, "entity", "")));
+                    text(element, "entity", ""),
+                    // O recorte de uma imagem, e a folha de onde ela sai.
+                    //
+                    // Sem isto o unico desenho possivel e o PNG inteiro com o tamanho exato do
+                    // arquivo -- e uma folha de interface do jogo tem 256x256 com o painel num
+                    // canto. Um mod que quisesse a propria arte de tela tinha que recortar o PNG
+                    // em pedacos, um arquivo por elemento.
+                    //
+                    // O padrao da folha e 256, que e o tamanho de toda folha de GUI do jogo: quem
+                    // usar o formato de sempre nao precisa dizer nada.
+                    integer(element, "u", 0),
+                    integer(element, "v", 0),
+                    integer(element, "sheet_w", 256),
+                    integer(element, "sheet_h", 256),
+                    // O recorte na folha, quando ele nao tem o tamanho do elemento na tela.
+                    //
+                    // Sao coisas diferentes e ate aqui eram a mesma: uma moldura de 256x199 pode
+                    // aparecer com 195 de largura, e para isso o desenho tem que ser em nove
+                    // pedacos -- cantos inteiros, bordas esticadas num eixo, miolo nos dois.
+                    integer(element, "sw", integer(element, "w", 0)),
+                    integer(element, "sh", integer(element, "h", 0)),
+                    // A espessura de cada borda. O padrao de cada uma e a borda geral: uma moldura
+                    // simetrica diz um numero so, e a do Logistic Pipes -- que tem o pe mais alto
+                    // que o topo -- diz os que precisa.
+                    integer(element, "border_top", integer(element, "border", 2)),
+                    integer(element, "border_right", integer(element, "border", 2)),
+                    integer(element, "border_bottom", integer(element, "border", 2)),
+                    integer(element, "border_left", integer(element, "border", 2))));
         }
         return list;
     }

@@ -30,6 +30,16 @@ public class LuaLoaderClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.UpdateScreen.ID,
                 (payload, context) -> context.client().execute(() -> updateScreen(payload)));
 
+        // A tela da janela declarada. Uma so para todos os blocos: o que muda e o manifesto que ela
+        // le, a mesma ideia da tela generica do loader.
+        //
+        // Depois do registro do conteudo, que roda no entrypoint principal: o tipo so existe se
+        // algum bloco declarou janela propria.
+        if (dev.lualoader.minecraft.DeclaredMenus.type() != null) {
+            net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                    dev.lualoader.minecraft.DeclaredMenus.type(), DeclaredContainerScreen::new);
+        }
+
         ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.CloseScreen.ID,
                 (payload, context) -> context.client().execute(LuaLoaderClient::closeScreen));
 

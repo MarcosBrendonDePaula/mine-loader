@@ -98,9 +98,67 @@ distribuir e o cliente baixar uma imagem.
 | `slot` | Bisel invertido: o quadrado parece cavado, como um slot |
 | `inset` | Igual a `slot`, para areas maiores que um slot |
 | `divider` | Linha de separacao, horizontal ou vertical conforme a proporcao |
+| `sheet` | A arte que o mod trouxe, em **nove pedacos** |
 
 `border`, `border_light` e `border_dark` ajustam espessura e cores quando o padrao nao serve. Sem
 `color`, `vanilla` e `slot` usam os cinzas do jogo.
+
+## Arte propria: a folha e a moldura de nove pedacos
+
+O fundo por regra cobre a janela do jogo. Um mod que porta a interface de outro mod precisa da arte
+**daquele** mod, e ate aqui nao tinha como: uma tela podia **nomear** uma textura, e um mod nao
+tinha como **entregar** uma -- todo recurso declarado virava textura de bloco ou de item.
+
+**Entregar.** Um recurso de tipo `gui` aterrissa em `assets/<mod>/textures/gui/<nome>.png`. O
+caminho e fixo de proposito: a tela precisa escreve-lo a mao, e um nome gerado pelo montador seria
+impossivel de adivinhar do lado do Lua.
+
+```json
+"resources": {
+  "moldura": { "type": "gui", "from": "assets/original/gui/gui_border.png" }
+}
+```
+
+**Recortar.** Uma folha de interface do jogo tem 256x256 com o painel num canto, entao desenhar o
+arquivo inteiro nunca serve. `u` e `v` dizem de onde recortar, e `sheet_w`/`sheet_h` dizem o tamanho
+da folha -- o padrao e 256, que e o de toda folha de GUI do jogo.
+
+```lua
+{ type = "image", x = 0, y = 0, w = 195, h = 96,
+  u = 0, v = 0, texture = "logistica:textures/gui/fabricador_tela.png" }
+```
+
+**Esticar sem deformar.** Uma moldura precisa servir a qualquer tamanho de tela, e esticar a imagem
+inteira engorda a linha da borda e deforma o canto. `style = "sheet"` desenha em nove pedacos: os
+quatro cantos saem inteiros, as quatro bordas esticam num eixo so, e o miolo estica nos dois.
+
+```lua
+{ type = "panel", style = "sheet", x = 0, y = 0, w = 256, h = 200,
+  texture = "logistica:textures/gui/moldura.png",
+  u = 0, v = 0, sw = 256, sh = 199, sheet_w = 256, sheet_h = 248,
+  border_top = 23, border_left = 23, border_right = 23, border_bottom = 29 }
+```
+
+`sw` e `sh` sao o recorte **na folha**, que e diferente do tamanho **na tela** -- e a distincao que
+o nove-pedacos existe para explorar. A espessura e por lado porque arte de mod e assimetrica: a
+moldura do Logistic Pipes tem o pe mais alto que o topo, e um numero simetrico dobraria a linha de
+baixo.
+
+## O que esta camada NAO faz
+
+Vale dizer com todas as letras, porque tentar o contrario custou uma sessao.
+
+**Esta camada mostra dados. Ela nao mexe em itens.** Nao ha slot, nao ha arrastar, nao ha
+shift-clique, nao ha inventario do jogador, e cada clique vai ao servidor e volta com a tela inteira
+redesenhada. Serve para um terminal, uma lista, um estado, um painel de configuracao por botao.
+
+Para **mexer em item**, o caminho e o inventario declarado no bloco: ele abre a janela do proprio
+jogo, com slots de verdade, arrastar, shift-clique e o inventario do jogador embaixo. Ver
+`MOD_FORMAT_SPEC.md`, em `inventory` -- inclusive `ghost`, para um slot que desenha uma intencao
+sem guardar item.
+
+Uma tela desenhada a mao que tenta imitar slot vira gesto inventado, e gesto inventado o jogador
+chama de inutilizavel -- com razao.
 
 ## Botao com icone
 

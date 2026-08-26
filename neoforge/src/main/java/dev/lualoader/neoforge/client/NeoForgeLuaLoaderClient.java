@@ -36,6 +36,15 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
                 sendScreenSize());
         NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> sendScreenSize());
 
+        // A tela da janela declarada. Uma so para todos os blocos: o que muda e o manifesto que ela
+        // le, a mesma ideia da tela generica do loader.
+        modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) -> {
+            if (dev.lualoader.neoforge.NeoForgeDeclaredMenus.type() != null) {
+                event.register(dev.lualoader.neoforge.NeoForgeDeclaredMenus.type(),
+                        NeoForgeDeclaredScreen::new);
+            }
+        });
+
         // As entidades desenhadas apontam para o mundo em que foram criadas; sair dele as invalida.
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) ->
                 NeoForgeScreenRenderer.forgetEntities());

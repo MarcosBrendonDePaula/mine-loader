@@ -862,6 +862,28 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public void setSlot(int x, int y, int z, int slot, String itemId, int count) {
+        // Escreve no Inventory do bloco, e nao pela Transfer API: aquela e o portao de maquina, e um
+        // inventario fantasma o fecha de proposito. Quem desenha e o mod dono do bloco.
+        if (!(requireWorld().getBlockEntity(new BlockPos(x, y, z))
+                instanceof DeclarativeBlockEntity entity)) {
+            throw new BridgeException("set_slot exige um bloco do loader em "
+                    + x + "," + y + "," + z);
+        }
+        if (slot < 0 || slot >= entity.size()) {
+            throw new BridgeException("slot " + slot + " nao existe; o inventario tem "
+                    + entity.size());
+        }
+
+        if (itemId == null || itemId.isBlank() || count <= 0) {
+            entity.setStack(slot, ItemStack.EMPTY);
+        } else {
+            entity.setStack(slot, new ItemStack(resolveItemForTransfer(itemId), count));
+        }
+        entity.markDirty();
+    }
+
+    @Override
     public int insertIntoSlot(int x, int y, int z, int slot, String itemId, int count) {
         if (slot < 0) return insertInto(x, y, z, itemId, count);
 

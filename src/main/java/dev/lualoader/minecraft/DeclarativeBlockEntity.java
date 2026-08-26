@@ -34,7 +34,8 @@ import org.jetbrains.annotations.Nullable;
  * mod que não recebe de funil não é um baú.
  */
 public class DeclarativeBlockEntity extends BlockEntity implements SidedInventory,
-        NamedScreenHandlerFactory {
+        NamedScreenHandlerFactory,
+        net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory<BlockPos> {
     private static final String DATA_KEY = "lua_data";
     private static final String ITEMS_KEY = "lua_items";
 
@@ -190,12 +191,12 @@ public class DeclarativeBlockEntity extends BlockEntity implements SidedInventor
 
     @Override
     public boolean canInsert(int slot, ItemStack stack, @Nullable Direction side) {
-        return inventory != null && inventory.allowInsert;
+        return inventory != null && inventory.machineCanInsert();
     }
 
     @Override
     public boolean canExtract(int slot, ItemStack stack, Direction side) {
-        return inventory != null && inventory.allowExtract;
+        return inventory != null && inventory.machineCanExtract();
     }
 
     // ------------------------------------------------------------------ janela
@@ -208,6 +209,14 @@ public class DeclarativeBlockEntity extends BlockEntity implements SidedInventor
         return getCachedState().getBlock().getName();
     }
 
+    /**
+     * O unico dado que o cliente precisa: qual bloco. O desenho ele acha no manifesto que ja tem.
+     */
+    @Override
+    public BlockPos getScreenOpeningData(net.minecraft.server.network.ServerPlayerEntity player) {
+        return getPos();
+    }
+
     @Nullable
     @Override
     public ScreenHandler createMenu(int syncId, PlayerInventory playerInventory, PlayerEntity player) {
@@ -216,7 +225,30 @@ public class DeclarativeBlockEntity extends BlockEntity implements SidedInventor
         // A tela do baú, e não uma própria: o inventário declarado é uma grade de slots, que é
         // exatamente o que ela desenha. Uma tela do loader aqui exigiria protocolo para algo que o
         // jogo já faz, e não funcionaria em cliente vanilla.
+        // Uma janela declarada e montada slot a slot, na posicao que o manifesto disser: as
+        // formas do jogo sao fechadas, e uma maquina raramente tem uma delas.
+        if (inventory.layout != null) {
+            return new DeclaredScreenHandler(syncId, playerInventory, getPos(), this, inventory);
+        }
+
+        // A janela 3x3 e a do dispenser: o jogo ja a desenha com essa forma, e a forma e o que da
+        // sentido a um padrao. Nove slots numa fileira unica nao dizem "a espada e duas barras em
+        // cima de um graveto" -- o jogador olha e nao tem como desenhar.
+        if ("3x3".equals(inventory.window)) {
+            return inventory.ghost
+                    ? new Ghost3x3ScreenHandler(syncId, playerInventory, this)
+                    : new net.minecraft.screen.Generic3x3ContainerScreenHandler(
+                            syncId, playerInventory, this);
+        }
+
         int rows = Math.max(1, Math.min(6, items.size() / 9));
+
+        // Um inventario fantasma abre a mesma tela, com o clique reescrito: o desenho continua sendo
+        // o do jogo e so o comportamento muda, que e a parte que o servidor decide sozinho.
+        if (inventory.ghost) {
+            return new GhostContainerScreenHandler(
+                    typeFor(rows), syncId, playerInventory, this, rows);
+        }
         return new GenericContainerScreenHandler(
                 typeFor(rows), syncId, playerInventory, this, rows);
     }

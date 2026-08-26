@@ -141,8 +141,11 @@ class ObjPackTest {
 
         assertTrue(blockstate.has("variants"), "deveria ser variantes, veio " + blockstate);
         assertFalse(blockstate.has("multipart"), "o multipart ignoraria o modelo declarado");
+        // A chave e vazia porque o bloco nao declara variante nem direcao: escrever
+        // "lua_variant=0" ali citaria uma propriedade que o bloco nao tem, e o jogo recusa a
+        // definicao inteira -- deixando o bloco sem modelo.
         assertEquals("tenda:block/tenda", blockstate.getAsJsonObject("variants")
-                .getAsJsonObject("lua_variant=0").get("model").getAsString());
+                .getAsJsonObject("").get("model").getAsString());
     }
 
     @Test

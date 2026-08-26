@@ -989,6 +989,37 @@ processá-lo, e esse é o único caminho que ela tem.
 
 Um bloco com inventário guarda dados por posição automaticamente, como se tivesse `block_data`.
 
+### Slot fantasma: desenhar uma intenção
+
+`"ghost": true` faz os slots **mostrarem um item sem guardar item nenhum**. Clicar com um item no
+cursor copia a *identidade* dele para o slot e devolve o cursor intacto — botão direito desenha um,
+esquerdo desenha a pilha, mão vazia limpa. **Nada é consumido, nunca.**
+
+```json
+"inventory": {
+  "size": 9,
+  "title": "Padrão de Fabricação",
+  "ghost": true,
+  "drop_on_break": false
+}
+```
+
+Serve para um padrão de receita, um filtro, uma lista de itens desejados — qualquer lugar onde o
+jogador *aponta* um item em vez de *entregar* um.
+
+**Máquina nunca mexe num inventário fantasma**, mesmo com `allow_insert` ligado. Um funil ou um cano
+esvaziando os slots apagaria o desenho, e a máquina pararia sem erro nenhum — o defeito silencioso
+de sempre. O que está ali não é estoque, e a quantidade que aparece nem existe.
+
+O mod dono desenha com `set_slot(x, y, z, slot, item, quantidade)`, que **substitui** o slot e passa
+por cima desse portão; `insert_into` acrescenta e respeita o portão, então não serve aqui. Item
+vazio ou quantidade zero limpam.
+
+**Por que isto existe.** Sem slot fantasma, um mod que precisa de um padrão 3×3 tem duas saídas
+ruins: exigir que o jogador *gaste* um item de cada tipo para desenhar a receita, ou inventar um
+gesto próprio numa tela sem slot. O Logistic Pipes resolve com `DummySlot` — `canTakeStack` falso e
+limite de pilha zero, com o clique reescrito para copiar — e é essa a regra reproduzida aqui.
+
 ## Forma e modelo do bloco
 
 A forma declarada vale para as três coisas ao mesmo tempo: colisão, contorno e desenho. Antes ela

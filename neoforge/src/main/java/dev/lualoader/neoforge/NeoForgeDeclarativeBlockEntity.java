@@ -94,13 +94,13 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
         this.sided = new InvWrapper(contents) {
             @Override
             public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
-                if (!declared.allowInsert) return stack;
+                if (!declared.machineCanInsert()) return stack;
                 return super.insertItem(slot, stack, simulate);
             }
 
             @Override
             public ItemStack extractItem(int slot, int amount, boolean simulate) {
-                if (!declared.allowExtract) return ItemStack.EMPTY;
+                if (!declared.machineCanExtract()) return ItemStack.EMPTY;
                 return super.extractItem(slot, amount, simulate);
             }
         };
@@ -257,7 +257,30 @@ public class NeoForgeDeclarativeBlockEntity extends BlockEntity
         // A tela do baú, e não uma própria: o inventário declarado é uma grade de slots, que é
         // exatamente o que ela desenha. Uma tela do loader aqui exigiria protocolo para algo que o
         // jogo já faz, e não funcionaria em cliente vanilla.
+        // Uma janela declarada e montada slot a slot, na posicao que o manifesto disser: as
+        // formas do jogo sao fechadas, e uma maquina raramente tem uma delas.
+        if (inventory != null && inventory.layout != null) {
+            return new NeoForgeDeclaredMenu(containerId, playerInventory, getBlockPos(),
+                    contents, inventory);
+        }
+
+        // A janela 3x3 e a do dispenser: o jogo ja a desenha com essa forma, e a forma e o que da
+        // sentido a um padrao. Nove slots numa fileira unica nao dizem "a espada e duas barras em
+        // cima de um graveto" -- o jogador olha e nao tem como desenhar.
+        if (inventory != null && "3x3".equals(inventory.window)) {
+            return inventory.ghost
+                    ? new NeoForgeGhost3x3Menu(containerId, playerInventory, contents)
+                    : new net.minecraft.world.inventory.DispenserMenu(
+                            containerId, playerInventory, contents);
+        }
+
         int rows = Math.max(1, Math.min(6, contents.getContainerSize() / 9));
+
+        // Um inventario fantasma abre a mesma tela, com o clique reescrito: o desenho continua sendo
+        // o do jogo e so o comportamento muda, que e a parte que o servidor decide sozinho.
+        if (inventory != null && inventory.ghost) {
+            return new NeoForgeGhostMenu(typeFor(rows), containerId, playerInventory, contents, rows);
+        }
         return new ChestMenu(typeFor(rows), containerId, playerInventory, contents, rows);
     }
 

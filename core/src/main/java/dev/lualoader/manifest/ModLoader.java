@@ -847,8 +847,53 @@ public final class ModLoader {
             // ate seis fileiras de nove, e um inventario maior teria slots que ninguem alcanca.
             require(block.inventory.size >= 1 && block.inventory.size <= 54,
                     "inventory.size deve estar entre 1 e 54");
-            require(block.inventory.size % 9 == 0,
-                    "inventory.size deve ser multiplo de 9, para fechar as fileiras da janela");
+            // A regra das fileiras vale para as janelas do jogo, que desenham nove por linha. Com
+            // layout declarado ela deixa de valer: o manifesto diz onde cada slot fica, e uma
+            // maquina com dez slots -- nove de padrao e um de saida -- e exatamente o caso que a
+            // janela declarada existe para atender.
+            require(block.inventory.layout != null || block.inventory.size % 9 == 0,
+                    "inventory.size deve ser multiplo de 9, para fechar as fileiras da janela"
+                            + " -- ou declare inventory.layout e diga onde cada slot fica");
+
+            String janela = block.inventory.window == null ? "rows" : block.inventory.window.trim();
+            require(janela.equals("rows") || janela.equals("3x3"),
+                    "inventory.window aceita \"rows\" ou \"3x3\", recebido: " + janela);
+            // A janela 3x3 e a do dispenser, e ela tem exatamente nove slots. Aceitar outro tamanho
+            // ali daria uma tela com slots que ninguem alcanca -- o mesmo defeito do teto acima.
+            require(!janela.equals("3x3") || block.inventory.size == 9,
+                    "inventory.window 3x3 exige inventory.size 9, recebido: " + block.inventory.size);
+
+            ModManifest.LayoutDefinition layout = block.inventory.layout;
+            if (layout != null) {
+                require(layout.width >= 32 && layout.width <= 512,
+                        "inventory.layout.width deve estar entre 32 e 512");
+                require(layout.height >= 32 && layout.height <= 512,
+                        "inventory.layout.height deve estar entre 32 e 512");
+
+                // Uma posicao por slot, nem mais nem menos. Faltando, o slot existe e nao aparece --
+                // e o jogador procura por ele; sobrando, a posicao aponta para um slot que nao
+                // existe, e o clique cai no vazio. Os dois sao silenciosos.
+                require(layout.slots != null && layout.slots.size() == block.inventory.size,
+                        "inventory.layout.slots precisa de uma posicao por slot: "
+                                + block.inventory.size + " slots, "
+                                + (layout.slots == null ? 0 : layout.slots.size()) + " posicoes");
+
+                for (ModManifest.SlotDefinition slot : layout.slots) {
+                    require(slot != null, "posicao de slot vazia em inventory.layout.slots");
+                    require(slot.x >= 0 && slot.x + 18 <= layout.width
+                                    && slot.y >= 0 && slot.y + 18 <= layout.height,
+                            "slot em " + slot.x + "," + slot.y + " cai fora da janela de "
+                                    + layout.width + "x" + layout.height);
+                }
+
+                Set<String> botoes = new HashSet<>();
+                for (ModManifest.ButtonDefinition botao : layout.buttons) {
+                    require(botao != null && botao.id != null && !botao.id.isBlank(),
+                            "botao de janela sem id: o clique nao teria como ser identificado");
+                    require(botoes.add(botao.id),
+                            "botao duplicado em inventory.layout.buttons: " + botao.id);
+                }
+            }
         }
         if (block.state != null && block.state.properties != null) {
             Set<String> propertyNames = new HashSet<>();

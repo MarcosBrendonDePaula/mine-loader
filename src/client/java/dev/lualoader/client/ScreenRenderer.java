@@ -89,7 +89,11 @@ public final class ScreenRenderer {
             case "item" -> {
                 Identifier id = Identifier.tryParse(element.item());
                 if (id != null && Registries.ITEM.containsId(id)) {
-                    ItemStack stack = new ItemStack(Registries.ITEM.get(id), element.count());
+                    // Zero vira um: uma pilha de zero e considerada vazia pelo jogo e nao
+                    // desenha nada, e o mod que escreveu zero queria o icone sem numero -- que e o
+                    // que um vale. Sumir em silencio e o pior desfecho.
+                    ItemStack stack = new ItemStack(Registries.ITEM.get(id),
+                            Math.max(1, element.count()));
                     context.drawItem(stack, x, y);
                     context.drawItemInSlot(textRenderer, stack, x, y);
                 } else if (id != null && Registries.ENTITY_TYPE.containsId(id)) {
@@ -110,7 +114,7 @@ public final class ScreenRenderer {
                     int cellX = x + (position % columns) * element.cell();
                     int cellY = y + (position / columns) * element.cell();
 
-                    ItemStack stack = new ItemStack(Registries.ITEM.get(id), cell.count());
+                    ItemStack stack = new ItemStack(Registries.ITEM.get(id), Math.max(1, cell.count()));
                     context.drawItem(stack, cellX, cellY);
                     context.drawItemInSlot(textRenderer, stack, cellX, cellY);
                 }
@@ -122,8 +126,11 @@ public final class ScreenRenderer {
             case "image" -> {
                 Identifier texture = Identifier.tryParse(element.texture());
                 if (texture != null) {
-                    context.drawTexture(texture, x, y, 0, 0,
-                            element.w(), element.h(), element.w(), element.h());
+                    // O recorte vem do elemento, e a folha tambem: e o que permite usar a arte de
+                    // interface como ela e distribuida -- uma folha unica com tudo dentro.
+                    context.drawTexture(texture, x, y, element.u(), element.v(),
+                            element.w(), element.h(),
+                            element.sheetWidth(), element.sheetHeight());
                 }
             }
             default -> {
@@ -144,7 +151,109 @@ public final class ScreenRenderer {
      * <p>{@code slot} e {@code inset} invertem as bordas: a sombra passa para cima, e o retângulo
      * parece afundado — é o que distingue um slot de um botão, no jogo inteiro.
      */
+
+    /**
+     * Desenha uma moldura de nove pedacos a partir de uma folha.
+     *
+     * <p>Os quatro cantos saem inteiros, as quatro bordas esticam num eixo so, e o miolo estica nos
+     * dois. E o que permite a mesma arte servir a uma tela de qualquer tamanho -- esticar a imagem
+     * inteira deformaria o canto arredondado e engordaria a linha da borda.
+     *
+     * <p>As bordas sao por lado porque a arte de mod costuma ser assimetrica: a moldura do Logistic
+     * Pipes tem o pe mais alto que o topo, para caber o texto que ele desenha ali.
+     */
+    private static void moldura(DrawContext context, ScreenModel.Element element, int x, int y) {
+        String folha = element.texture();
+        if (folha == null || folha.isEmpty()) return;
+
+        Identifier textura = Identifier.tryParse(folha);
+        if (textura == null) return;
+
+        int su = element.u();
+        int sv = element.v();
+        int sw = element.sourceWidth() > 0 ? element.sourceWidth() : element.w();
+        int sh = element.sourceHeight() > 0 ? element.sourceHeight() : element.h();
+
+        // As bordas nao podem somar mais que o destino, senao os cantos se sobrepoem e o miolo
+        // recebe largura negativa -- que no jogo aparece como a textura espelhada.
+        int cima = Math.min(element.borderTop(), Math.min(sh, element.h()) / 2);
+        int baixo = Math.min(element.borderBottom(), Math.min(sh, element.h()) / 2);
+        int esquerda = Math.min(element.borderLeft(), Math.min(sw, element.w()) / 2);
+        int direita = Math.min(element.borderRight(), Math.min(sw, element.w()) / 2);
+
+        int miolaL = Math.max(0, element.w() - esquerda - direita);
+        int miolaA = Math.max(0, element.h() - cima - baixo);
+        int fonteL = Math.max(1, sw - esquerda - direita);
+        int fonteA = Math.max(1, sh - cima - baixo);
+
+        int folhaL = element.sheetWidth();
+        int folhaA = element.sheetHeight();
+
+        esticar(context, textura, x, y, su, sv, esquerda, cima, esquerda, cima, folhaL, folhaA);
+        esticar(context, textura, x + element.w() - direita, y, su + sw - direita, sv,
+                direita, cima, direita, cima, folhaL, folhaA);
+        esticar(context, textura, x, y + element.h() - baixo, su, sv + sh - baixo,
+                esquerda, baixo, esquerda, baixo, folhaL, folhaA);
+        esticar(context, textura, x + element.w() - direita, y + element.h() - baixo,
+                su + sw - direita, sv + sh - baixo, direita, baixo, direita, baixo, folhaL, folhaA);
+
+        if (miolaL > 0) {
+            esticar(context, textura, x + esquerda, y, su + esquerda, sv,
+                    miolaL, cima, fonteL, cima, folhaL, folhaA);
+            esticar(context, textura, x + esquerda, y + element.h() - baixo,
+                    su + esquerda, sv + sh - baixo, miolaL, baixo, fonteL, baixo, folhaL, folhaA);
+        }
+        if (miolaA > 0) {
+            esticar(context, textura, x, y + cima, su, sv + cima,
+                    esquerda, miolaA, esquerda, fonteA, folhaL, folhaA);
+            esticar(context, textura, x + element.w() - direita, y + cima,
+                    su + sw - direita, sv + cima, direita, miolaA, direita, fonteA, folhaL, folhaA);
+        }
+        if (miolaL > 0 && miolaA > 0) {
+            esticar(context, textura, x + esquerda, y + cima, su + esquerda, sv + cima,
+                    miolaL, miolaA, fonteL, fonteA, folhaL, folhaA);
+        }
+    }
+
+    /** Um pedaco da folha esticado para um retangulo do tamanho pedido. */
+    private static void esticar(DrawContext context, Identifier textura,
+                                int x, int y, int u, int v, int larguraDestino, int alturaDestino,
+                                int larguraFonte, int alturaFonte, int folhaL, int folhaA) {
+        if (larguraDestino <= 0 || alturaDestino <= 0) return;
+        context.drawTexture(textura, x, y, larguraDestino, alturaDestino,
+                (float) u, (float) v, larguraFonte, alturaFonte, folhaL, folhaA);
+    }
+
+    /**
+     * A janela do jogo desenhada por regra, para quem chama de fora do modelo de tela.
+     *
+     * <p>Existe para a janela declarada: um mod que nao trouxe arte ainda merece uma tela
+     * apresentavel, e repetir o bisel la daria duas versoes do mesmo cinza.
+     */
+    public static void vanillaPanel(DrawContext context, int x, int y, int w, int h) {
+        context.fill(x, y, x + w, y + h, 0xFFC6C6C6);
+        context.fill(x, y, x + w, y + 2, 0xFFFFFFFF);
+        context.fill(x, y, x + 2, y + h, 0xFFFFFFFF);
+        context.fill(x, y + h - 2, x + w, y + h, 0xFF555555);
+        context.fill(x + w - 2, y, x + w, y + h, 0xFF555555);
+    }
+
+    /** O encaixe de um slot: o mesmo bisel, invertido, que o jogo usa no inventario. */
+    public static void slotWell(DrawContext context, int x, int y, int w, int h) {
+        context.fill(x, y, x + w, y + h, 0xFF8B8B8B);
+        context.fill(x, y, x + w, y + 1, 0xFF373737);
+        context.fill(x, y, x + 1, y + h, 0xFF373737);
+        context.fill(x, y + h - 1, x + w, y + h, 0xFFFFFFFF);
+        context.fill(x + w - 1, y, x + w, y + h, 0xFFFFFFFF);
+    }
+
     private static void panel(DrawContext context, ScreenModel.Element element, int x, int y) {
+        // Um painel com arte propria e desenhado em nove pedacos, e nao pela regra de bisel: quem
+        // trouxe a imagem quer a imagem.
+        if (element.style().equals("sheet")) {
+            moldura(context, element, x, y);
+            return;
+        }
         int right = x + element.w();
         int bottom = y + element.h();
         String style = element.style();

@@ -1779,6 +1779,32 @@ public final class LuaRuntime {
                 return list;
             }
         });
+        // Desenha um slot, trocando o que estiver la. `insert_into` acrescenta e respeita o portao
+        // de maquina; isto substitui e passa por cima dele, que e o que um inventario fantasma
+        // precisa -- ele recusa funil e cano justamente para ninguem apagar o desenho.
+        serverApi.set("set_slot", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 4) {
+                    throw new LuaError("set_slot exige x, y, z e slot");
+                }
+
+                // Item vazio ou quantidade zero limpam o slot: e o gesto de apagar, e exigir uma
+                // operacao separada para isso daria duas formas de dizer a mesma coisa.
+                String item = args.narg() >= 5 && !args.arg(5).isnil()
+                        ? requireIdentifier(args.arg(5).tojstring())
+                        : "";
+                int count = args.narg() >= 6 && !args.arg(6).isnil() ? args.arg(6).checkint() : 1;
+
+                bridge.setSlot(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)),
+                        args.arg(4).checkint(), item, count);
+                return LuaValue.NIL;
+            }
+        });
         serverApi.set("insert_into", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {

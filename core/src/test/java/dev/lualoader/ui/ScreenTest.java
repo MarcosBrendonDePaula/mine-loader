@@ -452,6 +452,40 @@ class ScreenTest {
         assertTrue(player.screenJson.contains("\"tooltip\":\"Diamante\""), player.screenJson);
     }
 
+    /**
+     * O numero desenhado no item passa de uma pilha.
+     *
+     * <p>O limite era 64, e a recusa derrubava a montagem da tela <b>inteira</b>. Custou o terminal
+     * do mod de logistica nao abrir: a rede tinha 158 de um item, e mostrar quantos itens a rede tem
+     * e justamente o que um terminal existe para fazer. Aquele campo nao e um tamanho de pilha -- e
+     * um numero escrito por cima do icone, e o jogo desenha a cadeia de digitos sem se importar.
+     */
+    @Test
+    void oNumeroDoItemPassaDeUmaPilha(@TempDir Path root) throws Exception {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    ctx.player.open_screen("estoque", {
+                        title = "Estoque",
+                        elements = {
+                            { type = "item", x = 8, y = 8, item = "minecraft:iron_ingot",
+                              count = 158 },
+                            { type = "grid", id = "lista", x = 8, y = 30, columns = 9,
+                              items = { { item = "minecraft:stone", count = 4096 } } }
+                        }
+                    })
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertTrue(player.screenJson.contains("\"count\":158"), player.screenJson);
+        assertTrue(player.screenJson.contains("\"count\":4096"), player.screenJson);
+    }
+
     @Test
     void gridNeedsAnIdAndRefusesTooManyCells(@TempDir Path root) throws IOException {
         RecordingBridge bridge = new RecordingBridge();

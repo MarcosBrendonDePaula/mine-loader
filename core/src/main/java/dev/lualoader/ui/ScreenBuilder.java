@@ -199,13 +199,56 @@ public final class ScreenBuilder {
         copyText(source, json, "item");
         copyText(source, json, "entity");
         copyText(source, json, "texture");
+
+        // O recorte da imagem, e o tamanho da folha de onde ela sai.
+        //
+        // Sem isto o unico desenho possivel e o PNG inteiro com o tamanho exato do arquivo -- e uma
+        // folha de interface do jogo tem 256x256 com o painel num canto. Um mod que quisesse a
+        // propria arte de tela tinha que recortar o PNG em pedacos, um arquivo por elemento.
+        //
+        // O teto e 4096 porque e o limite de textura que o jogo garante em qualquer maquina; a
+        // folha padrao e 256, o tamanho de toda folha de GUI do jogo.
+        if (!source.get("u").isnil()) {
+            json.addProperty("u", (int) clamp(source.get("u").todouble(), 0, 4096, "u"));
+        }
+        if (!source.get("v").isnil()) {
+            json.addProperty("v", (int) clamp(source.get("v").todouble(), 0, 4096, "v"));
+        }
+        if (!source.get("sheet_w").isnil()) {
+            json.addProperty("sheet_w",
+                    (int) clamp(source.get("sheet_w").todouble(), 1, 4096, "sheet_w"));
+        }
+        if (!source.get("sheet_h").isnil()) {
+            json.addProperty("sheet_h",
+                    (int) clamp(source.get("sheet_h").todouble(), 1, 4096, "sheet_h"));
+        }
+
+        // O recorte na folha, quando ele nao tem o tamanho do elemento na tela -- e o que uma
+        // moldura de nove pedacos precisa para esticar sem deformar os cantos.
+        for (String campo : new String[] { "sw", "sh" }) {
+            if (!source.get(campo).isnil()) {
+                json.addProperty(campo, (int) clamp(source.get(campo).todouble(), 0, 4096, campo));
+            }
+        }
+
+        // A espessura de cada borda. Cada uma cai na borda geral quando nao e dita.
+        for (String campo : new String[] { "border_top", "border_right",
+                                           "border_bottom", "border_left" }) {
+            if (!source.get(campo).isnil()) {
+                json.addProperty(campo, (int) clamp(source.get(campo).todouble(), 0, 64, campo));
+            }
+        }
         copyText(source, json, "tooltip");
 
         if (!source.get("color").isnil()) {
             json.addProperty("color", color(source.get("color")));
         }
         if (!source.get("count").isnil()) {
-            json.addProperty("count", (int) clamp(source.get("count").todouble(), 1, 64, "count"));
+            // O teto e o de um numero desenhado, e nao o de uma pilha: um terminal que mostra
+            // quantos itens a rede tem passa de 64 no primeiro bau cheio, e recusar ali derrubava a
+            // montagem da tela inteira -- por um numero no canto do icone.
+            json.addProperty("count", (int) clamp(source.get("count").todouble(),
+                    0, ScreenProtocol.MAX_ITEM_COUNT, "count"));
         }
         if (!source.get("progress").isnil()) {
             json.addProperty("progress", clamp(source.get("progress").todouble(), 0, 1, "progress"));
@@ -284,15 +327,28 @@ public final class ScreenBuilder {
         JsonArray cells = new JsonArray();
         for (int position = 1; position <= total; position++) {
             LuaValue entry = list.get(position);
-            if (entry.isnil()) continue;
 
             JsonObject cell = new JsonObject();
+
+            // Uma celula vazia continua sendo uma celula.
+            //
+            // Pular a posicao encurtaria a lista e puxaria todas as seguintes um lugar para tras --
+            // o desenho sairia torto e, pior, o clique responderia pela celula errada, porque o
+            // cliente devolve a posicao contada nesta mesma lista. Um buraco no meio de uma grade e
+            // o caso comum, nao a excecao: e o inventario com um slot vago.
+            if (entry.isnil() || entry.isboolean()) {
+                cell.addProperty("item", "");
+                cells.add(cell);
+                continue;
+            }
+
             if (entry.istable()) {
                 LuaTable table = (LuaTable) entry;
                 cell.addProperty("item", text(table.get("item"), "", "item"));
                 if (!table.get("count").isnil()) {
                     cell.addProperty("count",
-                            (int) clamp(table.get("count").todouble(), 1, 64, "count"));
+                            (int) clamp(table.get("count").todouble(),
+                                    0, ScreenProtocol.MAX_ITEM_COUNT, "count"));
                 }
                 if (!table.get("tooltip").isnil()) {
                     cell.addProperty("tooltip", text(table.get("tooltip"), "", "tooltip"));

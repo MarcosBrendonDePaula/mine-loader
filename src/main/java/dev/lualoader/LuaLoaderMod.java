@@ -111,6 +111,21 @@ public final class LuaLoaderMod implements ModInitializer {
             // montado, sem erro nenhum.
             dev.lualoader.minecraft.NaturalSpawns.register(LOGGER, entityRegistrar, loadedMods);
 
+            // A janela declarada: um tipo so para todos os blocos, e o mapa de quem tem desenho
+            // proprio. O mapa e preenchido dos dois lados, e e o que permite o layout nao trafegar.
+            for (ModLoader.LoadedMod mod : loadedMods) {
+                if (mod.manifest().blocks == null) continue;
+                for (dev.lualoader.manifest.ModManifest.BlockDefinition block
+                        : mod.manifest().blocks) {
+                    if (block == null || block.inventory == null) continue;
+                    dev.lualoader.minecraft.DeclaredMenus.declare(
+                            mod.manifest().id + ":" + block.id, block.inventory);
+                }
+            }
+            if (dev.lualoader.minecraft.DeclaredMenus.anyDeclared()) {
+                dev.lualoader.minecraft.DeclaredMenus.register();
+            }
+
             // O tipo de dados precisa conhecer todos os blocos, entao vem depois do registro deles.
             dev.lualoader.minecraft.BlockEntityRegistrar.register(LOGGER, blockRegistrar.dataBlocks());
 
