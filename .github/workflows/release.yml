@@ -106,10 +106,26 @@ jobs:
 
             ## Diferenca entre as plataformas
 
-            O adaptador Fabric e o completo. O do NeoForge cobre o caminho central -- descobrir
-            mods, executar Lua, ler e mexer no mundo e em inventarios -- e recusa com mensagem
-            clara o que ainda nao implementa, em vez de responder errado. Blocos declarativos,
-            telas desenhadas e receitas so existem no Fabric por enquanto.
+            Os dois adaptadores cobrem o mesmo caminho: descobrir mods, executar Lua, registrar
+            blocos e itens, montar o pacote de recursos, desenhar telas, mexer no mundo e em
+            inventarios. A bateria de GameTests roda nas duas em todo push, e e de proposito --
+            enquanto ela rodava so no Fabric, seis divergencias entre os adaptadores se
+            acumularam sem quebrar nada.
+
+            O que ainda difere esta em `docs/COMPATIBILIDADE.md`, conferido a cada mudanca. Uma
+            matriz que envelhece em silencio e pior que nenhuma, porque alguem confia nela.
+
+            ## Defeito conhecido nesta versao
+
+            **Modelo `.obj` desenha errado no Fabric.** Um bloco com malha propria aparece
+            correto no NeoForge e deformado no Fabric. O leitor do `.obj` mora no nucleo e e o
+            mesmo nas duas; o que diverge e o desenho -- as contas de oclusao de ambiente e de
+            sombreamento difuso do Fabric supoem a face encostada na parede do cubo, e numa malha
+            ela fica no meio do bloco.
+
+            Vale so para mods que declaram `render.model` com um `.obj`. Bloco comum, item,
+            tela, receita e o resto nao sao afetados. O diagnostico completo esta em
+            `docs/COMPATIBILIDADE.md`, na secao "A malha desenha errado no Fabric".
 
             ## Mods de exemplo
 
