@@ -12,7 +12,8 @@
 - [Catálogo de eventos](docs/EVENTS.md)
 - [Interface customizada](docs/UI_SPEC.md)
 - [Estudo: interface por HTML e CSS](docs/UI_HTML_DESIGN.md)
-- [Compatibilidade entre plataformas](docs/COMPATIBILIDADE.md)
+- [Compatibilidade por runtime e versão](docs/COMPATIBILIDADE.md)
+- [Runtimes, versões e matriz de testes](docs/RUNTIMES.md)
 - [O que falta para um modder construir](docs/API_GAPS.md)
 - [Checklist de recursos e progressão](docs/CHECKLIST_MODLOADER.md)
 - [Instalar mods por link](docs/INSTALACAO.md)
@@ -20,11 +21,11 @@
 - [Roadmap de implementação](docs/ROADMAP.md)
 - [Pipeline de geração por IA](docs/AI_PIPELINE.md)
 
-Protótipo de um modloader declarativo para Minecraft Java 1.21.1. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ.
+Protótipo de um modloader declarativo para Minecraft Java. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ. A branch de prova mantém bridges Fabric e NeoForge para Minecraft 1.21.1 e 1.21.4 no mesmo projeto.
 
-O núcleo não conhece plataforma: existem dois adaptadores, **Fabric** e **NeoForge**, e o mesmo mod em Lua roda nos dois sem mudança. **As duas plataformas estão em paridade** — nenhuma operação da API e nenhum campo do manifesto responde diferente entre elas. O que falta, falta nas duas, e está em [`docs/API_GAPS.md`](docs/API_GAPS.md).
+O núcleo não conhece plataforma: existem adaptadores **Fabric** e **NeoForge**, separados por versão em `runtimes/<plataforma>/<versão>`. Os mesmos manifestos e scripts Lua são carregados pelos quatro runtimes. A 1.21.1 é a baseline; a 1.21.4 já passa compilação e GameTests, mas continua experimental nas capabilities visuais e em alguns formatos de recurso. A matriz honesta está em [`docs/COMPATIBILIDADE.md`](docs/COMPATIBILIDADE.md).
 
-Isso não é afirmação de quem escreveu o adaptador: os GameTests rodam nas duas plataformas no CI, e o mod `autoteste` exercita as APIs contra o jogo de verdade com o mesmo script dos dois lados — uma plataforma que faz diferente reporta FALHOU onde a outra reporta OK.
+Isso não é afirmação de quem escreveu o adaptador: os GameTests rodam nas quatro combinações no CI, e o mod `autoteste` exercita as APIs contra o jogo de verdade com o mesmo script em cada plataforma — uma divergência reporta FALHOU onde outra reporta OK.
 
 ## Requisitos
 
@@ -35,8 +36,10 @@ O projeto usa Java 21. No Windows, o Gradle Wrapper já está disponível em `gr
 Linux/macOS:
 
 ```bash
-./gradlew build              # nucleo, testes e adaptador Fabric
-./gradlew :neoforge:build    # adaptador NeoForge
+./gradlew compileAllRuntimes   # core + Fabric/NeoForge 1.21.1 e 1.21.4
+./gradlew testAllRuntimes      # suíte JUnit do core e tarefas test dos runtimes
+./gradlew gameTestAllRuntimes  # 18 GameTests em cada combinação
+./gradlew checkAllRuntimes     # verificação completa, incluindo GameTests
 ```
 
 Windows PowerShell:
@@ -48,19 +51,22 @@ Windows PowerShell:
 ## Rodar nas duas plataformas
 
 ```bash
-./gradlew runClient              # Fabric
-./gradlew :neoforge:runClient    # NeoForge
+./gradlew :runtimes:fabric:1.21.1:runClient
+./gradlew :runtimes:fabric:1.21.4:runClient
+./gradlew :runtimes:neoforge:1.21.1:runClient
+./gradlew :runtimes:neoforge:1.21.4:runClient
 ```
 
 Cada run tem o proprio diretorio de jogo, e portanto a propria pasta `mods-lua`. Para nao manter
 duas copias dos mesmos mods:
 
 ```bash
-./gradlew :neoforge:linkModsLua
+./gradlew :runtimes:neoforge:1.21.4:linkModsLua
 ```
 
-Isso aponta `neoforge/run/mods-lua` para `run/mods-lua`, e um mod editado passa a valer nas duas
-plataformas de uma vez -- que e justamente o que se quer verificar.
+Isso aponta a pasta de mods Lua do runtime NeoForge para a pasta partilhada do projeto. Para testar
+uma versão específica, use a tarefa `linkModsLua` desse runtime; os GameTests, por sua vez,
+sincronizam automaticamente `examples/` para cada versão.
 
 ## Executar servidor de desenvolvimento
 
@@ -204,22 +210,23 @@ A mudança de textura durante o jogo deve usar variantes de blockstate. O Lua mu
 
 ## Limitações conscientes
 
-O MVP é direcionado a Minecraft 1.21.1 e registra inicialmente blocos genéricos. As propriedades do builder são lidas no registro inicial; apenas propriedades dinâmicas implementadas pelo `DeclarativeBlock` podem mudar depois. Não existe ainda hot-unload de classes Java, acesso irrestrito à JVM, compatibilidade automática com mods Fabric/NeoForge, integração completa de todas as subclasses especiais de bloco ou gerador de mods por prompt conectado a um modelo de IA.
+A branch de prova tem baseline em Minecraft 1.21.1 e um porte experimental para 1.21.4. As propriedades do builder são lidas no registro inicial; apenas propriedades dinâmicas implementadas pelo `DeclarativeBlock` podem mudar depois. No porte 1.21.4, OBJ está desativado, modelos/skins customizados de entidades usam renderer vanilla, cores customizadas de ovos têm fallback, reparação de ferramentas/armaduras usa tags padrão, e partículas NeoForge estão pendentes. Não existe hot-unload de classes Java, acesso irrestrito à JVM, compatibilidade automática com mods Fabric/NeoForge ou gerador de mods por prompt conectado a um modelo de IA.
 
 O sistema de IA será adicionado sobre este contrato: a IA produzirá um pacote JSON/Lua/recursos, e o loader continuará sendo responsável por validação, permissões, testes e instalação.
 
 ## Testes
 
 ```bash
-./gradlew :core:test                  # nucleo, sem Minecraft -- segundos
-./gradlew runGametest                 # GameTests no Fabric, num servidor de verdade
-./gradlew :neoforge:runGameTestServer # os mesmos, no NeoForge
-./gradlew build
+./gradlew :core:test
+./gradlew testAllRuntimes
+./gradlew gameTestAllRuntimes
+./gradlew checkAllRuntimes
 ```
 
-Os GameTests rodam nas duas plataformas, e o CI executa as duas em todo push. Antes disso a coluna
-do NeoForge na matriz de compatibilidade era afirmacao de quem escreveu o adaptador, e nao resultado
-de execucao.
+Os GameTests rodam nas quatro combinações e o CI executa a matriz em todo push. Cada runtime
+carrega os mesmos exemplos e precisa mostrar `All 18 required tests passed :)`. A compilação client
+não substitui esses testes, e os GameTests não substituem uma inspeção visual; as limitações estão
+separadas na matriz.
 
 Os testes do nucleo rodam contra um dublê, e por isso nao alcancam o que so aparece com o jogo
 de verdade: um registro com mil e trezentos itens, uma tabela de loot com entradas condicionais, o

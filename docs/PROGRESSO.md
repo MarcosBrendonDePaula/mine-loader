@@ -504,13 +504,15 @@ uma. Este documento é o mapa; elas são o roteiro.
 ## Como retomar
 
 ```bash
-./gradlew build                       # tudo, nas duas plataformas
-./gradlew runGametest                 # GameTests do Fabric
-./gradlew :neoforge:runGameTestServer # os mesmos, no NeoForge
+./gradlew compileAllRuntimes       # core + os quatro bridges
+./gradlew testAllRuntimes             # testes JUnit
+./gradlew gameTestAllRuntimes         # 18 testes em cada runtime
+./gradlew checkAllRuntimes            # verificação completa
 
 tools/servidor-dirigivel.sh iniciar   # servidor sem cliente
 tools/servidor-dirigivel.sh cmd "mod autoteste"
 ```
 
-Os dois pontos em `:runClient` e `:runServer` não são enfeite — sem eles sobem as duas plataformas
-ao mesmo tempo, escrevendo no mesmo log. Custou tempo nesta sessão.
+Escolha sempre uma combinação explícita, por exemplo `:runtimes:fabric:1.21.4:runClient` ou
+`:runtimes:neoforge:1.21.1:runServer`; não existe mais uma tarefa raiz ambígua. A estrutura versionada
+é parte da prova de compatibilidade, não apenas organização de ficheiros.

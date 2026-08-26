@@ -1,187 +1,65 @@
 plugins {
-    id 'fabric-loom' version "${loom_version}"
-    id 'maven-publish'
+    id 'base'
 }
 
-repositories {
-    mavenCentral()
+// O projeto raiz não conhece classes de Minecraft. Ele apenas orquestra o core e os adaptadores.
+
+allprojects {
+    group = findProperty('maven_group') ?: 'dev.lualoader'
+    version = findProperty('mod_version') ?: '0.1.0'
 }
 
-loom {
-    splitEnvironmentSourceSets()
-
-    // Servidor headless que executa os @GameTest e escreve um relatorio JUnit.
-    runs {
-        // Entra direto em um mundo, para nao repetir menu e carregamento a cada teste:
-        //   ./gradlew runClient -Pmundo="New World"
-        // Sem a propriedade, o cliente abre no menu como sempre.
-        client {
-            client()
-            if (project.hasProperty('mundo')) {
-                programArgs '--quickPlaySingleplayer', project.property('mundo').toString()
-            }
-        }
-
-        gametest {
-            server()
-            name = "Game Test"
-            vmArg "-Dfabric-api.gametest"
-            vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.get().asFile}/gametest-results.xml"
-            runDir "build/gametest"
-        }
-    }
-
-    mods {
-        "lua_loader" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
-        }
-    }
+tasks.register('testAllRuntimes') {
+    group = 'verification'
+    description = 'Executa o core e os testes de todos os runtimes versionados.'
+    dependsOn(
+            ':core:test',
+            ':runtimes:fabric:1.21.1:test',
+            ':runtimes:fabric:1.21.4:test',
+            ':runtimes:neoforge:1.21.1:test',
+            ':runtimes:neoforge:1.21.4:test')
 }
 
-dependencies {
-    // Nucleo agnostico de plataforma; este modulo e o adaptador Fabric.
-    implementation project(':core')
-    include project(':core')
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    modImplementation "org.luaj:luaj-jse:${project.luaj_version}"
-    include "org.luaj:luaj-jse:${project.luaj_version}"
-    testImplementation platform('org.junit:junit-bom:5.11.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+tasks.register('compileAllRuntimes') {
+    group = 'verification'
+    description = 'Compila todos os runtimes versionados.'
+    dependsOn(
+            ':core:classes',
+            ':runtimes:fabric:1.21.1:compileJava',
+            ':runtimes:fabric:1.21.4:compileJava',
+            ':runtimes:neoforge:1.21.1:compileJava',
+            ':runtimes:neoforge:1.21.4:compileJava')
 }
 
-processResources {
-    def version = project.mod_version
-    inputs.property "version", version
-
-    filesMatching("fabric.mod.json") {
-        expand "version": version
-    }
+tasks.register('buildAllRuntimes') {
+    group = 'build'
+    description = 'Compila e empacota o core e todos os runtimes versionados.'
+    dependsOn(
+            ':core:build',
+            ':runtimes:fabric:1.21.1:build',
+            ':runtimes:fabric:1.21.4:build',
+            ':runtimes:neoforge:1.21.1:build',
+            ':runtimes:neoforge:1.21.4:build')
 }
 
-tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-    it.options.encoding = 'UTF-8'
+tasks.register('gameTestAllRuntimes') {
+    group = 'verification'
+    description = 'Executa os GameTests no Fabric e NeoForge para cada versão do Minecraft.'
+    dependsOn(
+            ':runtimes:fabric:1.21.1:runGametest',
+            ':runtimes:fabric:1.21.4:runGametest',
+            ':runtimes:neoforge:1.21.1:runGameTestServer',
+            ':runtimes:neoforge:1.21.4:runGameTestServer')
 }
 
-java {
-    withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-    def projectName = project.archives_base_name
-    inputs.property "projectName", projectName
-
-    from("LICENSE") {
-        rename { "${it}_${projectName}" }
-    }
-}
-
-test {
-    useJUnitPlatform()
-}
-
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            from components.java
-        }
-    }
-}
-
-/*
- * Leva os mods de exemplo para o mundo do GameTest.
- *
- * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
- * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio. Foi o que
- * aconteceu com o bloco de inventario: o teste procurava um bloco que so existia em examples/.
- *
- * Sync, e nao Copy: Copy acrescenta e nunca remove, entao um exemplo que sai do repositorio
- * continuava sendo carregado nos testes. Um mod fantasma que ninguem consegue achar no codigo e
- * pior que um mod faltando.
- */
-tasks.register('sincronizaExemplosDoGametest', Sync) {
-    from 'examples'
-    into layout.buildDirectory.dir('gametest/mods-lua')
-}
-
-tasks.named('runGametest') {
-    dependsOn 'sincronizaExemplosDoGametest'
-}
-
-/*
- * Aponta cada exemplo de run/mods-lua para a pasta em examples/, em vez de copiar.
- *
- * O GameTest ja sincroniza a sua propria copia; o servidor e o cliente nao, e liam uma copia feita
- * a mao alguma vez. O resultado e o pior possivel: a bateria fica verde contra um script velho, e o
- * log diz que passou. Foi o que aconteceu nesta sessao -- um caso novo simplesmente nao existia
- * para o servidor, e o total de casos nao mudou.
- *
- * So mexe em pasta cujo nome existe em examples/: e reproduzivel por definicao, nada se perde ao
- * refazer. Mod instalado por link ou baixado fica intacto.
- *
- * Junction no Windows e link simbolico no resto, pela mesma razao de linkModsLua: junction nao pede
- * privilegio de administrador.
- */
-tasks.register('linkExemplos') {
-    description = 'Faz run/mods-lua/<exemplo> apontar para examples/<exemplo>.'
-    group = 'lua loader'
-
-    doLast {
-        def destinoRaiz = file('run/mods-lua')
-        destinoRaiz.mkdirs()
-        def windows = System.getProperty('os.name').toLowerCase().contains('windows')
-
-        file('examples').listFiles()?.findAll { it.directory }?.each { exemplo ->
-            def destino = new File(destinoRaiz, exemplo.name)
-
-            // Ja e link: nada a fazer. E o estado desejado, e refazer so gastaria tempo.
-            if (java.nio.file.Files.isSymbolicLink(destino.toPath())) return
-            if (destino.exists() && windows && destino.canonicalPath == exemplo.canonicalPath) return
-
-            if (destino.exists()) {
-                delete destino
-                println "Copia substituida por link: ${exemplo.name}"
-            }
-
-            if (windows) {
-                // ProcessBuilder, e nao exec {}: o exec do projeto nao alcanca de dentro deste
-                // closure aninhado, e a falha aparece so ao rodar a tarefa.
-                def processo = new ProcessBuilder('cmd', '/c', 'mklink', '/J',
-                        destino.absolutePath, exemplo.absolutePath).redirectErrorStream(true).start()
-                def saida = processo.inputStream.text
-                if (processo.waitFor() != 0) {
-                    throw new GradleException("mklink falhou para ${exemplo.name}: ${saida}")
-                }
-            } else {
-                java.nio.file.Files.createSymbolicLink(destino.toPath(), exemplo.toPath())
-            }
-        }
-    }
-}
-
-tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
-    dependsOn 'linkExemplos'
-
-    /*
-     * Pastas de mod fora do jogo, para desenvolver um mod que mora em outro repositorio.
-     *
-     *   ./gradlew :runClient -Pmods=E:/logistica-lua/logistica
-     *   MINE_LOADER_MODS=/caminho/do/mod ./gradlew :runClient
-     *
-     * Sem copiar nada para mods-lua. A copia era o que se fazia, e o servidor acabava rodando
-     * contra um script velho dizendo que passou -- o pior resultado possivel, porque parece
-     * verificacao.
-     */
-    def extras = project.findProperty('mods') ?: System.getenv('MINE_LOADER_MODS')
-    if (extras) {
-        systemProperty 'mineloader.mods', extras
-        doFirst { println "Pastas de mod extras: ${extras}" }
-    }
+tasks.register('checkAllRuntimes') {
+    group = 'verification'
+    description = 'Executa todas as verificações do core e dos runtimes.'
+    dependsOn(
+            ':core:check',
+            'gameTestAllRuntimes',
+            ':runtimes:fabric:1.21.1:check',
+            ':runtimes:fabric:1.21.4:check',
+            ':runtimes:neoforge:1.21.1:check',
+            ':runtimes:neoforge:1.21.4:check')
 }

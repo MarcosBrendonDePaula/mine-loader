@@ -1,46 +1,52 @@
 # Mine Loader — guia para trabalhar neste repositório
 
-Modloader declarativo para Minecraft Java 1.21.1, sobre Fabric e NeoForge. Mods são pastas com
-`mod.json` mais lógica em Lua (LuaJ); o loader registra blocos e itens, monta um resource pack
-virtual e executa os scripts. Nenhum mod escreve Java, e o mesmo mod roda nas duas plataformas sem
-mudar uma linha — `docs/COMPATIBILIDADE.md` é onde essa promessa é conferida.
+Modloader declarativo para Minecraft Java, sobre Fabric e NeoForge. Mods são pastas com `mod.json`
+mais lógica em Lua (LuaJ); o loader registra blocos e itens, monta um resource pack virtual e executa
+os scripts. Nenhum mod escreve Java, e o mesmo mod roda nos quatro runtimes desta branch — Fabric e
+NeoForge para 1.21.1 e 1.21.4. `docs/COMPATIBILIDADE.md` é onde essa promessa é conferida.
 
 ## Comandos
 
 ```bash
-./gradlew build                       # compila tudo e roda os testes das duas plataformas
+./gradlew compileAllRuntimes       # compila core + os quatro bridges
 ./gradlew :core:test                  # só os testes do núcleo — rápidos, sem Minecraft
-./gradlew runGametest                 # servidor headless com os @GameTest — Fabric
-./gradlew :neoforge:runGameTestServer # o mesmo, no NeoForge
+./gradlew testAllRuntimes             # testes unitários dos módulos
+./gradlew gameTestAllRuntimes         # 18 GameTests em cada runtime
+./gradlew checkAllRuntimes            # verificação completa
 ```
 
-**Os GameTests rodam nas duas plataformas, e é de propósito.** Enquanto rodavam só no Fabric, seis
+**Os GameTests rodam nos quatro runtimes, e é de propósito.** Enquanto rodavam só no Fabric, seis
 divergências entre os adaptadores se acumularam sem quebrar nada: eventos globais que nunca
 disparavam, receitas que não chegavam ao servidor, ferramentas declaradas que viravam item comum.
-Ao acrescentar um recurso, verifique nos dois.
+Ao acrescentar um recurso, verifique em cada plataforma e versão.
 
 ```bash
-# Fabric                                  # NeoForge
-./gradlew :runServer                      ./gradlew :neoforge:runServer
-./gradlew :runClient                      ./gradlew :neoforge:runClient
+./gradlew :runtimes:fabric:1.21.1:runServer
+./gradlew :runtimes:fabric:1.21.4:runServer
+./gradlew :runtimes:neoforge:1.21.1:runServer
+./gradlew :runtimes:neoforge:1.21.4:runServer
+
+./gradlew :runtimes:fabric:1.21.1:runClient
+./gradlew :runtimes:fabric:1.21.4:runClient
+./gradlew :runtimes:neoforge:1.21.1:runClient
+./gradlew :runtimes:neoforge:1.21.4:runClient
 ```
 
 Acrescente `-Pmundo="New World"` a qualquer `runClient` para entrar direto no mundo, pulando o menu.
 
-**Os dois pontos na frente não são enfeite.** `./gradlew runServer` sem eles procura a tarefa em
-todos os subprojetos e sobe as duas plataformas ao mesmo tempo — as duas escrevendo no mesmo lugar,
-o que já produziu um log misturado que fez a leitura mentir.
 
-Java 21. No Windows use `./gradlew.bat`. O CI roda `build` mais os GameTests em todo push.
+
+Java 21. No Windows use `./gradlew.bat`. O CI roda compilação, testes unitários e GameTests nos quatro runtimes em todo push.
 
 ## Estrutura
 
 | Onde | O quê | Conhece Minecraft |
 |---|---|---|
 | `core/` | Núcleo: manifesto, runtime Lua, protocolo de UI, contratos de plataforma | **não** |
-| `src/main/` | Adaptador Fabric: registro de conteúdo, rede, bridge | sim |
-| `src/client/` | Cliente Fabric: desenha telas, HUD e sobreposições | sim |
-| `neoforge/` | Adaptador NeoForge, com o próprio cliente em `.../neoforge/client/` | sim |
+| `runtimes/fabric/1.21.1/` | Bridge Fabric da baseline 1.21.1 | sim |
+| `runtimes/fabric/1.21.4/` | Bridge Fabric experimental 1.21.4, incluindo client | sim |
+| `runtimes/neoforge/1.21.1/` | Bridge NeoForge da baseline 1.21.1 | sim |
+| `runtimes/neoforge/1.21.4/` | Bridge NeoForge experimental 1.21.4 | sim |
 | `examples/` | Mods de exemplo, em Lua | — |
 | `tools/` | Servidor dirigível e utilitários de verificação | — |
 | `docs/` | Especificações; veja o índice no README | — |
@@ -112,7 +118,7 @@ introduza operação que bloqueie — rede, disco síncrono — dentro de um cal
 `core/src/test/` roda sem Minecraft, com `TestBridge` e `TestPlayer` no lugar da plataforma — é onde
 quase toda lógica é verificável. `TestBridge` é abstrata de propósito: ela obriga cada teste a dizer
 o que precisa, para um contrato novo não passar despercebido por um dublê que responde a tudo.
-`src/main/java/dev/lualoader/gametest/` sobe um servidor de verdade para o que depende do jogo.
+Os GameTests vivem em `runtimes/*/*/src/main/java/**/gametest/` e sobem um servidor de verdade para o que depende do jogo.
 
 Alguns testes carregam mods de `examples/` em tempo de execução — `catalogExampleRunsEndToEnd` e os
 outros que citam `Path.of("..", "examples", ...)`. Eles percorrem o fluxo inteiro de um mod real, e
@@ -127,7 +133,7 @@ sucesso sem ter executado nada — o pior resultado possível, porque parece ver
 | Nível | Alcança | Custo |
 |---|---|---|
 | `./gradlew :core:test` | manifesto, validação, geometria de tela, runtime Lua | segundos |
-| `./gradlew runGametest` e `:neoforge:runGameTestServer` | registro, entidade de bloco, NBT — num servidor de verdade, **nas duas plataformas** | ~20 s cada |
+| `./gradlew gameTestAllRuntimes` | registro, entidade de bloco, NBT — num servidor de verdade, **nas quatro combinações** | variável; NeoForge baixa assets na primeira execução |
 | `/mod autoteste` no servidor | as APIs contra o jogo real: registro com milhares de itens, loot de datapack, inventário de outro mod | minuto |
 | `runClient` | **só aqui se vê se um pixel está no lugar** | manual |
 
