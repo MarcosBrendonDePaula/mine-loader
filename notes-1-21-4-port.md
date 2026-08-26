@@ -1,0 +1,1 @@
+Estado do porte Minecraft 1.21.4: core compila; Fabric compila após migrações de APIs; NeoForge ainda falha em ArmorMaterial/Tier (a corrigir), EntityRenderer genérico e NeoForgeObjModels por mudanças de renderização, além de MobSpawnType.

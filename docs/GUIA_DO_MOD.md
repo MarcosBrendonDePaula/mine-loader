@@ -385,8 +385,8 @@ Um mod não precisa estar dentro de `mods-lua` para ser carregado. Aponte a past
 direto de lá:
 
 ```bash
-./gradlew :runClient -Pmods=E:/meu-mod/logistica
-MINE_LOADER_MODS=/caminho/do/mod ./gradlew :runServer
+./gradlew :runtimes:fabric:1.21.4:runClient -Pmods=E:/meu-mod/logistica
+MINE_LOADER_MODS=/caminho/do/mod ./gradlew :runtimes:neoforge:1.21.4:runServer
 ```
 
 Aceita várias pastas, separadas por `;` no Windows e `:` no resto. Cada uma pode ser **a pasta do

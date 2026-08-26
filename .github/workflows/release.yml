@@ -1,7 +1,7 @@
 name: Release
 
-# Publica uma versao a partir de uma tag. Sao dois jars, um por plataforma, e o jogador baixa o da
-# dele; os mods de exemplo vao a parte, porque sao pastas de dados e nao jars.
+# Publica uma versao a partir de uma tag. Há um jar por plataforma e versão do Minecraft; os
+# mods de exemplo vao a parte, porque sao pastas de dados e nao jars.
 #
 # Os mods de exemplo servem as duas plataformas sem mudanca: e a mesma pasta, o mesmo manifesto e o
 # mesmo Lua. E o que a separacao entre nucleo e adaptador existe para permitir.
@@ -37,11 +37,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Compilar e rodar os testes
-        # Uma versao so e publicada se os testes passarem.
-        run: ./gradlew build --stacktrace
-
-      - name: Compilar o adaptador NeoForge
-        run: ./gradlew :neoforge:build --stacktrace
+        # Uma versao so e publicada se os quatro runtimes passarem.
+        run: ./gradlew buildAllRuntimes testAllRuntimes gameTestAllRuntimes --stacktrace
 
       - name: Reunir os jars das duas plataformas
         # Renomeia para o nome dizer a plataforma: os dois se chamariam igual na pagina da release.
@@ -50,14 +47,15 @@ jobs:
           versao="${{ github.event_name == 'workflow_dispatch'
                        && github.event.inputs.versao || github.ref_name }}"
 
-          for jar in build/libs/*.jar; do
-            case "$jar" in *sources*|*dev*) continue;; esac
-            cp "$jar" "build/plataformas/minecraft-lua-loader-fabric-${versao}.jar"
-          done
-
-          for jar in neoforge/build/libs/*.jar; do
-            case "$jar" in *sources*|*dev*) continue;; esac
-            cp "$jar" "build/plataformas/minecraft-lua-loader-neoforge-${versao}.jar"
+          for plataforma in fabric neoforge; do
+            for pasta in "runtimes/${plataforma}"/*; do
+              versao_mc=$(basename "$pasta")
+              for jar in "$pasta"/build/libs/*.jar; do
+                [ -f "$jar" ] || continue
+                case "$jar" in *sources*|*dev*) continue;; esac
+                cp "$jar" "build/plataformas/minecraft-lua-loader-${plataforma}-${versao_mc}-${versao}.jar"
+              done
+            done
           done
 
           ls -la build/plataformas
@@ -93,11 +91,11 @@ jobs:
 
             Escolha o jar da sua plataforma. Os mods de exemplo servem as duas sem mudanca.
 
-            **Fabric** -- instale o Fabric Loader para 1.21.1 e a Fabric API, e ponha
-            `minecraft-lua-loader-fabric-*.jar` em `mods/`.
+            **Fabric** -- instale o Fabric Loader e a Fabric API correspondentes à versão do Minecraft,
+            e ponha o jar `fabric-<versao>/` em `mods/`.
 
-            **NeoForge** -- instale o NeoForge 21.1 e ponha
-            `minecraft-lua-loader-neoforge-*.jar` em `mods/`.
+            **NeoForge** -- instale a versão NeoForge correspondente e ponha o jar
+            `neoforge-<versao>/` em `mods/`.
 
             Depois, baixe um mod de exemplo abaixo e descompacte em `mods-lua/`, ao lado de `mods/`.
 

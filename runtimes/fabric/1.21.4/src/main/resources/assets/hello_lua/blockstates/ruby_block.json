@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "hello_lua:block/ruby_block"
+    }
+  }
+}

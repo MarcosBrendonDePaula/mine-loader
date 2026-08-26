@@ -1,7 +1,7 @@
 name: CI
 
-# Roda em todo push e pull request: o build compila o nucleo e os dois adaptadores -- Fabric e
-# NeoForge -- e executa os testes unitarios mais os GameTests, que sobem um servidor headless.
+# Roda em todo push e pull request: o build compila o nucleo e os quatro runtimes -- duas
+# plataformas em duas versões -- e executa testes unitários mais GameTests headless.
 #
 # O adaptador NeoForge compila em um passo proprio porque ele baixa outro Minecraft, e uma falha ali
 # precisa aparecer como falha dele, e nao confundida com a do Fabric.
@@ -35,38 +35,12 @@ jobs:
       - name: Preparar o Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Compilar e rodar os testes
-        run: ./gradlew build --stacktrace
+      - name: Compilar e rodar os testes unitários
+        run: ./gradlew buildAllRuntimes testAllRuntimes --stacktrace
 
-      - name: Compilar o adaptador NeoForge
-        # Prova que o nucleo nao depende de plataforma: o mesmo core, outra casa.
-        run: ./gradlew :neoforge:build --stacktrace
-
-      - name: Aceitar o EULA para os GameTests
-        # Os GameTests sobem um servidor de verdade, que exige o EULA aceito.
-        run: |
-          mkdir -p build/gametest
-          echo "eula=true" > build/gametest/eula.txt
-
-      - name: Instalar os mods de exemplo para os GameTests
-        run: |
-          mkdir -p build/gametest/mods-lua
-          cp -r examples/hello_lua build/gametest/mods-lua/
-          cp -r examples/crystal_world build/gametest/mods-lua/
-
-      - name: Rodar os GameTests do Fabric
-        run: ./gradlew runGametest --stacktrace
-
-      - name: Aceitar o EULA para os GameTests do NeoForge
-        run: |
-          mkdir -p neoforge/build/gametest
-          echo "eula=true" > neoforge/build/gametest/eula.txt
-
-      - name: Rodar os GameTests do NeoForge
-        # As duas plataformas, e nao so uma: enquanto isto nao rodava aqui, seis divergencias
-        # entre os adaptadores se acumularam sem quebrar nenhum teste -- eventos que nunca
-        # disparavam, receitas que nao chegavam ao servidor, ferramentas que viravam item comum.
-        run: ./gradlew :neoforge:runGameTestServer --stacktrace
+      - name: Rodar os GameTests em todos os runtimes
+        # Cada bridge sincroniza examples/ para o próprio diretório e sobe o seu servidor headless.
+        run: ./gradlew gameTestAllRuntimes --stacktrace
 
       - name: Guardar os relatorios quando algo falha
         if: failure()
@@ -76,19 +50,19 @@ jobs:
           path: |
             core/build/reports/tests/
             core/build/test-results/
-            build/gametest-results.xml
+            runtimes/**/build/gametest-results.xml
           retention-days: 7
 
       - name: Publicar o jar do Fabric
         uses: actions/upload-artifact@v4
         with:
           name: minecraft-lua-loader-fabric
-          path: build/libs/*.jar
+          path: runtimes/fabric/*/build/libs/*.jar
           retention-days: 14
 
       - name: Publicar o jar do NeoForge
         uses: actions/upload-artifact@v4
         with:
           name: minecraft-lua-loader-neoforge
-          path: neoforge/build/libs/*.jar
+          path: runtimes/neoforge/*/build/libs/*.jar
           retention-days: 14

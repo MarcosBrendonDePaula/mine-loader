@@ -1,0 +1,168 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+// O runtime declara a própria versão; outro diretório pode apontar para outro Minecraft.
+def runtime = [
+        minecraft_version: '1.21.4',
+        neoforge_version: '21.4.157'
+]
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    // Sem isto o jar se chamaria neoforge.jar, e na pagina de uma release ele nao diria de que
+    // projeto e -- so de qual pasta saiu.
+    archivesName = "${project.archives_base_name}-neoforge"
+}
+
+neoForge {
+    version = runtime.neoforge_version
+
+    runs {
+        client {
+            client()
+            gameDirectory = file('run')
+
+            // O mesmo atalho do adaptador Fabric:
+            //   ./gradlew :neoforge:runClient -Pmundo="New World"
+            if (project.hasProperty('mundo')) {
+                programArguments.addAll('--quickPlaySingleplayer',
+                        project.property('mundo').toString())
+            }
+        }
+
+        server {
+            server()
+            gameDirectory = file('run')
+        }
+
+        // Os GameTests: um servidor sem cliente que roda a bateria e sai com o codigo do
+        // resultado. Ate ele existir, as sete verificacoes que precisam de um servidor de verdade
+        // rodavam so contra o Fabric -- e foi por isso que seis divergencias entre as plataformas
+        // puderam se acumular sem quebrar nada.
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = file('build/gametest')
+        }
+    }
+
+    mods {
+        "lua_loader" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    // O mesmo nucleo do adaptador Fabric, sem uma linha diferente: e o que esta em teste aqui.
+    //
+    // Gson e slf4j sao excluidos porque o Minecraft ja os fornece, e em versao fixa: o nucleo pede
+    // uma mais nova, e empacotar as duas daria conflito de classe em vez de erro de resolucao.
+    implementation(project(':core')) {
+        exclude group: 'com.google.code.gson', module: 'gson'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation "org.luaj:luaj-jse:${project.luaj_version}"
+
+    jarJar(project(':core'))
+    jarJar("org.luaj:luaj-jse:${project.luaj_version}")
+
+    // O ModDevGradle nao leva o que esta em implementation para o classpath dos runs: sem isto o
+    // jogo sobe e o mod falha em ClassNotFoundException do proprio nucleo.
+    additionalRuntimeClasspath(project(':core')) {
+        exclude group: 'com.google.code.gson', module: 'gson'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    additionalRuntimeClasspath "org.luaj:luaj-jse:${project.luaj_version}"
+}
+
+processResources {
+    def version = project.mod_version
+    inputs.property "version", version
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": version
+    }
+}
+
+/**
+ * Compartilha a pasta de mods Lua com o adaptador Fabric.
+ *
+ * <p>Os mods sao os mesmos nas duas plataformas -- e o que o projeto existe para demonstrar --, mas
+ * cada run tem o proprio diretorio de jogo. Copiar significa manter duas copias em sincronia a mao,
+ * e elas divergem no primeiro esquecimento.
+ *
+ * <p>Junction no Windows e link simbolico no resto, porque junction nao pede privilegio de
+ * administrador, e symlink de diretorio no Windows pede.
+ */
+/*
+ * O mesmo que no adaptador Fabric: pastas de mod fora do jogo, para desenvolver um mod que mora em
+ * outro repositorio. Vale nas duas plataformas de proposito -- um recurso de desenvolvimento que so
+ * funciona num lado faz quem escreve o mod testar so daquele lado.
+ */
+tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
+    def extras = project.findProperty('mods') ?: System.getenv('MINE_LOADER_MODS')
+    if (extras) {
+        systemProperty 'mineloader.mods', extras
+        doFirst { println "Pastas de mod extras: ${extras}" }
+    }
+}
+
+tasks.register('linkModsLua') {
+    description = 'Aponta neoforge/run/mods-lua para a mesma pasta do adaptador Fabric.'
+    group = 'lua loader'
+
+    doLast {
+        def compartilhada = rootProject.file('run/mods-lua')
+        def destino = file('run/mods-lua')
+
+        compartilhada.mkdirs()
+        if (destino.exists()) {
+            println "Ja existe: ${destino}. Apague antes se quiser refazer o link."
+            return
+        }
+        destino.parentFile.mkdirs()
+
+        if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+            exec {
+                commandLine 'cmd', '/c', 'mklink', '/J',
+                        destino.absolutePath, compartilhada.absolutePath
+            }
+        } else {
+            java.nio.file.Files.createSymbolicLink(
+                    destino.toPath(), compartilhada.toPath().toAbsolutePath())
+        }
+        println "Mods Lua compartilhados: ${destino} -> ${compartilhada}"
+    }
+}
+
+// Sem isto o servidor sobe surdo: o ModDevGradle nao liga a entrada padrao a tarefa, e o console
+// do servidor -- que e por onde comandos entram -- fica sem ninguem falando. O adaptador Fabric
+// nao precisa porque o Loom ja faz essa ligacao.
+tasks.matching { it.name in ['runServer', 'runClient'] }.configureEach {
+    if (it instanceof JavaExec) {
+        it.standardInput = System.in
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}
+
+/*
+ * Leva os mods de exemplo para o mundo do GameTest, como o adaptador Fabric ja faz.
+ *
+ * Sem isto a pasta e uma copia feita a mao alguma vez, e os testes rodam contra exemplos velhos --
+ * o pior resultado possivel, porque passa e nao verificou o que esta no repositorio.
+ */
+tasks.register('sincronizaExemplosDoGametest', Sync) {
+    from rootProject.file('examples')
+    into layout.buildDirectory.dir('gametest/mods-lua')
+}
+
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    dependsOn 'sincronizaExemplosDoGametest'
+}

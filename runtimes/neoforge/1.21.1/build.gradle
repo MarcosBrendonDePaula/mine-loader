@@ -2,6 +2,12 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.144'
 }
 
+// Este runtime conserva o bridge da main e fixa a sua própria versão do jogo.
+def runtime = [
+        minecraft_version: '1.21.1',
+        neoforge_version: '21.1.248'
+]
+
 version = project.mod_version
 group = project.maven_group
 
@@ -12,7 +18,7 @@ base {
 }
 
 neoForge {
-    version = project.neoforge_version
+    version = runtime.neoforge_version
 
     runs {
         client {

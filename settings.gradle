@@ -9,7 +9,15 @@ pluginManagement {
 
 rootProject.name = 'minecraft-lua-loader'
 
-// Nucleo agnostico de plataforma. O modulo raiz e o adaptador Fabric, e neoforge e o segundo
-// adaptador -- a prova de que o nucleo nao depende de nenhuma das duas.
+// O núcleo é independente da plataforma. Cada runtime fica isolado por plataforma e versão,
+// permitindo que a mesma API seja validada contra vários Minecraft sem duplicar o core.
 include 'core'
-include 'neoforge'
+include 'runtimes:fabric:1.21.1'
+include 'runtimes:fabric:1.21.4'
+include 'runtimes:neoforge:1.21.1'
+include 'runtimes:neoforge:1.21.4'
+
+project(':runtimes:fabric:1.21.1').projectDir = file('runtimes/fabric/1.21.1')
+project(':runtimes:fabric:1.21.4').projectDir = file('runtimes/fabric/1.21.4')
+project(':runtimes:neoforge:1.21.1').projectDir = file('runtimes/neoforge/1.21.1')
+project(':runtimes:neoforge:1.21.4').projectDir = file('runtimes/neoforge/1.21.4')
