@@ -835,6 +835,20 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public int containerSize(int x, int y, int z) {
+        var storage = itemStorageAt(x, y, z);
+        if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+
+        // A Transfer API expoe visoes, e nao um numero de slots: contar as visoes e o equivalente.
+        int slots = 0;
+        try (var transaction = net.fabricmc.fabric.api.transfer.v1.transaction.Transaction
+                .openOuter()) {
+            for (var ignored : storage) slots++;
+        }
+        return slots;
+    }
+
+    @Override
     public java.util.List<String> containerAt(int x, int y, int z) {
         var storage = itemStorageAt(x, y, z);
         if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);

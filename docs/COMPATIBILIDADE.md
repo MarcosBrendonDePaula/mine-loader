@@ -123,6 +123,7 @@ núcleo não conhecer Minecraft.
 | `inventory.window: "3x3"` | sim | sim | A janela do dispenser. A forma e o que da sentido a um padrao -- nove slots numa fileira nao dizem onde cada item fica |
 | Botao de janela declarada -> evento de tela | sim | sim | Mesmo canal dos eventos de tela desenhada: o nome da tela e o id do bloco, o valor e a posicao |
 | `inventory.ghost` -- slot fantasma | sim | sim | Mostra um item sem guardar item nenhum. Clicar com item no cursor copia a identidade e devolve o cursor intacto; mao vazia limpa. **Nada e consumido.** Maquina nunca mexe, mesmo com `allow_insert` ligado |
+| `container_size(x, y, z)` -- quantos slots a maquina tem | sim | sim | `container_at` pula slot vazio: uma fornalha com a saida vazia parece ter dois slots. Sem o tamanho, um mod nao tem como **mapear** uma maquina que o loader nao conhece |
 | `set_slot(x, y, z, slot, item, qtd)` | sim | sim | Escreve um slot **substituindo**, e passa por cima do portao de maquina. E o que permite ao mod dono desenhar num inventario fantasma, que recusa funil e cano de proposito |
 | `image` com recorte (`u`, `v`, `sheet_w`, `sheet_h`) | sim | sim | Antes so desenhava o PNG inteiro com o tamanho exato do arquivo -- e toda folha de GUI do jogo e 256x256 com o painel num canto |
 | Recurso `type: "gui"` -- o mod entrega arte de tela | sim | sim | Aterrissa em `assets/<mod>/textures/gui/<nome>.png`, caminho fixo porque a tela precisa escreve-lo a mao. Uma tela podia **nomear** uma textura e um mod nao tinha como **entregar** uma |

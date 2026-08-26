@@ -1779,6 +1779,24 @@ public final class LuaRuntime {
                 return list;
             }
         });
+        // Quantos slots aquela maquina tem, contando os vazios.
+        //
+        // `container_at` devolve so o que tem item: uma fornalha com a saida vazia parece ter dois
+        // slots, e o terceiro -- justamente o que interessa -- e invisivel. Sem este numero, um mod
+        // nao tem como oferecer "estes sao os slots desta maquina, diga qual e entrada e qual e
+        // saida", que e o unico jeito honesto de falar com uma maquina que o loader nao conhece.
+        serverApi.set("container_size", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 3) throw new LuaError("container_size exige x, y e z");
+
+                return LuaValue.valueOf(bridge.containerSize(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3))));
+            }
+        });
         // Desenha um slot, trocando o que estiver la. `insert_into` acrescenta e respeita o portao
         // de maquina; isto substitui e passa por cima dele, que e o que um inventario fantasma
         // precisa -- ele recusa funil e cano justamente para ninguem apagar o desenho.

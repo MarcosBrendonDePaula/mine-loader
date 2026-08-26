@@ -319,6 +319,22 @@ public interface GameBridge {
     }
 
     /**
+     * Quantos slots aquele inventario tem, contando os vazios.
+     *
+     * <p>{@code containerAt} devolve so o que tem item -- um slot vazio nao aparece, ainda que o
+     * numero dele seja preservado nos que aparecem. Isso basta para ler o que esta guardado e nao
+     * basta para <b>mapear a maquina</b>: uma fornalha com a saida vazia parece ter dois slots, e o
+     * terceiro -- justamente o que interessa -- e invisivel.
+     *
+     * <p>Sem isto, um mod nao tem como oferecer ao jogador "estes sao os slots desta maquina, diga
+     * qual e entrada e qual e saida" -- que e o unico jeito honesto de falar com uma maquina que o
+     * loader nao conhece.
+     */
+    default int containerSize(int x, int y, int z) {
+        throw new BridgeException("container_size nao existe neste adaptador");
+    }
+
+    /**
      * Escreve um slot de um inventario declarado, trocando o que estiver la.
      *
      * <p>Diferente de {@code insertInto}, que <b>acrescenta</b> respeitando o portao de maquina:

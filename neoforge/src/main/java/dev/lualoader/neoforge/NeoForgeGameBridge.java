@@ -171,6 +171,13 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public int containerSize(int x, int y, int z) {
+        IItemHandler handler = itemHandlerAt(x, y, z);
+        if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+        return handler.getSlots();
+    }
+
+    @Override
     public List<String> containerAt(int x, int y, int z) {
         IItemHandler handler = itemHandlerAt(x, y, z);
         if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);

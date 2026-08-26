@@ -172,6 +172,10 @@ O log fica em `build/servidor-<plataforma>.log`. Se o `grep` reclamar de arquivo
   **velho**, que responde normalmente. Depois de `parar`, confira que morreu; no Windows,
   `Get-CimInstance Win32_Process -Filter "Name='java.exe'"` e mate por PID o que não for
   `GradleDaemon`.
+- **Não rode o Gradle com o cliente aberto.** Uma compilação reescreve os `.class` embaixo dele, e o
+  jogo quebra quando for carregar uma classe que ainda não tinha carregado — `NoClassDefFoundError`
+  numa classe que existe e está compilada. A leitura óbvia do relatório é "o código está quebrado",
+  e não está. Feche o cliente antes de compilar.
 - **O mod é carregado no arranque, e editar o `.lua` depois não recarrega nada.** O comando roda a
   versão anterior e responde com a maior naturalidade. Um teste que você acabou de escrever
   simplesmente não aparece na lista, ou aparece falhando por um motivo que você já corrigiu.

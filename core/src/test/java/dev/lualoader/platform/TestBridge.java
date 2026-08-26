@@ -177,6 +177,22 @@ public abstract class TestBridge implements GameBridge {
             {"id":"minecraft:iron_sword","type":"minecraft:crafting_shaped",            "output":{"item":"minecraft:iron_sword","count":1},"width":1,"height":3,            "ingredients":[["minecraft:iron_ingot"],["minecraft:iron_ingot"],["minecraft:stick"]]}            """));
 
     /**
+     * Quantos slots o duble diz que aquele inventario tem.
+     *
+     * <p>O duble guarda o inventario como um mapa de item para quantidade, sem posicao -- entao o
+     * tamanho e quantos itens diferentes ha. E o bastante para o que os testes perguntam, e fingir
+     * um numero fixo esconderia a diferenca entre uma maquina de tres slots e um bau.
+     */
+    @Override
+    public int containerSize(int x, int y, int z) {
+        java.util.Map<String, Integer> container = containers.get(x + "," + y + "," + z);
+        if (container == null) {
+            throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);
+        }
+        return container.size();
+    }
+
+    /**
      * Desenha um slot no duble.
      *
      * <p>O duble guarda o inventario como um mapa de item para quantidade, sem posicao -- entao um
