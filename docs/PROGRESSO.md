@@ -7,10 +7,11 @@ meio e o que vem a seguir.
 **Regra:** ao fechar um item, risque-o na mesma mudança que o implementa. Um acompanhamento que
 envelhece em silêncio é pior que nenhum — é a mesma razão de `COMPATIBILIDADE.md` existir.
 
-Última revisão: quatro limites removidos — `events` sem `entrypoint`, `placement.facing`, a forma
-que varia com o estado e o tique agendado por posição. Os quatro saíram da migração do Logistic
-Pipes. Junto veio um conserto de ferramenta que valia mais do que parece: `run/mods-lua` era uma
-cópia de `examples/`, e o servidor rodava contra scripts velhos dizendo que passou.
+Última revisão: **saiu a v0.1.0**, a primeira versão publicada. E o cano de fabricação aprendeu a
+esperar a máquina: uma fila de ordens no `block_data`, conferida uma vez por segundo, com o trabalho
+dividido entre as máquinas que sabem fazer a mesma coisa. Três defeitos graves apareceram no
+caminho, todos pegos pela bateria — o pior deles fabricava produto sem usar a máquina do meio da
+cadeia, criando item do nada com o log dizendo que tinha dado certo.
 
 ---
 
@@ -172,6 +173,94 @@ o modelo de item nao pode herdar da malha, senao o cliente nao abre.
 ---
 
 ## Onde a sessão parou
+
+**A v0.1.0 saiu.** É a primeira versão publicada, em
+[releases/tag/v0.1.0](https://github.com/MarcosBrendonDePaula/mine-loader/releases/tag/v0.1.0): dois
+jars, um por plataforma, e onze mods de exemplo empacotados. A workflow roda o `build` inteiro antes
+de publicar, então uma versão só sai com os testes verdes.
+
+O texto da página estava desatualizado e dizia que blocos declarativos, telas e receitas só existiam
+no Fabric. Era verdade quando foi escrito, e mandaria embora quem usa NeoForge por um motivo que não
+existe mais. A página agora diz o que a matriz diz, e o defeito da malha `.obj` tem seção própria com
+o alcance na primeira linha — vale só para mod que declara `render.model` com um `.obj`.
+
+### O cano espera a máquina, e sabe dividir trabalho
+
+A sessão inteira foi conduzida jogando: o usuário montava, o defeito aparecia, e o log dizia qual
+era. Fabricar acontecia todo num tique — a rede punha o material na máquina e pedia o produto no
+mesmo instante. Para um baú funciona, o que entra sai; uma fornalha ainda nem acendeu. Quem pedia
+ficava clicando de novo, e cada clique empilhava material que nunca virava nada.
+
+Agora o cano guarda uma **fila de até 16 ordens** no `block_data` e confere a máquina uma vez por
+segundo, entregando cada ordem quando fica pronta. É o desenho do `LogisticsOrderManager` do
+original, lido no código dele: inclusive a parte em que a ordem que não pode ser atendida agora vai
+para o fim em vez de segurar as outras — o `deferSend`. O prazo de um minuto para desistir é nosso;
+lá não há nenhum, e uma fornalha sem combustível deixa a ordem para sempre.
+
+Entre máquinas que fazem a mesma coisa vence a de **fila mais curta**. Antes valia a primeira da
+lista, e montar uma segunda fornalha não fabricava mais rápido — só gastava ferro. Confirmado no
+jogo, no Fabric, com três fornalhas drenando em paralelo.
+
+### Três defeitos que a bateria pegou, todos graves
+
+- **Só o último passo do plano era executado.** Uma cadeia de duas máquinas anunciava `FABRICOU em 2
+  passo(s)` tendo usado uma: a pedra sumia da rede, a pederneira saía do estoque da segunda máquina,
+  e a primeira nunca era tocada. Pedra virava pederneira de graça, com o log dizendo que deu certo.
+- **Material recusado não interrompia nada**, e o passo seguinte puxava o produto assim mesmo.
+- **A busca do slot de entrada usava `pairs`**, que em Lua não tem ordem: tudo caía sempre no mesmo
+  slot, e qual deles nem era estável entre execuções.
+
+### O mapa de slots virou receita, com quantidade
+
+Marcar "slot 0 recebe pedra, slot 2 devolve cascalho" agora **registra o cano na rede** — era o que
+faltava: o mapa existia e ninguém o lia. O mapa vence o padrão 3×3; o padrão só é consultado quando
+o mapa não responde.
+
+A conta por slot é um **mínimo para a máquina rodar, e não um teto**, na regra que o usuário definiu:
+primeiro um a um até cada slot fechar o mínimo — com dois slots e um item, ele vai no primeiro —, e o
+excedente enche os slots depois, já que o mínimo está garantido.
+
+### O que a sessão ensinou sobre verificar
+
+**Os defeitos desta leva apareceram jogando, não nos testes.** Botão invisível, botões sobrepostos,
+slot de mapa apontando para máquina que não existe mais. A camada de tela tem 35 casos de lógica e
+nenhuma verificação visual, e a armadilha do `CLAUDE.md` — *log verde não é verificação visual* — foi
+cometida de novo, na tela em que mais custa: um botão invisível numa tela que continua respondendo ao
+clique não parece defeito nenhum.
+
+O que fechou o buraco de diagnóstico foi mandar os avisos **para o chat**, e não só para o log. O
+usuário teve que pedir "olha os logs" quatro vezes antes disso; depois, o motivo chegava sozinho.
+
+Duas ferramentas novas nasceram daí:
+
+- `/mod logistica esquecer <x> <y> <z>` — apaga padrão, resultado e mapa de um cano sem quebrá-lo.
+- O `fabricantes` parou de esconder o mapa. Ele dizia `SEM PADRAO` para um cano perfeitamente
+  mapeado, e foi isso que fez a investigação rodar em círculo três rodadas.
+
+### O que ficou aberto, em ordem de valor
+
+1. **A malha `.obj` no Fabric.** É o único aberto que contradiz a promessa central — o mesmo mod nas
+   duas plataformas. Primeiro item da v0.1.1. O diagnóstico já está escrito na matriz: as contas de
+   oclusão de ambiente e de sombreamento difuso supõem a face encostada na parede do cubo, e numa
+   malha ela fica no meio do bloco.
+2. **Um pedido se dividir entre as máquinas.** Hoje um clique é um lote: pedir 14 são 14 cliques. O
+   desempate por fila já existe; falta o planejador repartir em vez de escolher uma e parar.
+3. **A varredura estourando o orçamento** com 208 canos. O terminal varre a rede duas vezes por
+   clique, e quando estoura mostra o estoque velho calado.
+4. **Cadeia com máquina lenta no meio.** Só o passo final espera; retomar um passo intermediário
+   exige guardar o plano inteiro, que é trabalho de outra ordem.
+5. **Verificação visual da camada de tela.** Nenhum dos defeitos de UI desta sessão seria pego por
+   teste de lógica.
+
+### A bateria aprendeu a ocupar mais de um tique
+
+Um caso pode devolver uma função e ganhar outro orçamento inteiro. Sem isso, um caso que monta rede,
+configura três máquinas e ainda planeja e executa não cabia nos 20 ms — e o estouro caía num laço
+barato qualquer, que é onde o contador de instruções bate, dando a impressão de defeito naquele
+trecho. São **35 casos, verdes nas duas plataformas**.
+
+
+## Onde a sessão parou (rodada anterior)
 
 ### A camada de tela ganhou o que faltava para mexer em item
 
@@ -406,6 +495,10 @@ uma. Este documento é o mapa; elas são o roteiro.
 | 17 | ~~Ler inventário por slot~~ | **fechado** |
 | 18 | Evento de bloco quebrado com o inventário íntegro | a fazer |
 | 19 | Portar os canos que faltam, e fazer o item viajar pelo cano | a fazer |
+| 22 | Malha `.obj` desenhando certo no Fabric | **primeiro da v0.1.1** |
+| 23 | Um pedido se dividir entre varias maquinas | a fazer |
+| 24 | Varredura da rede dentro do orcamento com centenas de canos | a fazer |
+| 25 | Verificacao visual da camada de tela | a fazer |
 | 12 | UI por HTML e CSS | adiado por decisão |
 
 ## Como retomar
