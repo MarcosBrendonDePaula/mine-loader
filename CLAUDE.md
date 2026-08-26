@@ -166,6 +166,16 @@ O log fica em `build/servidor-<plataforma>.log`. Se o `grep` reclamar de arquivo
   chão, use `entities_near` pela API do loader — é o caminho que um mod usaria, e responde.
 - **Um servidor órfão segura a porta e o mundo.** `parar` antes de `iniciar`, sempre. O script
   limpa órfãos da mesma plataforma, mas não toca no cliente que você deixou aberto.
+- **`parar` nem sempre mata.** Aconteceu várias vezes numa sessão: o comando volta, o processo
+  continua vivo, e o próximo `iniciar` falha com `outro processo bloqueou parte do arquivo` — que
+  não se parece com "o servidor anterior ainda está aí". Pior: o `cmd` seguinte vai para o servidor
+  **velho**, que responde normalmente. Depois de `parar`, confira que morreu; no Windows,
+  `Get-CimInstance Win32_Process -Filter "Name='java.exe'"` e mate por PID o que não for
+  `GradleDaemon`.
+- **O mod é carregado no arranque, e editar o `.lua` depois não recarrega nada.** O comando roda a
+  versão anterior e responde com a maior naturalidade. Um teste que você acabou de escrever
+  simplesmente não aparece na lista, ou aparece falhando por um motivo que você já corrigiu.
+  **Reinicie o servidor a cada mudança de script.**
 
 ### Escrever verificação nova
 
