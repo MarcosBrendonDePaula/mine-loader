@@ -90,6 +90,15 @@ public final class LuaRuntime {
     private final Map<String, LuaTable> states = new LinkedHashMap<>();
 
     /**
+     * Dados persistentes por jogador, separados por mod.
+     *
+     * <p>A chave externa é o UUID e o conteúdo é uma tabela Lua limitada aos tipos serializáveis pelo
+     * {@link StateStore}. O UUID não é exposto como nome de arquivo ao script; ele só organiza o
+     * estado internamente e permite que o mesmo jogador conserve progresso entre sessões.
+     */
+    private final Map<String, Map<String, LuaTable>> playerStates = new LinkedHashMap<>();
+
+    /**
      * Tarefas agendadas por {@code mod.after}, ordenadas por tick de disparo.
      *
      * <p>Sem isto, qualquer coisa com duracao precisava contar ticks a mao dentro do evento
@@ -425,6 +434,13 @@ public final class LuaRuntime {
         for (Map.Entry<String, LuaTable> entry : states.entrySet()) {
             stateStore.save(entry.getKey(), entry.getValue());
         }
+        for (Map.Entry<String, Map<String, LuaTable>> entry : playerStates.entrySet()) {
+            LuaTable allPlayers = new LuaTable();
+            for (Map.Entry<String, LuaTable> player : entry.getValue().entrySet()) {
+                allPlayers.set(player.getKey(), player.getValue());
+            }
+            stateStore.saveScoped(entry.getKey(), "players", allPlayers);
+        }
         logger.info("Estado de {} mod(s) gravado", states.size());
     }
 
@@ -432,6 +448,15 @@ public final class LuaRuntime {
     public void saveState(String modId) {
         LuaTable state = states.get(modId);
         if (state != null) stateStore.save(modId, state);
+
+        Map<String, LuaTable> byPlayer = playerStates.get(modId);
+        if (byPlayer != null) {
+            LuaTable allPlayers = new LuaTable();
+            for (Map.Entry<String, LuaTable> player : byPlayer.entrySet()) {
+                allPlayers.set(player.getKey(), player.getValue());
+            }
+            stateStore.saveScoped(modId, "players", allPlayers);
+        }
     }
 
     /**
@@ -467,6 +492,7 @@ public final class LuaRuntime {
     /** Descarta o estado acumulado por um mod. Usado quando o mod e removido, nao em recarga. */
     public void forgetState(String modId) {
         states.remove(modId);
+        playerStates.remove(modId);
     }
 
     public boolean reload(String modId) throws IOException {
@@ -2115,6 +2141,19 @@ public final class LuaRuntime {
                 return LuaValue.NIL;
             }
         });
+        serverApi.set("redstone_signal", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) {
+                    throw new LuaError("redstone_signal exige x, y e z");
+                }
+                return LuaValue.valueOf(bridge.redstoneSignal(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3))));
+            }
+        });
         serverApi.set("schedule_block", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -2249,10 +2288,93 @@ public final class LuaRuntime {
      */
     private static final String[] SIDE_NAMES = {"down", "up", "north", "south", "west", "east"};
 
+    private LuaTable playerDataFor(ModLoader.LoadedMod mod, PlayerHandle player) {
+        Map<String, LuaTable> byPlayer = playerStates.computeIfAbsent(mod.manifest().id, id -> {
+            Map<String, LuaTable> loaded = new LinkedHashMap<>();
+            LuaTable stored = stateStore.loadScoped(id, "players");
+            for (LuaValue key : stored.keys()) {
+                LuaValue value = stored.get(key);
+                if (value.istable()) loaded.put(key.tojstring(), (LuaTable) value);
+            }
+            return loaded;
+        });
+        return byPlayer.computeIfAbsent(player.uuid(), ignored -> new LuaTable());
+    }
+
+    private LuaTable playerDataApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
+        LuaTable data = playerDataFor(mod, player);
+        LuaTable api = new LuaTable();
+        api.set("get", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.read");
+                String key = requireDataKey(args.arg(1));
+                LuaValue value = data.get(key);
+                if (value.isnil() && args.narg() >= 2) return args.arg(2);
+                return value;
+            }
+        });
+        api.set("has", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(!data.get(requireDataKey(value)).isnil());
+            }
+        });
+        api.set("set", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue keyValue, LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                String key = requireDataKey(keyValue);
+                ensurePersistable(value, 0);
+                data.set(key, value);
+                return value;
+            }
+        });
+        api.set("remove", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                String key = requireDataKey(value);
+                LuaValue previous = data.get(key);
+                data.set(key, LuaValue.NIL);
+                return LuaValue.valueOf(!previous.isnil());
+            }
+        });
+        return api;
+    }
+
+    private static String requireDataKey(LuaValue value) {
+        if (value == null || !value.isstring()) {
+            throw new LuaError("chave de player.data precisa ser texto");
+        }
+        String key = value.tojstring();
+        if (!key.matches("[A-Za-z0-9_.-]{1,64}")) {
+            throw new LuaError("chave de player.data invalida: " + key);
+        }
+        return key;
+    }
+
+    private static void ensurePersistable(LuaValue value, int depth) {
+        if (value.isnil() || value.isboolean() || value.isnumber() || value.isstring()) return;
+        if (!value.istable()) {
+            throw new LuaError("player.data aceita apenas texto, numero, booleano ou tabela");
+        }
+        if (depth >= 32) throw new LuaError("player.data excede 32 niveis de profundidade");
+        LuaTable table = value.checktable();
+        for (LuaValue key : table.keys()) {
+            if (!key.isstring() && !key.isnumber()) {
+                throw new LuaError("chaves de player.data precisam ser texto ou numero");
+            }
+            ensurePersistable(table.get(key), depth + 1);
+        }
+    }
+
     private LuaTable playerApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
         LuaTable playerApi = new LuaTable();
         playerApi.set("name", LuaValue.valueOf(player.name()));
         playerApi.set("uuid", LuaValue.valueOf(player.uuid()));
+        playerApi.set("data", playerDataApiFor(mod, player));
 
         playerApi.set("send_message", new OneArgFunction() {
             @Override

@@ -92,6 +92,12 @@ class PlatformBridgeTest {
             calls.add("fill:" + blockId + "=" + changed);
             return changed;
         }
+
+        @Override
+        public int redstoneSignal(int x, int y, int z) {
+            calls.add("redstone:" + x + "," + y + "," + z);
+            return 13;
+        }
     }
 
     /** Jogador de teste: a base cobre o contrato, e aqui ficam apenas os apelidos usados. */
@@ -141,6 +147,53 @@ class PlatformBridgeTest {
                 "property:test_mod:bloco.hardness=4.0",
                 "luminance:test_mod:bloco@1,2,3=9"
         ), bridge.calls, "cada operação Lua deve virar exatamente uma chamada de bridge");
+    }
+
+    @Test
+    void redstoneSignalIsExportedThroughTheNeutralContract(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.read\", \"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.broadcast("power=" .. ctx.server.redstone_signal(1, 2, 3))
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("redstone:1,2,3", "broadcast:power=13"), bridge.calls);
+    }
+
+    @Test
+    void playerDataSurvivesRuntimeReload(@TempDir Path root) throws IOException {
+        Path state = root.resolve("state");
+        FakePlayer firstPlayer = new FakePlayer();
+        LuaRuntime first = new LuaRuntime(LoggerFactory.getLogger("test"), null, state);
+        first.load(writeMod(root, "\"player.read\", \"player.modify\", \"chat.send\"", """
+                mod.on("player_joined", function(ctx)
+                    local previous = ctx.player.data.get("visits", 0)
+                    ctx.player.data.set("visits", previous + 1)
+                    ctx.player.send_message(tostring(previous))
+                end)
+                """));
+        first.triggerAll("player_joined", firstPlayer);
+        first.saveAllStates();
+
+        FakePlayer secondPlayer = new FakePlayer();
+        LuaRuntime second = new LuaRuntime(LoggerFactory.getLogger("test"), null, state);
+        second.load(writeMod(root, "\"player.read\", \"player.modify\", \"chat.send\"", """
+                mod.on("player_joined", function(ctx)
+                    local previous = ctx.player.data.get("visits", 0)
+                    ctx.player.data.set("visits", previous + 1)
+                    ctx.player.send_message(tostring(previous))
+                end)
+                """));
+        second.triggerAll("player_joined", secondPlayer);
+
+        assertEquals(List.of("0"), firstPlayer.received);
+        assertEquals(List.of("1"), secondPlayer.received);
     }
 
     @Test

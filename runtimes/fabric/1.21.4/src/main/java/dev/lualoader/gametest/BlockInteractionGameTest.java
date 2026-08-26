@@ -33,6 +33,27 @@ public class BlockInteractionGameTest implements FabricGameTest {
     }
 
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeReadsRedstoneSignalInLoadedWorld(TestContext context) {
+        var world = context.getWorld();
+        BlockPos source = context.getAbsolutePos(new BlockPos(1, 1, 1));
+        BlockPos target = context.getAbsolutePos(new BlockPos(2, 1, 1));
+        world.setBlockState(source, net.minecraft.block.Blocks.REDSTONE_BLOCK.getDefaultState(), 3);
+
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(world);
+        try {
+            int signal = bridge.redstoneSignal(target.getX(), target.getY(), target.getZ());
+            if (signal != 15) {
+                throw new AssertionError("o bloco deveria receber sinal 15, recebeu " + signal);
+            }
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void bridgeAppliesVariantInLoadedWorld(TestContext context) {
         Block block = LuaLoaderMod.blockRegistrar().get(RUBY_BLOCK);
         if (!(block instanceof DeclarativeBlock declarativeBlock)) {

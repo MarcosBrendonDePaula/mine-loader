@@ -99,6 +99,11 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public int redstoneSignal(int x, int y, int z) {
+        return requireLevel().getBestNeighborSignal(new BlockPos(x, y, z));
+    }
+
+    @Override
     public String getBlock(int x, int y, int z) {
         BlockState state = requireLevel().getBlockState(new BlockPos(x, y, z));
         return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();

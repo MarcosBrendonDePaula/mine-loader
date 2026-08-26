@@ -59,6 +59,18 @@ public interface GameBridge {
     String worldName();
 
     /**
+     * Lê a potência redstone recebida por um bloco, entre 0 e 15.
+     *
+     * <p>O contrato pergunta pela potência que chega à posição, não pelo método da plataforma:
+     * Fabric expõe a leitura no mundo e NeoForge a expõe pelo {@code SignalGetter}. Isso permite
+     * que máquinas declarativas reajam a alavancas, comparadores e outros mods sem conhecer nenhuma
+     * API interna.
+     */
+    default int redstoneSignal(int x, int y, int z) {
+        throw new BridgeException("redstone_signal nao existe neste adaptador");
+    }
+
+    /**
      * Lê o identificador do bloco na posição indicada.
      *
      * @return identificador no formato {@code mod:bloco}, por exemplo {@code minecraft:stone}

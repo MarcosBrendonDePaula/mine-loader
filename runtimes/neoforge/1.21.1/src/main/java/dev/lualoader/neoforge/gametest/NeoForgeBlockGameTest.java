@@ -49,6 +49,28 @@ public class NeoForgeBlockGameTest {
         helper.succeed();
     }
 
+    /** A bridge lê a potência recebida por uma posição do mundo real. */
+    @GameTest(template = EMPTY)
+    public static void bridgeLePotenciaRedstone(GameTestHelper helper) {
+        BlockPos source = helper.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos target = helper.absolutePos(new BlockPos(2, 1, 1));
+        helper.getLevel().setBlock(source,
+                net.minecraft.world.level.block.Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentLevel(helper.getLevel());
+        try {
+            int signal = bridge.redstoneSignal(target.getX(), target.getY(), target.getZ());
+            if (signal != 15) {
+                throw new AssertionError("o bloco deveria receber sinal 15, recebeu " + signal);
+            }
+        } finally {
+            bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
     /** O item do bloco existe: sem ele o bloco só aparece por comando. */
     @GameTest(template = EMPTY)
     public static void itemDoBlocoExiste(GameTestHelper helper) {

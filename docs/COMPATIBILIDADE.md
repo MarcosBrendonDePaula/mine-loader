@@ -15,10 +15,12 @@ A promessa do MineLoader é que o mod declarativo dependa do contrato do loader,
 | Resource pack gerado | sim | sim | sim | sim |
 | Eventos, comandos e scheduler | sim | sim | sim | sim |
 | Inventário e block data | sim | sim | sim | sim |
+| Leitura de potência redstone | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge |
+| `player.data` persistente | sim, core + teste de reinício | sim, core + bridge | sim, core + teste de reinício | sim, core + bridge |
 | Menus declarados | sim | sim | sim | sim |
 | Tags, drops e estruturas | sim | sim | sim | sim |
 | Herança entre entidades declaradas | sim | sim | sim | sim |
-| GameTests obrigatórios | 18/18 | 18/18 | 18/18 | 18/18 |
+| GameTests obrigatórios | 19/19 | 19/19 | 19/19 | 19/19 |
 | Modelo `.obj` de bloco | sim | **não — desativado** | sim | **não — desativado** |
 | Modelo/skin customizados de entidades | sim | **degradado para renderer vanilla** | sim | **degradado para renderer vanilla** |
 | Cores customizadas do spawn egg | sim | **degradado para cores padrão** | sim | **degradado para cores padrão** |
@@ -33,14 +35,14 @@ As linhas de OBJ, renderer de entidades, cores de ovos, reparação e partícula
 
 | Verificação | Resultado |
 |---|---|
-| `./gradlew :core:test` | passou |
+| `./gradlew :core:test` | passou, incluindo os contratos de redstone e `player.data` |
 | `./gradlew compileAllRuntimes` | passou para Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 |
-| `:runtimes:fabric:1.21.1:runGametest` | 18/18 testes obrigatórios passaram |
-| `:runtimes:fabric:1.21.4:runGametest` | 18/18 testes obrigatórios passaram |
-| `:runtimes:neoforge:1.21.1:runGameTestServer` | 18/18 testes obrigatórios passaram |
-| `:runtimes:neoforge:1.21.4:runGameTestServer` | 18/18 testes obrigatórios passaram |
+| `:runtimes:fabric:1.21.1:runGametest` | 19/19 testes obrigatórios passaram |
+| `:runtimes:fabric:1.21.4:runGametest` | 19/19 testes obrigatórios passaram |
+| `:runtimes:neoforge:1.21.1:runGameTestServer` | 19/19 testes obrigatórios passaram |
+| `:runtimes:neoforge:1.21.4:runGameTestServer` | 19/19 testes obrigatórios passaram |
 
-Os testes usam os mesmos exemplos em `examples/`, sincronizados para cada diretório de jogo. Eles cobrem registro, propriedades declaradas, inventários, persistência, automação, eventos, fila de ticks, tags, ovos e herança. **Eles são testes de servidor:** não conseguem verificar pixels, iluminação, modelos na mão do jogador, telas client-side ou qualidade visual.
+Os testes usam os mesmos exemplos em `examples/`, sincronizados para cada diretório de jogo. Eles cobrem registro, propriedades declaradas, inventários, persistência, automação, eventos, fila de ticks, leitura de redstone, tags, ovos e herança. **Eles são testes de servidor:** não conseguem verificar pixels, iluminação, modelos na mão do jogador, telas client-side ou qualidade visual.
 
 ## O que significa “mesmo mod”
 

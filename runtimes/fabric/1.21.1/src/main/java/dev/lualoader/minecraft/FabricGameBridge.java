@@ -101,6 +101,11 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public int redstoneSignal(int x, int y, int z) {
+        return requireWorld().getReceivedRedstonePower(new BlockPos(x, y, z));
+    }
+
+    @Override
     public void broadcast(String message) {
         requireServer().getPlayerManager().broadcast(Text.literal(message), false);
     }
