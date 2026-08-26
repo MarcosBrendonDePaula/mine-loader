@@ -85,6 +85,22 @@ public interface PlayerHandle {
     void openMenu(String menuId, String title, int rows, java.util.List<String> items);
 
     /**
+     * Abre a janela declarada de um bloco, como se o jogador tivesse clicado nele.
+     *
+     * <p>Um bloco com inventario abre a propria janela ao clique, e ate aqui era a unica forma:
+     * desligar {@code open_on_use} para o script decidir o que o clique faz custava perder a janela
+     * de vez, porque nao havia como abri-la.
+     *
+     * <p>Isso amarrava a ordem das telas a uma decisao do manifesto. Um bloco cujo clique deve
+     * abrir uma tela de configuracao, com a janela de itens atras de um botao, nao era exprimivel.
+     *
+     * @return {@code false} quando aquele bloco nao tem janela para abrir
+     */
+    default boolean openBlockInventory(int x, int y, int z) {
+        return false;
+    }
+
+    /**
      * Substitui o conteúdo do menu aberto sem fechá-lo.
      *
      * <p>Sem isto, reagir a um clique exigiria fechar e reabrir a tela, o que pisca e devolve o

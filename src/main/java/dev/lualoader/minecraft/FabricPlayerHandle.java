@@ -214,6 +214,20 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
+    public boolean openBlockInventory(int x, int y, int z) {
+        var pos = new net.minecraft.util.math.BlockPos(x, y, z);
+        var world = player.getWorld();
+
+        // A fabrica vem do bloco, e nao de uma tabela nossa: e o mesmo caminho do clique, entao um
+        // bloco que abre algo pelo clique abre a mesma coisa por aqui.
+        var factory = world.getBlockState(pos).createScreenHandlerFactory(world, pos);
+        if (factory == null) return false;
+
+        player.openHandledScreen(factory);
+        return true;
+    }
+
+    @Override
     public void openMenu(String menuId, String title, int rows, java.util.List<String> items) {
         int lines = Math.max(1, Math.min(6, rows));
         var content = LuaMenu.build(items, lines);

@@ -97,6 +97,15 @@ public final class ScreenProtocol {
      */
     public static final int MAX_ITEM_COUNT = 99999;
 
+    /**
+     * A camada mais alta que um elemento pode pedir.
+     *
+     * <p>Quatro, e nao um numero grande: cada camada e um degrau de profundidade na tela do jogo, e
+     * a faixa e limitada. Uma janela sobre a tela e a janela de confirmacao dela ja sao duas -- uma
+     * pilha maior que isso nao e interface, e desenho perdido.
+     */
+    public static final int MAX_LAYER = 4;
+
     /** Maior número de colunas de uma grade. */
     public static final int MAX_COLUMNS = 32;
 

@@ -198,6 +198,13 @@ public final class ScreenBuilder {
         copyText(source, json, "value");
         copyText(source, json, "item");
         copyText(source, json, "entity");
+        // A camada: elementos de camada maior desenham por cima, e o teto e baixo de proposito --
+        // a profundidade da tela do jogo e limitada, e uma pilha de janelas nao e uma boa interface.
+        if (!source.get("layer").isnil()) {
+            json.addProperty("layer",
+                    (int) clamp(source.get("layer").todouble(), 0, ScreenProtocol.MAX_LAYER, "layer"));
+        }
+
         copyText(source, json, "texture");
 
         // O recorte da imagem, e o tamanho da folha de onde ela sai.

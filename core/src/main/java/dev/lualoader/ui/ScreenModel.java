@@ -29,7 +29,8 @@ public final class ScreenModel {
                           boolean shadow, String entity,
                           int u, int v, int sheetWidth, int sheetHeight,
                           int sourceWidth, int sourceHeight,
-                          int borderTop, int borderRight, int borderBottom, int borderLeft) {
+                          int borderTop, int borderRight, int borderBottom, int borderLeft,
+                          int layer) {
     }
 
     private final String title;
@@ -169,7 +170,15 @@ public final class ScreenModel {
                     integer(element, "border_top", integer(element, "border", 2)),
                     integer(element, "border_right", integer(element, "border", 2)),
                     integer(element, "border_bottom", integer(element, "border", 2)),
-                    integer(element, "border_left", integer(element, "border", 2))));
+                    integer(element, "border_left", integer(element, "border", 2)),
+                    // A camada, para um painel ficar por cima do que veio antes.
+                    //
+                    // A ordem da lista nao basta: o jogo desenha icone de item com deslocamento de
+                    // profundidade proprio, entao um item do fundo passa por cima de qualquer
+                    // retangulo desenhado depois. Sem uma camada, uma janela sobreposta e
+                    // impossivel -- e uma janela sobreposta e o jeito natural de configurar uma
+                    // coisa sem perder de vista o resto.
+                    integer(element, "layer", 0)));
         }
         return list;
     }

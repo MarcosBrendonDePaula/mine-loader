@@ -1779,6 +1779,37 @@ public final class LuaRuntime {
                 return list;
             }
         });
+        // Onde cada slot daquela maquina aparece na tela DELA.
+        // Uma fornalha desenha os tres slots em L; um moedor de outro mod desenha do jeito dele.
+        // Listar em fileira funciona e nao se parece com nada -- o jogador reconhece a maquina pela
+        // forma, e uma tela de configuracao sem a forma dela obriga a contar slots.
+        //
+        // Vazia quando o bloco nao tem menu proprio, e ai quem chamou desenha como puder.
+        serverApi.set("container_slot_layout", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.containers");
+                if (args.narg() < 3) throw new LuaError("container_slot_layout exige x, y e z");
+
+                LuaTable lista = new LuaTable();
+                int indice = 1;
+                for (String linha : bridge.containerSlotLayout(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3)))) {
+
+                    String[] partes = linha.split(";", 3);
+                    if (partes.length < 3) continue;
+
+                    LuaTable entrada = new LuaTable();
+                    entrada.set("slot", LuaValue.valueOf(Integer.parseInt(partes[0])));
+                    entrada.set("x", LuaValue.valueOf(Integer.parseInt(partes[1])));
+                    entrada.set("y", LuaValue.valueOf(Integer.parseInt(partes[2])));
+                    lista.set(indice++, entrada);
+                }
+                return lista;
+            }
+        });
         // Quantos slots aquela maquina tem, contando os vazios.
         //
         // `container_at` devolve so o que tem item: uma fornalha com a saida vazia parece ter dois
@@ -2474,6 +2505,25 @@ public final class LuaRuntime {
                 requirePermission(mod.manifest(), "player.inventory");
                 player.clearInventory();
                 return LuaValue.NIL;
+            }
+        });
+        // Abre a janela declarada de um bloco, como se o jogador tivesse clicado nele.
+        //
+        // Ate aqui, desligar `open_on_use` para o script decidir o que o clique faz custava perder
+        // a janela de vez -- nao havia como abri-la. Isso amarrava a ordem das telas a uma decisao
+        // do manifesto: um bloco cujo clique deve abrir configuracao, com os itens atras de um
+        // botao, nao era exprimivel.
+        playerApi.set("open_block_inventory", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.menu");
+                if (args.narg() < 3) {
+                    throw new LuaError("open_block_inventory exige x, y e z");
+                }
+                return LuaValue.valueOf(player.openBlockInventory(
+                        (int) requireCoordinate(args.arg(1)),
+                        (int) requireCoordinate(args.arg(2)),
+                        (int) requireCoordinate(args.arg(3))));
             }
         });
         playerApi.set("open_menu", new VarArgFunction() {

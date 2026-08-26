@@ -38,6 +38,16 @@ public class LuaScreen extends Screen {
     private final java.util.List<net.minecraft.client.gui.widget.ClickableWidget> widgets =
             new java.util.ArrayList<>();
 
+    /**
+     * A camada de cada widget, na mesma ordem da lista acima.
+     *
+     * <p>Um botao e widget do jogo e desenha na profundidade zero, enquanto os elementos com camada
+     * desenham deslocados para frente. Um modal aberto sobre outro cobria os proprios botoes: o
+     * painel do modal de cima passava na frente deles, e o botao sumia de uma tela que continuava
+     * respondendo ao clique — o pior sintoma possivel, porque nada parece quebrado.
+     */
+    private final java.util.List<Integer> widgetLayers = new java.util.ArrayList<>();
+
     /** Recorte, rolagem e clique de celula, compartilhados com a sobreposicao. */
     private final ScreenSurface surface = new ScreenSurface();
 
@@ -91,6 +101,7 @@ public class LuaScreen extends Screen {
         clearChildren();
         fields.clear();
         widgets.clear();
+        widgetLayers.clear();
         buildWidgets(previous);
 
         // Devolve o foco ao campo em que o jogador estava digitando.
@@ -104,6 +115,7 @@ public class LuaScreen extends Screen {
     protected void init() {
         fields.clear();
         widgets.clear();
+        widgetLayers.clear();
         buildWidgets(Map.of());
     }
 
@@ -143,6 +155,7 @@ public class LuaScreen extends Screen {
                         .builder(Text.literal(element.text()), button -> send(element.id(), "click", ""))
                         .dimensions(pos[0], pos[1], Math.max(20, element.w()), Math.max(12, element.h()))
                         .build()));
+                widgetLayers.add(element.layer());
             } else if (element.type().equals("input")) {
                 TextFieldWidget existing = previous.get(element.id());
 
@@ -151,6 +164,7 @@ public class LuaScreen extends Screen {
                     existing.setPosition(pos[0], pos[1]);
                     fields.put(element.id(), existing);
                     widgets.add(addDrawableChild(existing));
+                    widgetLayers.add(element.layer());
                     continue;
                 }
 
@@ -163,6 +177,7 @@ public class LuaScreen extends Screen {
 
                 fields.put(element.id(), field);
                 widgets.add(addDrawableChild(field));
+                widgetLayers.add(element.layer());
             }
         }
     }
@@ -190,8 +205,17 @@ public class LuaScreen extends Screen {
 
         // Os widgets sao desenhados por ultimo, para ficarem sobre os elementos do mod. Nao se
         // chama Screen.render aqui: ele repintaria o fundo por cima do que acabou de ser desenhado.
-        for (var widget : widgets) {
-            widget.render(context, mouseX, mouseY, delta);
+        for (int i = 0; i < widgets.size(); i++) {
+            int layer = i < widgetLayers.size() ? widgetLayers.get(i) : 0;
+            if (layer > 0) {
+                context.getMatrices().push();
+                context.getMatrices().translate(0f, 0f, layer * 250f);
+            }
+            try {
+                widgets.get(i).render(context, mouseX, mouseY, delta);
+            } finally {
+                if (layer > 0) context.getMatrices().pop();
+            }
         }
         // O icone de um botao vem depois dele, senao o proprio botao o cobriria.
         surface.drawButtonIcons(context, textRenderer, model.elements(), window, window);

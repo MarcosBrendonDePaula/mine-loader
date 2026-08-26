@@ -335,6 +335,24 @@ public interface GameBridge {
     }
 
     /**
+     * Onde cada slot daquela maquina aparece na tela <b>dela</b>.
+     *
+     * <p>Uma fornalha desenha os tres slots em L, com a seta no meio; um moedor de outro mod desenha
+     * do jeito dele. Listar em fileira funciona e nao se parece com nada -- o jogador reconhece a
+     * maquina pela forma, e uma tela de configuracao que nao tem a forma dela obriga a contar slots
+     * para saber qual e qual.
+     *
+     * <p>As posicoes vem do proprio menu da maquina, montado e descartado sem ser mostrado: e o mesmo
+     * objeto que o jogo usa para desenhar, entao nao ha o que divergir. So os slots <b>dela</b>
+     * entram -- os do inventario do jogador sao reconhecidos por pertencerem a outro inventario.
+     *
+     * @return uma linha por slot, {@code "slot;x;y"}; vazia quando o bloco nao tem menu proprio
+     */
+    default java.util.List<String> containerSlotLayout(int x, int y, int z) {
+        return java.util.List.of();
+    }
+
+    /**
      * Escreve um slot de um inventario declarado, trocando o que estiver la.
      *
      * <p>Diferente de {@code insertInto}, que <b>acrescenta</b> respeitando o portao de maquina:

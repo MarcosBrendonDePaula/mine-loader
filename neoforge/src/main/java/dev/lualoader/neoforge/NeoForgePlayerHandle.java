@@ -243,6 +243,22 @@ public class NeoForgePlayerHandle implements PlayerHandle {
     // ------------------------------------------------------------------ janelas
 
     @Override
+    public boolean openBlockInventory(int x, int y, int z) {
+        var pos = new net.minecraft.core.BlockPos(x, y, z);
+        var level = player.level();
+
+        // A fabrica vem do bloco, e nao de uma tabela nossa: e o mesmo caminho do clique, entao um
+        // bloco que abre algo pelo clique abre a mesma coisa por aqui.
+        var provider = level.getBlockState(pos).getMenuProvider(level, pos);
+        if (provider == null) return false;
+
+        // Com janela declarada a posicao vai junto, como no clique: e o unico dado que o cliente
+        // precisa para achar o desenho no manifesto que ele ja tem.
+        player.openMenu(provider, buffer -> buffer.writeBlockPos(pos));
+        return true;
+    }
+
+    @Override
     public void openMenu(String menuId, String title, int rows, List<String> items) {
         int lines = Math.max(1, Math.min(6, rows));
         var contents = NeoForgeLuaMenu.build(items, lines);

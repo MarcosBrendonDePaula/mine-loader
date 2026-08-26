@@ -171,6 +171,52 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public List<String> containerSlotLayout(int x, int y, int z) {
+        ServerLevel level = requireLevel();
+        BlockPos pos = new BlockPos(x, y, z);
+
+        // O menu vem do bloco, e nao de uma tabela nossa: e o mesmo objeto que o jogo usa para
+        // desenhar a tela dele, entao nao ha o que divergir.
+        net.minecraft.world.MenuProvider provider =
+                level.getBlockState(pos).getMenuProvider(level, pos);
+        if (provider == null) return List.of();
+
+        // Montar um menu exige um jogador. Qualquer um serve: a posicao dos slots da maquina nao
+        // depende de quem abriu -- so os slots do inventario do jogador dependem, e esses sao
+        // descartados abaixo.
+        net.minecraft.server.level.ServerPlayer player = level.getServer().getPlayerList().getPlayers().stream()
+                .findFirst().orElse(null);
+        if (player == null) {
+            throw new BridgeException("container_slot_layout precisa de um jogador no servidor");
+        }
+
+        List<String> layout = new ArrayList<>();
+        try {
+            // Um id que nao colide com menu aberto nenhum: este menu e lido e jogado fora, nunca
+            // mostrado nem registrado.
+            net.minecraft.world.inventory.AbstractContainerMenu menu = provider.createMenu(-1, player.getInventory(), player);
+            if (menu == null) return List.of();
+
+            net.minecraft.world.Container inventarioDoJogador = player.getInventory();
+            int indice = 0;
+            for (net.minecraft.world.inventory.Slot slot : menu.slots) {
+                // Os slots do jogador aparecem em toda tela e nao sao da maquina: reconhecidos por
+                // pertencerem a outro inventario, e nao por posicao -- posicao varia por tela.
+                if (slot.container == inventarioDoJogador) continue;
+                layout.add(indice++ + ";" + slot.x + ";" + slot.y);
+            }
+        } catch (RuntimeException error) {
+            // `createMenu` e codigo de outro mod rodando fora do contexto que ele espera. Alguns
+            // registram ouvintes ali e nao gostam de ser chamados assim. Falhar aqui devolve a
+            // lista vazia, e quem chamou desenha em fileira -- pior desenho, nenhum estrago.
+            NeoForgeLuaLoader.LOGGER.warn("Nao consegui ler o desenho da tela de {},{},{}: {}",
+                    x, y, z, error.toString());
+            return List.of();
+        }
+        return layout;
+    }
+
+    @Override
     public int containerSize(int x, int y, int z) {
         IItemHandler handler = itemHandlerAt(x, y, z);
         if (handler == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);

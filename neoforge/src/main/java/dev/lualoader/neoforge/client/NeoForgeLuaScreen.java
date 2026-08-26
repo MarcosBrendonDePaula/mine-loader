@@ -42,6 +42,16 @@ public class NeoForgeLuaScreen extends Screen {
      */
     private final List<AbstractWidget> widgets = new ArrayList<>();
 
+    /**
+     * A camada de cada widget, na mesma ordem da lista acima.
+     *
+     * <p>Um botao e widget do jogo e desenha na profundidade zero, enquanto os elementos com camada
+     * desenham deslocados para frente. Um modal aberto sobre outro cobria os proprios botoes: o
+     * painel do modal de cima passava na frente deles, e o botao sumia de uma tela que continuava
+     * respondendo ao clique — o pior sintoma possivel, porque nada parece quebrado.
+     */
+    private final List<Integer> widgetLayers = new ArrayList<>();
+
     /** Recorte, rolagem e clique de celula, compartilhados com a sobreposicao. */
     private final NeoForgeScreenSurface surface = new NeoForgeScreenSurface();
 
@@ -73,6 +83,7 @@ public class NeoForgeLuaScreen extends Screen {
         clearWidgets();
         fields.clear();
         widgets.clear();
+        widgetLayers.clear();
         buildWidgets(previous);
 
         // Devolve o foco ao campo em que o jogador estava digitando.
@@ -86,6 +97,7 @@ public class NeoForgeLuaScreen extends Screen {
     protected void init() {
         fields.clear();
         widgets.clear();
+        widgetLayers.clear();
         buildWidgets(Map.of());
     }
 
@@ -126,6 +138,7 @@ public class NeoForgeLuaScreen extends Screen {
                                 button -> send(element.id(), "click", ""))
                         .bounds(pos[0], pos[1], Math.max(20, element.w()), Math.max(12, element.h()))
                         .build()));
+                widgetLayers.add(element.layer());
             } else if (element.type().equals("input")) {
                 EditBox existing = previous.get(element.id());
 
@@ -134,6 +147,7 @@ public class NeoForgeLuaScreen extends Screen {
                     existing.setPosition(pos[0], pos[1]);
                     fields.put(element.id(), existing);
                     widgets.add(addRenderableWidget(existing));
+                    widgetLayers.add(element.layer());
                     continue;
                 }
 
@@ -146,6 +160,7 @@ public class NeoForgeLuaScreen extends Screen {
 
                 fields.put(element.id(), field);
                 widgets.add(addRenderableWidget(field));
+                widgetLayers.add(element.layer());
             }
         }
     }
@@ -173,8 +188,17 @@ public class NeoForgeLuaScreen extends Screen {
 
         // Os widgets sao desenhados por ultimo, para ficarem sobre os elementos do mod. Nao se
         // chama Screen.render aqui: ele repintaria o fundo por cima do que acabou de ser desenhado.
-        for (AbstractWidget widget : widgets) {
-            widget.render(graphics, mouseX, mouseY, delta);
+        for (int i = 0; i < widgets.size(); i++) {
+            int layer = i < widgetLayers.size() ? widgetLayers.get(i) : 0;
+            if (layer > 0) {
+                graphics.pose().pushPose();
+                graphics.pose().translate(0f, 0f, layer * 250f);
+            }
+            try {
+                widgets.get(i).render(graphics, mouseX, mouseY, delta);
+            } finally {
+                if (layer > 0) graphics.pose().popPose();
+            }
         }
         // O icone de um botao vem depois dele, senao o proprio botao o cobriria.
         surface.drawButtonIcons(graphics, font, model.elements(), window, window);

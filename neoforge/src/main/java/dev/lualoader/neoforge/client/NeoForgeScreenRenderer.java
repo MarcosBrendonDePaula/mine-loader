@@ -75,6 +75,25 @@ public final class NeoForgeScreenRenderer {
      */
     public static void draw(GuiGraphics graphics, Font font,
                             ScreenModel.Element element, int x, int y) {
+        // A camada vira profundidade, e nao ordem de desenho.
+        //
+        // A ordem da lista nao basta: o jogo desenha icone de item com deslocamento proprio de
+        // cerca de cem, entao um item do fundo passa por cima de qualquer retangulo desenhado
+        // depois. O degrau e maior que esse deslocamento justamente para o painel de cima cobrir o
+        // item de baixo.
+        if (element.layer() > 0) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0f, 0f, element.layer() * 250f);
+        }
+        try {
+            desenhar(graphics, font, element, x, y);
+        } finally {
+            if (element.layer() > 0) graphics.pose().popPose();
+        }
+    }
+
+    private static void desenhar(GuiGraphics graphics, Font font,
+                                 ScreenModel.Element element, int x, int y) {
         switch (element.type()) {
             case "panel" -> panel(graphics, element, x, y);
             case "label" -> {

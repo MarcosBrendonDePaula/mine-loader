@@ -835,6 +835,52 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public java.util.List<String> containerSlotLayout(int x, int y, int z) {
+        var world = requireWorld();
+        BlockPos pos = new BlockPos(x, y, z);
+
+        // O menu vem do bloco, e nao de uma tabela nossa: e o mesmo objeto que o jogo usa para
+        // desenhar a tela dele, entao nao ha o que divergir.
+        var factory = world.getBlockState(pos).createScreenHandlerFactory(world, pos);
+        if (factory == null) return java.util.List.of();
+
+        // Montar um menu exige um jogador. Qualquer um serve: a posicao dos slots da maquina nao
+        // depende de quem abriu -- so os slots do inventario do jogador dependem, e esses sao
+        // descartados abaixo.
+        var player = world.getServer() == null ? null
+                : world.getServer().getPlayerManager().getPlayerList().stream()
+                        .findFirst().orElse(null);
+        if (player == null) {
+            throw new BridgeException("container_slot_layout precisa de um jogador no servidor");
+        }
+
+        java.util.List<String> layout = new java.util.ArrayList<>();
+        try {
+            // Um id que nao colide com menu aberto nenhum: este menu e lido e jogado fora, nunca
+            // mostrado nem registrado.
+            var menu = factory.createMenu(-1, player.getInventory(), player);
+            if (menu == null) return java.util.List.of();
+
+            var inventarioDoJogador = player.getInventory();
+            int indice = 0;
+            for (var slot : menu.slots) {
+                // Os slots do jogador aparecem em toda tela e nao sao da maquina: reconhecidos por
+                // pertencerem a outro inventario, e nao por posicao -- posicao varia por tela.
+                if (slot.inventory == inventarioDoJogador) continue;
+                layout.add(indice++ + ";" + slot.x + ";" + slot.y);
+            }
+        } catch (RuntimeException error) {
+            // `createMenu` e codigo de outro mod rodando fora do contexto que ele espera. Alguns
+            // registram ouvintes ali e nao gostam de ser chamados assim. Falhar aqui devolve a
+            // lista vazia, e quem chamou desenha em fileira -- pior desenho, nenhum estrago.
+            dev.lualoader.LuaLoaderMod.LOGGER.warn("Nao consegui ler o desenho da tela de {},{},{}: {}",
+                    x, y, z, error.toString());
+            return java.util.List.of();
+        }
+        return layout;
+    }
+
+    @Override
     public int containerSize(int x, int y, int z) {
         var storage = itemStorageAt(x, y, z);
         if (storage == null) throw new BridgeException("nao ha inventario em " + x + "," + y + "," + z);

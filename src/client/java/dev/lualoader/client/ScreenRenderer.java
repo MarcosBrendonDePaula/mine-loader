@@ -62,6 +62,25 @@ public final class ScreenRenderer {
      */
     public static void draw(DrawContext context, TextRenderer textRenderer,
                             ScreenModel.Element element, int x, int y) {
+        // A camada vira profundidade, e nao ordem de desenho.
+        //
+        // A ordem da lista nao basta: o jogo desenha icone de item com deslocamento proprio de
+        // cerca de cem, entao um item do fundo passa por cima de qualquer retangulo desenhado
+        // depois. O degrau e maior que esse deslocamento justamente para o painel de cima cobrir o
+        // item de baixo.
+        if (element.layer() > 0) {
+            context.getMatrices().push();
+            context.getMatrices().translate(0f, 0f, element.layer() * 250f);
+        }
+        try {
+            desenhar(context, textRenderer, element, x, y);
+        } finally {
+            if (element.layer() > 0) context.getMatrices().pop();
+        }
+    }
+
+    private static void desenhar(DrawContext context, TextRenderer textRenderer,
+                                 ScreenModel.Element element, int x, int y) {
         switch (element.type()) {
             case "panel" -> panel(context, element, x, y);
             case "label" -> {
