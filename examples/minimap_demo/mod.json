@@ -20,6 +20,7 @@
       "world.block_state.read": "1.0.0",
       "ui.menu": "1.0.0",
       "client.input.keybind": "1.0.0",
+      "server.command.schema": "1.0.0",
       "player.data.read": "1.0.0",
       "player.data.write": "1.0.0"
     }

@@ -57,6 +57,7 @@ public final class RuntimeContract {
         capabilities.put("events.lifecycle", "1.0.0");
         capabilities.put("scheduler.after", "1.0.0");
         capabilities.put("scheduler.block", "1.0.0");
+        capabilities.put("server.command.schema", "1.0.0");
         capabilities.put("ui.menu", "1.0.0");
         capabilities.put("ui.screen", "1.0.0");
         capabilities.put("client.input.keybind", "1.0.0");

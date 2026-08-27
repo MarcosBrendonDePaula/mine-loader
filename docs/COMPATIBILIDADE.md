@@ -14,6 +14,7 @@ A promessa do MineLoader é que o mod declarativo dependa do contrato do loader,
 | Registro de entidades e ovos de criação | sim | sim | sim | sim |
 | Resource pack gerado | sim | sim | sim | sim |
 | Eventos, comandos e scheduler | sim | sim | sim | sim |
+| Schemas de comandos e autocomplete | sim, Brigadier | sim, Brigadier | sim, Brigadier | sim, Brigadier |
 | Inventário e block data | sim | sim | sim | sim |
 | Leitura de potência redstone | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge |
 | Estado de bloco (`block_state`/`set_block_state`) | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |
@@ -40,6 +41,7 @@ As linhas de OBJ, renderer de entidades, cores de ovos, reparação e partícula
 |---|---|
 | `./gradlew :core:test` | passou, incluindo estado de bloco, Game Rules, dificuldade, redstone e `player.data` |
 | `./gradlew compileAllRuntimes` | passou para Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 |
+| `CommandSchemaTest` + bridges Brigadier | schema, argumentos nomeados e compatibilidade legada passaram; quatro bridges compilados |
 | `:runtimes:fabric:1.21.1:runGametest` | 22/22 testes obrigatórios passaram |
 | `:runtimes:fabric:1.21.4:runGametest` | 22/22 testes obrigatórios passaram |
 | `:runtimes:neoforge:1.21.1:runGameTestServer` | 22/22 testes obrigatórios passaram |

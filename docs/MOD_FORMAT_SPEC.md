@@ -138,6 +138,10 @@ executar Lua no cliente. O contrato e os limites estão em [HOTKEYS.md](HOTKEYS.
 Os exemplos completos estão em [`docs/examples/`](examples/), incluindo um consumidor de capabilities,
 um consumidor de domínio e um mod que combina `dependencies` com `requires`.
 
+### 2.4 Schemas declarativos de comandos
+
+A forma estruturada de `mod.command(nome, schema, callback)` exige a capability `server.command.schema` além da permissão `server.command.register`. O schema é declarado no Lua, não como um campo arbitrário do manifesto, porque o callback e a árvore são compilados juntos no mesmo entrypoint. Literais, argumentos tipados, limites e sugestões são validados pelo core e publicados pelo bridge. A forma legada `mod.command(nome, callback)` continua válida e usa texto livre. Consulte [COMMANDS.md](COMMANDS.md) para o contrato completo.
+
 ## 3. Blocos
 
 A declaração de bloco é composta por identidade, material, configurações, estados, renderização, item, drops, tags e comportamento.

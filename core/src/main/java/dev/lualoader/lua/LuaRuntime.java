@@ -1,5 +1,6 @@
 package dev.lualoader.lua;
 
+import dev.lualoader.command.CommandSchema;
 import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.manifest.LoaderEvents;
 import dev.lualoader.manifest.ManifestImports;
@@ -533,13 +534,29 @@ public final class LuaRuntime {
         return java.util.Set.copyOf(commands.keySet());
     }
 
+    /** Schema estruturado de um comando, ou {@code null} para o formato legado livre. */
+    public CommandSchema commandSchema(String name) {
+        RegisteredCommand command = commands.get(name);
+        return command == null ? null : command.schema();
+    }
+
     /**
-     * Executa um comando registrado por um mod.
-     *
-     * @param arguments texto digitado depois do nome do comando
-     * @return {@code false} quando o comando nao existe
+     * Executa um comando legado, preservando o contrato de texto livre existente.
      */
     public boolean runCommand(String name, PlayerHandle player, String arguments) {
+        return runCommand(name, player, arguments, null, Map.of());
+    }
+
+    /**
+     * Executa um comando estruturado com tokens e argumentos já validados pelo bridge.
+     *
+     * @param arguments texto digitado depois do nome do comando
+     * @param wordList tokens do caminho estruturado, ou {@code null} no modo legado
+     * @param values argumentos nomeados validados pelo bridge
+     * @return {@code false} quando o comando nao existe
+     */
+    public boolean runCommand(String name, PlayerHandle player, String arguments,
+                              List<String> wordList, Map<String, String> values) {
         RegisteredCommand command = commands.get(name);
         if (command == null) return false;
 
@@ -553,19 +570,26 @@ public final class LuaRuntime {
             String text = arguments == null ? "" : arguments.trim();
             context.set("args", LuaValue.valueOf(text));
 
-            // Alem do texto cru, o script recebe as palavras separadas e o primeiro termo como
-            // subcomando, que e o formato que quase todo comando acaba montando a mao.
-            LuaTable words = new LuaTable();
-            String subcommand = "";
-            if (!text.isEmpty()) {
-                String[] parts = text.split("\s+");
-                for (int index = 0; index < parts.length; index++) {
-                    words.set(index + 1, LuaValue.valueOf(parts[index]));
-                }
-                subcommand = parts[0];
+            // O formato legado separa o texto no próprio core. O bridge estruturado entrega os
+            // tokens já resolvidos para preservar argumentos string com espaços.
+            List<String> suppliedWords = wordList;
+            if (suppliedWords == null) {
+                suppliedWords = text.isEmpty() ? List.of() : List.of(text.split("\\s+"));
             }
-            context.set("argv", words);
+            LuaTable argv = new LuaTable();
+            String subcommand = suppliedWords.isEmpty() ? "" : suppliedWords.get(0);
+            for (int index = 0; index < suppliedWords.size(); index++) {
+                argv.set(index + 1, LuaValue.valueOf(suppliedWords.get(index)));
+            }
+            context.set("argv", argv);
             context.set("subcommand", LuaValue.valueOf(subcommand));
+
+            LuaTable commandApi = new LuaTable();
+            commandApi.set("name", LuaValue.valueOf(name));
+            commandApi.set("structured", LuaValue.valueOf(command.schema() != null));
+            commandApi.set("arguments", toLuaMap(values, command.schema()));
+            commandApi.set("path", toLuaList(suppliedWords));
+            context.set("command", commandApi);
 
             command.callback().call(context);
         } catch (LuaError error) {
@@ -1075,13 +1099,30 @@ public final class LuaRuntime {
                 if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
                     throw new LuaError("nome de comando invalido: " + name);
                 }
-                if (!args.arg(2).isfunction()) throw new LuaError("command exige uma funcao");
+
+                LuaFunction callback;
+                CommandSchema schema = null;
+                if (args.arg(2).istable()) {
+                    if (args.narg() < 3 || !args.arg(3).isfunction()) {
+                        throw new LuaError("command com schema exige uma funcao no terceiro argumento");
+                    }
+                    if (mod.manifest().requires == null
+                            || mod.manifest().requires.capabilities == null
+                            || !mod.manifest().requires.capabilities.containsKey("server.command.schema")) {
+                        throw new LuaError("command com schema exige requires.capabilities.server.command.schema");
+                    }
+                    schema = readCommandSchema((LuaTable) args.arg(2));
+                    callback = (LuaFunction) args.arg(3);
+                } else {
+                    if (!args.arg(2).isfunction()) throw new LuaError("command exige uma funcao");
+                    callback = (LuaFunction) args.arg(2);
+                }
 
                 RegisteredCommand existing = commands.get(name);
                 if (existing != null && !existing.modId().equals(mod.manifest().id)) {
                     throw new LuaError("comando " + name + " ja registrado pelo mod " + existing.modId());
                 }
-                commands.put(name, new RegisteredCommand(mod.manifest().id, (LuaFunction) args.arg(2)));
+                commands.put(name, new RegisteredCommand(mod.manifest().id, schema, callback));
                 return LuaValue.NIL;
             }
         });
@@ -3792,11 +3833,110 @@ public final class LuaRuntime {
                 station.isnil() ? null : requireIdentifier(station.tojstring()));
     }
 
+    private static CommandSchema readCommandSchema(LuaTable table) {
+        if (table.length() == 0) {
+            throw new LuaError("schema de comando nao pode ser vazio");
+        }
+
+        List<CommandSchema.Node> roots = new ArrayList<>();
+        for (int index = 1; index <= table.length(); index++) {
+            LuaValue entry = table.get(index);
+            if (entry.isnil()) throw new LuaError("schema de comando nao pode ter lacunas");
+            roots.add(readCommandNode(entry.checktable(), 0));
+        }
+        try {
+            return new CommandSchema(roots);
+        } catch (IllegalArgumentException error) {
+            throw new LuaError("schema de comando invalido: " + error.getMessage());
+        }
+    }
+
+    private static CommandSchema.Node readCommandNode(LuaTable table, int depth) {
+        if (depth > CommandSchema.MAX_DEPTH) {
+            throw new LuaError("schema de comando excede a profundidade " + CommandSchema.MAX_DEPTH);
+        }
+
+        LuaValue literalValue = table.get("literal");
+        LuaValue argumentValue = table.get("argument");
+        boolean hasLiteral = !literalValue.isnil();
+        boolean hasArgument = !argumentValue.isnil();
+        if (hasLiteral == hasArgument) {
+            throw new LuaError("cada no deve declarar literal ou argument");
+        }
+
+        List<CommandSchema.Node> children = new ArrayList<>();
+        LuaValue childValue = table.get("children");
+        if (!childValue.isnil()) {
+            LuaTable childTable = childValue.checktable();
+            for (int index = 1; index <= childTable.length(); index++) {
+                LuaValue child = childTable.get(index);
+                if (child.isnil()) throw new LuaError("children de comando nao pode ter lacunas");
+                children.add(readCommandNode(child.checktable(), depth + 1));
+            }
+        }
+
+        LuaValue executableValue = table.get("executes");
+        boolean executable = executableValue.isnil() ? children.isEmpty() : executableValue.checkboolean();
+        try {
+            if (hasLiteral) {
+                return CommandSchema.Node.literal(literalValue.checkjstring(), executable, children);
+            }
+            return CommandSchema.Node.argument(readCommandArgument(argumentValue.checktable()), executable, children);
+        } catch (IllegalArgumentException error) {
+            throw new LuaError("no de comando invalido: " + error.getMessage());
+        }
+    }
+
+    private static CommandSchema.Argument readCommandArgument(LuaTable table) {
+        String name = table.get("name").checkjstring();
+        String type = table.get("type").isnil() ? "word" : table.get("type").checkjstring();
+        Double min = optionalNumber(table, "min");
+        Double max = optionalNumber(table, "max");
+
+        List<String> suggestions = new ArrayList<>();
+        LuaValue suggestionValue = table.get("suggestions");
+        if (!suggestionValue.isnil()) {
+            LuaTable suggestionTable = suggestionValue.checktable();
+            if (suggestionTable.length() > CommandSchema.MAX_SUGGESTIONS) {
+                throw new LuaError("argumento " + name + " excede o limite de sugestões");
+            }
+            for (int index = 1; index <= suggestionTable.length(); index++) {
+                suggestions.add(suggestionTable.get(index).checkjstring());
+            }
+        }
+        return new CommandSchema.Argument(name, type, min, max, suggestions);
+    }
+
+    private static LuaTable toLuaMap(Map<String, String> values, CommandSchema schema) {
+        LuaTable table = new LuaTable();
+        if (values == null) return table;
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            LuaValue value = LuaValue.valueOf(entry.getValue());
+            if (schema != null) {
+                CommandSchema.Argument definition = schema.argument(entry.getKey());
+                if (definition != null) {
+                    try {
+                        value = switch (definition.type()) {
+                            case "integer" -> LuaValue.valueOf(Integer.parseInt(entry.getValue()));
+                            case "double" -> LuaValue.valueOf(Double.parseDouble(entry.getValue()));
+                            case "boolean" -> LuaValue.valueOf(Boolean.parseBoolean(entry.getValue()));
+                            default -> value;
+                        };
+                    } catch (NumberFormatException ignored) {
+                        // O bridge já validou o tipo; manter o texto é mais seguro que falhar o callback.
+                    }
+                }
+            }
+            table.set(entry.getKey(), value);
+        }
+        return table;
+    }
+
     private record RegisteredMenu(String modId, LuaFunction callback) {
     }
 
-    /** Comando registrado por um mod. */
-    private record RegisteredCommand(String modId, LuaFunction callback) {
+    /** Comando registrado por um mod, legado ou com árvore estruturada. */
+    private record RegisteredCommand(String modId, CommandSchema schema, LuaFunction callback) {
     }
 
     /** Hotkey declarada no manifesto e ligada a um callback Lua do mesmo mod. */

@@ -429,12 +429,25 @@ local function on_player_joined(ctx)
     end
 end
 
-mod.command("minimap_demo", function(ctx)
+mod.command("minimap_demo", {
+    { literal = "on" },
+    { literal = "off" },
+    { literal = "config" },
+    { literal = "zoom", children = {
+        { argument = {
+            name = "level",
+            type = "integer",
+            min = ZOOM_MIN,
+            max = ZOOM_MAX,
+            suggestions = { "1", "2", "3", "4" }
+        }}
+    }}
+}, function(ctx)
     if ctx.player == nil then
         return
     end
 
-    local action = ctx.argv[2] or "on"
+    local action = ctx.argv[1] or ""
 
     if action == "config" then
         abrir_config(ctx)
@@ -448,8 +461,8 @@ mod.command("minimap_demo", function(ctx)
     end
 
     if action == "zoom" then
-        local pedido = tonumber(ctx.argv[3] or "")
-        if pedido == nil or pedido < ZOOM_MIN or pedido > ZOOM_MAX then
+        local pedido = tonumber(ctx.command.arguments.level or "")
+        if pedido == nil then
             ctx.player.send_message("Uso: /mod minimap_demo zoom <1..4>")
             return
         end
@@ -469,8 +482,6 @@ mod.command("minimap_demo", function(ctx)
         end
         return
     end
-
-    ctx.player.send_message("Uso: /mod minimap_demo on|off|config|zoom <1..4>")
 end)
 
 mod.keybind("toggle", function(ctx)

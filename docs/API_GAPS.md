@@ -31,7 +31,7 @@ na mesma mudança que o implementa.
 | Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
 | Agendamento | `mod.after` |
-| Comandos | `mod.command`, publicado em `/mod <nome>` |
+| Comandos | `mod.command`, publicado em `/mod <nome>`; schema tipado e autocomplete via `server.command.schema` |
 | Cliente | `client_screen_opened`, `client_screen_closed`, com `ctx.client.screen` |
 | Estado | `mod.state`, por mod, persistido em disco |
 | Entre mods | `mod.require`, com `dependencies` |

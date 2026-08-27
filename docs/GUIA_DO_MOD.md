@@ -626,6 +626,42 @@ O comando é publicado como `/mod <nome>`. O contexto traz três formas do que f
 | `ctx.argv` | `{"dar", "diamante", "3"}` |
 | `ctx.subcommand` | `"dar"` |
 
+Para ter uma estrutura real no autocomplete, declare o schema e exija a capability `server.command.schema`:
+
+```json
+{
+  "permissions": ["server.command.register"],
+  "requires": {
+    "capabilities": {
+      "server.command.schema": "1.0.0"
+    }
+  }
+}
+```
+
+```lua
+mod.command("guilda", {
+    { literal = "status" },
+    { literal = "dar", children = {
+        { argument = {
+            name = "item",
+            type = "word",
+            suggestions = { "diamante", "ferro", "ouro" }
+        }, children = {
+            { argument = { name = "quantidade", type = "integer", min = 1, max = 64 } }
+        }}
+    }}
+}, function(ctx)
+    if ctx.argv[1] == "dar" then
+        local item = ctx.command.arguments.item
+        local quantidade = ctx.command.arguments.quantidade
+        ctx.player.give_item("minecraft:" .. item, quantidade)
+    end
+end)
+```
+
+Neste formato, o Minecraft sugere `status` e `dar`, valida a quantidade entre 1 e 64 e entrega os valores nomeados em `ctx.command.arguments`. O formato antigo continua válido para mods que preferem interpretar `ctx.args` manualmente. A referência completa está em [COMMANDS.md](COMMANDS.md).
+
 ## Tempo
 
 ```lua

@@ -23,6 +23,7 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.server.set_weather(kind, duration)` | `world.write` | Altera o clima por uma duração em ticks | quatro runtimes |
 | `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
+| `mod.command(nome, schema, callback)` | `server.command.register` | Árvore tipada, autocomplete e `ctx.command.arguments` | quatro runtimes |
 
 A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
 
@@ -120,6 +121,16 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
 | `dependencies` | `biblioteca_ui: 2.0.0` | Exige código de outro mod |
 
 A lista canónica de domínios e capabilities vive em `RuntimeContract` no core. Um bridge pode mudar a implementação interna, mas não pode publicar um nome diferente para a mesma operação nem declarar uma versão maior sem alterar a semântica do contrato.
+
+## Schemas de comandos
+
+`mod.command(nome, schema, callback)` é a forma estruturada de registar um comando. O schema é uma árvore de literais e argumentos portáveis (`word`, `string`, `greedy_string`, `integer`, `double` e `boolean`). O bridge publica a árvore no dispatcher do Minecraft, por isso os literais e as sugestões estáticas aparecem no autocomplete e os limites numéricos são validados antes de o Lua correr.
+
+O formato antigo `mod.command(nome, callback)` continua a publicar um `greedy_string` e permanece compatível. Um mod que usa a forma estruturada deve exigir `server.command.schema: 1.0.0` e manter `server.command.register`. O callback recebe `ctx.command.arguments`, `ctx.command.path` e `ctx.command.structured`, além de `ctx.args`, `ctx.argv` e `ctx.subcommand`.
+
+O core valida a árvore antes de a instalar: cada nó declara exactamente um literal ou argumento, os identificadores e tipos são fechados, os limites numéricos são consistentes e há limites de 128 nós, 8 níveis, 32 sugestões por argumento e 64 caracteres por sugestão. Sugestões dinâmicas executadas por Lua ainda não fazem parte do contrato.
+
+A especificação completa está em [COMMANDS.md](COMMANDS.md).
 
 ## Bibliotecas e require dinâmico
 

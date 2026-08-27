@@ -1,12 +1,25 @@
 package dev.lualoader;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
+import dev.lualoader.command.CommandSchema;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public final class LuaLoaderCommands {
     private LuaLoaderCommands() {
@@ -43,14 +56,115 @@ public final class LuaLoaderCommands {
 
         var root = CommandManager.literal("mod");
         for (String name : runtime.commandNames()) {
-            root = root.then(CommandManager.literal(name)
-                    .executes(context -> runModCommand(context.getSource(), name, ""))
-                    .then(CommandManager.argument("args", StringArgumentType.greedyString())
-                            .executes(context -> runModCommand(context.getSource(), name,
-                                    StringArgumentType.getString(context, "args")))));
+            CommandSchema schema = runtime.commandSchema(name);
+            var command = CommandManager.literal(name);
+            if (schema == null) {
+                command.executes(context -> runModCommand(context.getSource(), name, ""))
+                        .then(CommandManager.argument("args", StringArgumentType.greedyString())
+                                .executes(context -> runModCommand(context.getSource(), name,
+                                        StringArgumentType.getString(context, "args"))));
+            } else {
+                for (CommandSchema.Node node : schema.roots()) {
+                    command.then(buildNode(node, name));
+                }
+            }
+            root = root.then(command);
         }
         dispatcher.register(root);
         LuaLoaderMod.LOGGER.info("Comandos de mod publicados: {}", runtime.commandNames());
+    }
+
+    private static ArgumentBuilder<ServerCommandSource, ?> buildNode(CommandSchema.Node node, String name) {
+        ArgumentBuilder<ServerCommandSource, ?> builder;
+        if (node.literal() != null) {
+            LiteralArgumentBuilder<ServerCommandSource> literal = CommandManager.literal(node.literal());
+            builder = literal;
+        } else {
+            CommandSchema.Argument argument = node.argument();
+            RequiredArgumentBuilder<ServerCommandSource, ?> required =
+                    CommandManager.argument(argument.name(), argumentType(argument));
+            if (!argument.suggestions().isEmpty()) {
+                required.suggests((context, suggestions) -> {
+                    for (String value : argument.suggestions()) suggestions.suggest(value);
+                    return suggestions.buildFuture();
+                });
+            }
+            builder = required;
+        }
+        for (CommandSchema.Node child : node.children()) {
+            builder.then(buildNode(child, name));
+        }
+        if (node.executable()) {
+            builder.executes(context -> runStructuredCommand(context.getSource(), name, context));
+        }
+        return builder;
+    }
+
+    private static ArgumentType<?> argumentType(CommandSchema.Argument argument) {
+        return switch (argument.type()) {
+            case "word" -> StringArgumentType.word();
+            case "string" -> StringArgumentType.string();
+            case "greedy_string" -> StringArgumentType.greedyString();
+            case "integer" -> IntegerArgumentType.integer(integerMin(argument), integerMax(argument));
+            case "double" -> DoubleArgumentType.doubleArg(doubleMin(argument), doubleMax(argument));
+            case "boolean" -> BoolArgumentType.bool();
+            default -> throw new IllegalArgumentException("tipo de argumento não suportado: " + argument.type());
+        };
+    }
+
+    private static int integerMin(CommandSchema.Argument argument) {
+        return argument.min() == null ? Integer.MIN_VALUE : (int) Math.ceil(argument.min());
+    }
+
+    private static int integerMax(CommandSchema.Argument argument) {
+        return argument.max() == null ? Integer.MAX_VALUE : (int) Math.floor(argument.max());
+    }
+
+    private static double doubleMin(CommandSchema.Argument argument) {
+        return argument.min() == null ? -Double.MAX_VALUE : argument.min();
+    }
+
+    private static double doubleMax(CommandSchema.Argument argument) {
+        return argument.max() == null ? Double.MAX_VALUE : argument.max();
+    }
+
+    private static int runStructuredCommand(ServerCommandSource source, String name,
+                                            CommandContext<ServerCommandSource> context) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) return 0;
+
+        String arguments = commandTail(context.getInput(), name);
+        List<String> words = arguments.isEmpty() ? List.of() : List.of(arguments.split("\\s+"));
+        Map<String, String> values = new LinkedHashMap<>();
+        CommandSchema schema = runtime.commandSchema(name);
+        if (schema != null) {
+            for (String key : schema.argumentNames()) {
+                try {
+                    values.put(key, String.valueOf(context.getArgument(key, Object.class)));
+                } catch (IllegalArgumentException ignored) {
+                    // O argumento pertence a uma ramificação que não foi escolhida.
+                }
+            }
+        }
+
+        var player = source.getPlayer();
+        boolean exists = runtime.runCommand(name,
+                player == null ? null : new dev.lualoader.minecraft.FabricPlayerHandle(player),
+                arguments, words, values);
+        if (!exists) {
+            source.sendError(Text.literal("Comando de mod desconhecido: " + name));
+            return 0;
+        }
+        return 1;
+    }
+
+    private static String commandTail(String input, String name) {
+        String value = input == null ? "" : input.trim();
+        if (value.startsWith("/")) value = value.substring(1);
+        String prefix = "mod " + name;
+        if (value.equals(prefix)) return "";
+        if (value.startsWith(prefix + " ")) return value.substring(prefix.length()).trim();
+        return "";
     }
 
     private static int runModCommand(ServerCommandSource source, String name, String arguments) {

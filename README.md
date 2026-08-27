@@ -146,6 +146,7 @@ O Lua recebe tabelas e escalares simples. Classes Java, referências vivas do Mi
 | Conteúdo | blocos, itens, entidades, spawn eggs, tags, loot, estruturas, processos e herança declarativa |
 | Eventos | ciclo de vida, ticks, jogador, blocos, itens, entidades, cliente e menus |
 | Interface | menus, telas, HUD, sobreposições e protocolo fechado servidor-cliente |
+| Comandos | `mod.command()` legado ou schema tipado com autocomplete |
 | Bibliotecas | `mod.require()` para exports Lua de outro mod declarado em `dependencies` |
 | Contrato | `requires.domains` e `requires.capabilities` com versões do MineLoader |
 
@@ -171,7 +172,7 @@ A pasta [examples/](examples/) contém mods usados pela bateria de GameTests e p
 | `gerenciador` | Catálogo, activação e instalação por link |
 | `bestiario` | Entidades declaradas, variantes e herança |
 | `logistica` | Rede de canos e entrega de itens |
-| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, marcador, coordenadas e dimensão |
+| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, configuração, marcador, coordenadas e dimensão |
 
 Os exemplos documentais de capabilities, domínios e bibliotecas entre mods ficam separados em [docs/examples/](docs/examples/), para não serem carregados pela bateria de GameTests.
 
