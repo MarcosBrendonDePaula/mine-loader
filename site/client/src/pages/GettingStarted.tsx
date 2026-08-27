@@ -7,7 +7,7 @@ import { Check, FileCode2, FolderTree, Play, TerminalSquare } from "lucide-react
 import { Link } from "wouter";
 import { DocCallout, DocCode, DocsShell } from "@/components/DocsShell";
 
-const startServer = `# Linux e macOS
+const startServer = String.raw`# Linux e macOS
 git clone https://github.com/MarcosBrendonDePaula/mine-loader.git
 cd mine-loader
 ./gradlew runServer
