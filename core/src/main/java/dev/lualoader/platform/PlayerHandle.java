@@ -7,6 +7,17 @@ package dev.lualoader.platform;
  * estas operações.
  */
 public interface PlayerHandle {
+    /** Snapshot imutável de um efeito activo, sem expor a classe de efeitos da plataforma. */
+    record ActiveEffect(String id, int duration, int amplifier,
+                        boolean ambient, boolean showParticles) {
+    }
+
+    /** Snapshot imutável do movimento e da postura do jogador. */
+    record Movement(double velocityX, double velocityY, double velocityZ,
+                    boolean onGround, boolean sneaking, boolean sprinting,
+                    boolean swimming, boolean flying, boolean gliding) {
+    }
+
     String name();
 
     String uuid();
@@ -268,6 +279,16 @@ public interface PlayerHandle {
 
     default void clearEffects() {
         throw new BridgeException("clear_effects nao existe neste adaptador");
+    }
+
+    /** Efeitos activos, em snapshot independente da entidade real. */
+    default java.util.List<ActiveEffect> activeEffects() {
+        throw new BridgeException("effects nao existe neste adaptador");
+    }
+
+    /** Velocidade e estados de movimento actuais, sem referências vivas ao jogador. */
+    default Movement movement() {
+        throw new BridgeException("movement nao existe neste adaptador");
     }
 
     // ------------------------------------------------------------------ feedback

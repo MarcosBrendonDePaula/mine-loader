@@ -45,7 +45,10 @@ public final class RuntimeContract {
         capabilities.put("world.redstone.read", "1.0.0");
         capabilities.put("world.biome.read", "1.0.0");
         capabilities.put("world.light.read", "1.0.0");
+        capabilities.put("world.item_drop", "1.0.0");
         capabilities.put("player.looking_at.read", "1.0.0");
+        capabilities.put("player.effects.read", "1.0.0");
+        capabilities.put("player.movement.read", "1.0.0");
         capabilities.put("player.data.read", "1.0.0");
         capabilities.put("player.data.write", "1.0.0");
         capabilities.put("entity.read", "1.0.0");
@@ -56,6 +59,7 @@ public final class RuntimeContract {
         capabilities.put("registry.query", "1.0.0");
         capabilities.put("events.lifecycle", "1.0.0");
         capabilities.put("scheduler.after", "1.0.0");
+        capabilities.put("scheduler.every", "1.0.0");
         capabilities.put("scheduler.block", "1.0.0");
         capabilities.put("server.command.schema", "1.0.0");
         capabilities.put("ui.menu", "1.0.0");

@@ -442,6 +442,26 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
         player.clearStatusEffects();
     }
 
+    @Override
+    public java.util.List<ActiveEffect> activeEffects() {
+        java.util.List<ActiveEffect> result = new java.util.ArrayList<>();
+        for (var effect : player.getStatusEffects()) {
+            Identifier id = Registries.STATUS_EFFECT.getId(effect.getEffectType().value());
+            if (id == null) continue;
+            result.add(new ActiveEffect(id.toString(), effect.getDuration(), effect.getAmplifier(),
+                    effect.isAmbient(), effect.shouldShowParticles()));
+        }
+        return java.util.List.copyOf(result);
+    }
+
+    @Override
+    public Movement movement() {
+        var velocity = player.getVelocity();
+        return new Movement(velocity.x, velocity.y, velocity.z,
+                player.isOnGround(), player.isSneaking(), player.isSprinting(),
+                player.isSwimming(), player.getAbilities().flying, player.isFallFlying());
+    }
+
     // ------------------------------------------------------------------ feedback
 
     @Override

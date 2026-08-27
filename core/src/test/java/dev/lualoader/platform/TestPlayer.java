@@ -181,6 +181,19 @@ public class TestPlayer implements PlayerHandle {
 
     /** Tamanho de tela que este jogador reporta; null simula cliente que nao informou. */
     public int[] screenSize = {427, 240};
+    public java.util.List<ActiveEffect> effects = java.util.List.of();
+    public Movement movement = new Movement(0.0, 0.0, 0.0,
+            true, false, false, false, false, false);
+
+    @Override
+    public java.util.List<ActiveEffect> activeEffects() {
+        return java.util.List.copyOf(effects);
+    }
+
+    @Override
+    public Movement movement() {
+        return movement;
+    }
 
     @Override
     public int[] screenSize() {

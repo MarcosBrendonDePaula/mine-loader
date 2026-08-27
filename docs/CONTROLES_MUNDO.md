@@ -15,7 +15,9 @@ Hora e clima já são parte do contrato: `ctx.server.time_of_day()`, `set_time_o
 | Dificuldade | `difficulty`, `set_difficulty` | Quatro valores; recusa mundo com dificuldade bloqueada |
 | Terreno | `top_y`, `biome_at`, `light_at` | Consulta física; sem dependência de mod de mapa |
 | Construção | `set_block`, `fill`, `break_block`, `place_structure` | Limites de região e coordenadas continuam activos |
-| Automação | `redstone_signal`, `schedule_block` | A fila de ticks é a do jogo e só aceita bloco declarativo |
+| Automação | `redstone_signal`, `schedule_block`, `mod.after`, `mod.every`, `mod.cancel` | A fila de blocos é a do jogo; tarefas Lua têm limite e são limpas no reload |
+| Jogador | `player.effects()`, `player.movement()` | Snapshots neutros de efeitos, velocidade e postura; exigem `player.read` |
+| Loot | `ctx.server.drop_item(item, x, y, z, count)` | Exige `entity.spawn`; 1 a 4096 itens por chamada, divididos em stacks |
 
 A documentação oficial do Fabric trata Game Rules como configurações específicas do mundo que controlam, entre outros exemplos, nascimento de monstros e passagem do tempo [1]. Por isso o MineLoader expõe uma whitelist própria em vez de entregar um mapa livre de propriedades internas.
 
@@ -56,24 +58,26 @@ Dimensões novas, portais e worldgen são uma etapa separada. Criar uma dimensã
 
 ### Prioridade P0: mundo vivo
 
-| Capability | API futura | Motivo | Limite obrigatório |
+| Capability | API / próxima etapa | Motivo | Limite obrigatório |
 |---|---|---|---|
-| Drops no mundo | `world.drop_item(id, quantidade, x, y, z)` | Recompensas, máquinas e processos customizados | Quantidade, frequência e raio limitados |
+| Drops no mundo | `ctx.server.drop_item(item, x, y, z, count)` | Recompensas, máquinas e processos customizados | 1–4096 itens por chamada; exige `entity.spawn` |
 | Evento de quebra | `block_broken` com posição, id, jogador e drops | Redes e máquinas reagem sem polling | Contexto capturado antes de o bloco desaparecer |
 | Explosão | `world.explode(x, y, z, força, modo)` | Magia, bombas, máquinas e bosses | Força, área e frequência limitadas |
 | Raio | `world.strike_lightning(x, y, z)` | Tempestades e eventos especiais | Frequência e permissão específicas |
 
 ### Prioridade P1: jogador e máquinas
 
-Depois entram efeitos ativos, armadura equipada, postura, vetor de movimento, slots do jogador e partículas direcionadas. Para inventários de máquinas ainda falta um contrato de transferência por face e filtros de inserção; fluidos e energia devem usar unidades do próprio loader, não `FluidStack`, `IItemHandler` ou capabilities.
+Efeitos activos, postura e vetor de movimento já estão disponíveis como snapshots. Continuam pendentes
+armadura equipada, slots do jogador e partículas direccionadas. Para inventários de máquinas ainda
+falta um contrato de transferência por face e filtros de inserção; fluidos e energia devem usar
+unidades do próprio loader, não `FluidStack`, `IItemHandler` ou capabilities.
 
-| Capability | API futura | Uso |
+| Capability | API | Uso |
 |---|---|---|
-| Efeitos activos | `player.effects()` | Status, cura, progressão e interfaces |
-| Equipamento | `player.equipment()` | Classes, set bônus e protecção |
-| Postura | `player.pose()` | Agachar, correr, voar, nadar |
-| Movimento | `player.velocity()` | Zonas de velocidade, parkour e física declarativa |
-| Slot do jogador | `player.inventory_slot(n)` e escrita validada | Kits, filtros e ferramentas |
+| Efeitos activos | `ctx.player.effects()` | Status, cura, progressão e interfaces |
+| Equipamento | ainda futura | Classes, set bônus e protecção |
+| Postura e movimento | `ctx.player.movement()` | Agachar, correr, voar, nadar e verificar velocidade |
+| Slot do jogador | ainda futuro | Kits, filtros e ferramentas |
 | Transferência por face | `container.insert(..., face)` e `extract(..., face)` | Funis, tubos e máquinas direccionais |
 | Fluido/energia | Unidades próprias do loader | Automação portável sem classes de plataforma |
 
@@ -101,7 +105,12 @@ Eventos de alta frequência, como chunk e inventário por tick, precisam de orç
 
 ## Ordem recomendada
 
-A sequência que maximiza utilidade sem aumentar demais o risco é estado de bloco, regras, dificuldade, drops e quebra; depois explosão, raio e jogador completo; em seguida transferência por face, fluidos e energia; por fim waypoints, teleporte entre dimensões e worldgen limitado. Networking declarativo deve usar payloads pequenos e versionados, schema fechado, direcção explícita, limite de tamanho e validação no servidor [2].
+A sequência que maximiza utilidade sem aumentar demais o risco agora deixa estado de bloco, regras,
+dificuldade, drop de itens, efeitos, movimento e scheduler recorrente fechados. O próximo bloco é
+quebra com contexto, explosão, raio e jogador completo; em seguida transferência por face, fluidos e
+energia; por fim waypoints, teleporte entre dimensões e worldgen limitado. Networking declarativo deve
+usar payloads pequenos e versionados, schema fechado, direcção explícita, limite de tamanho e validação
+no servidor [2].
 
 A 1.21.4 só deve ser promovida de experimental para compatível quando OBJ, renderização declarada de entidades, formato de receitas e as capacidades degradadas forem validados. Compilar não é o mesmo que ter paridade visual.
 

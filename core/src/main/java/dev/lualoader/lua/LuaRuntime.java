@@ -61,6 +61,13 @@ public final class LuaRuntime {
     /** Teto de tarefas agendadas simultaneas, para um laco de agendamento nao consumir a memoria. */
     private static final int MAX_SCHEDULED = 4_096;
 
+    /** Sequência interna para IDs de tarefas, monotónica durante a vida do runtime. */
+    private long nextTaskSequence;
+
+    /** Tarefa recorrente que pediu cancelamento durante o próprio callback. */
+    private String runningTaskId;
+    private final Set<String> cancelledRunningTasks = new java.util.HashSet<>();
+
     /** Teto de modulos por mod, para uma cadeia de imports nao crescer sem limite. */
     private static final int MAX_MODULES = 128;
 
@@ -437,6 +444,9 @@ public final class LuaRuntime {
         for (ScheduledTask task : due) {
             LoadedScript script = scripts.get(task.modId());
             if (script == null) continue;
+            boolean repeat = task.intervalTicks() > 0;
+            LuaValue result = LuaValue.NIL;
+            runningTaskId = task.id();
             try {
                 script.budget().start();
                 // **Confere que ele ainda esta no servidor.** Um jogador que saiu deixa um handle
@@ -444,16 +454,32 @@ public final class LuaRuntime {
                 // melhor das hipoteses, trabalho perdido.
                 PlayerHandle dono = task.player();
                 if (dono != null && !bridge.onlinePlayers().contains(dono.name())) dono = null;
-                task.callback().call(context(script.mod(), dono, null));
+                result = task.callback().call(context(script.mod(), dono, null));
+                // Apenas false para uma tarefa recorrente a interrompe; qualquer outro retorno,
+                // inclusive nil, mantém o comportamento natural de um callback sem retorno.
+                if (task.intervalTicks() > 0 && result.isboolean() && !result.toboolean()) {
+                    repeat = false;
+                }
             } catch (LuaError error) {
+                repeat = false;
                 logger.error("Erro Lua em tarefa agendada do mod {}: {}", task.modId(), error.getMessage());
             } catch (BridgeException error) {
+                repeat = false;
                 logger.error("Erro de plataforma em tarefa agendada do mod {}: {}",
                         task.modId(), error.getMessage());
             } catch (RuntimeException error) {
+                repeat = false;
                 logger.error("Erro Java em tarefa agendada do mod {}", task.modId(), error);
             } finally {
                 script.budget().stop();
+                runningTaskId = null;
+            }
+
+            boolean cancelled = cancelledRunningTasks.remove(task.id());
+            if (repeat && !cancelled && scheduled.size() < MAX_SCHEDULED) {
+                scheduled.add(new ScheduledTask(task.id(), task.modId(),
+                        currentTick + task.intervalTicks(), task.intervalTicks(),
+                        task.callback(), task.player()));
             }
         }
     }
@@ -661,6 +687,17 @@ public final class LuaRuntime {
             script.budget().stop();
         }
         return true;
+    }
+
+    private String scheduleTask(String modId, int dueInTicks, int intervalTicks,
+                                 LuaFunction callback, PlayerHandle player) {
+        if (scheduled.size() >= MAX_SCHEDULED) {
+            throw new LuaError("limite de " + MAX_SCHEDULED + " tarefas agendadas atingido");
+        }
+        String id = modId + ":task-" + (++nextTaskSequence);
+        scheduled.add(new ScheduledTask(id, modId, currentTick + dueInTicks,
+                intervalTicks, callback, player));
+        return id;
     }
 
     /** Quantidade de tarefas ainda pendentes, usada em diagnostico e testes. */
@@ -1300,7 +1337,7 @@ public final class LuaRuntime {
             }
         });
 
-        modApi.set("after", new VarArgFunction() {
+                modApi.set("after", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
                 if (args.narg() < 2) throw new LuaError("after exige ticks e uma funcao");
@@ -1310,15 +1347,41 @@ public final class LuaRuntime {
                     throw new LuaError("ticks fora do intervalo permitido: " + ticks);
                 }
                 if (!args.arg(2).isfunction()) throw new LuaError("after exige uma funcao");
-
-                if (scheduled.size() >= MAX_SCHEDULED) {
-                    throw new LuaError("limite de " + MAX_SCHEDULED + " tarefas agendadas atingido");
-                }
-                scheduled.add(new ScheduledTask(mod.manifest().id, currentTick + ticks,
-                        (LuaFunction) args.arg(2), actingPlayer));
+                scheduleTask(mod.manifest().id, ticks, 0, (LuaFunction) args.arg(2), actingPlayer);
                 return LuaValue.NIL;
             }
         });
+        modApi.set("every", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requireCapability(mod.manifest(), "scheduler.every");
+                if (args.narg() < 2) throw new LuaError("every exige ticks e uma funcao");
+                int ticks = args.arg(1).checkint();
+                if (ticks < 1 || ticks > 1_728_000) {
+                    throw new LuaError("intervalo fora do intervalo permitido: " + ticks);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("every exige uma funcao");
+                String id = scheduleTask(mod.manifest().id, ticks, ticks,
+                        (LuaFunction) args.arg(2), actingPlayer);
+                return LuaValue.valueOf(id);
+            }
+        });
+        modApi.set("cancel", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                String id = value.checkjstring();
+                String prefix = mod.manifest().id + ":task-";
+                if (!id.startsWith(prefix)) return LuaValue.FALSE;
+                if (id.equals(runningTaskId)) {
+                    cancelledRunningTasks.add(id);
+                    return LuaValue.TRUE;
+                }
+                boolean removed = scheduled.removeIf(task -> task.id().equals(id)
+                        && task.modId().equals(mod.manifest().id));
+                return LuaValue.valueOf(removed);
+            }
+        });
+
 
         modApi.set("require", new OneArgFunction() {
             @Override
@@ -2521,6 +2584,23 @@ public final class LuaRuntime {
                         readEntitySpec(args.arg(5))));
             }
         });
+        serverApi.set("drop_item", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "entity.spawn");
+                if (args.narg() < 5) {
+                    throw new LuaError("drop_item exige item, x, y, z e quantidade");
+                }
+                String id = requireIdentifier(args.arg(1).tojstring());
+                int count = args.arg(5).checkint();
+                if (count < 1 || count > 4096) {
+                    throw new LuaError("quantidade de drop_item deve estar entre 1 e 4096");
+                }
+                return LuaValue.valueOf(bridge.dropItem(id,
+                        requireCoordinateDouble(args.arg(2)), requireCoordinateDouble(args.arg(3)),
+                        requireCoordinateDouble(args.arg(4)), count));
+            }
+        });
         serverApi.set("entities_near", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -3124,6 +3204,20 @@ public final class LuaRuntime {
             public LuaValue call() {
                 requirePermission(mod.manifest(), "player.read");
                 return LuaValue.valueOf(player.dimension());
+            }
+        });
+        playerApi.set("effects", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                return toLuaEffects(player.activeEffects());
+            }
+        });
+        playerApi.set("movement", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                return toLuaMovement(player.movement());
             }
         });
         playerApi.set("apply_effect", new VarArgFunction() {
@@ -3740,6 +3834,14 @@ public final class LuaRuntime {
         return coordinate;
     }
 
+    private static double requireCoordinateDouble(LuaValue value) {
+        double coordinate = value.checkdouble();
+        if (!Double.isFinite(coordinate) || coordinate < -MAX_COORDINATE || coordinate > MAX_COORDINATE) {
+            throw new LuaError("coordenada fora do intervalo permitido: " + coordinate);
+        }
+        return coordinate;
+    }
+
     /**
      * Lê o que o script declarou sobre uma entidade.
      *
@@ -3983,6 +4085,13 @@ public final class LuaRuntime {
         }
     }
 
+    private static void requireCapability(ModManifest manifest, String capability) {
+        if (manifest.requires == null || manifest.requires.capabilities == null
+                || !manifest.requires.capabilities.containsKey(capability)) {
+            throw new LuaError("capability ausente em requires.capabilities: " + capability);
+        }
+    }
+
     /**
      * @param exports tabela devolvida pelo entrypoint, que e a API publica do mod para
      *                {@code mod.require}
@@ -4204,8 +4313,41 @@ public final class LuaRuntime {
      * <p>{@code null} quando ninguem a agendou -- um tique de mundo, o arranque do servidor --, e
      * ai {@code ctx.player} continua nulo, como sempre foi.
      */
-    private record ScheduledTask(String modId, long dueTick, LuaFunction callback,
-                                 PlayerHandle player) {
+    private record ScheduledTask(String id, String modId, long dueTick, int intervalTicks,
+                                 LuaFunction callback, PlayerHandle player) {
+    }
+
+    private static LuaTable toLuaEffects(java.util.List<PlayerHandle.ActiveEffect> effects) {
+        LuaTable list = new LuaTable();
+        if (effects == null) return list;
+        int index = 1;
+        for (PlayerHandle.ActiveEffect effect : effects) {
+            LuaTable value = new LuaTable();
+            value.set("id", LuaValue.valueOf(effect.id()));
+            value.set("duration", LuaValue.valueOf(effect.duration()));
+            value.set("amplifier", LuaValue.valueOf(effect.amplifier()));
+            value.set("ambient", LuaValue.valueOf(effect.ambient()));
+            value.set("show_particles", LuaValue.valueOf(effect.showParticles()));
+            list.set(index++, value);
+        }
+        return list;
+    }
+
+    private static LuaTable toLuaMovement(PlayerHandle.Movement movement) {
+        LuaTable value = new LuaTable();
+        if (movement == null) return value;
+        LuaTable velocity = new LuaTable();
+        velocity.set("x", LuaValue.valueOf(movement.velocityX()));
+        velocity.set("y", LuaValue.valueOf(movement.velocityY()));
+        velocity.set("z", LuaValue.valueOf(movement.velocityZ()));
+        value.set("velocity", velocity);
+        value.set("on_ground", LuaValue.valueOf(movement.onGround()));
+        value.set("sneaking", LuaValue.valueOf(movement.sneaking()));
+        value.set("sprinting", LuaValue.valueOf(movement.sprinting()));
+        value.set("swimming", LuaValue.valueOf(movement.swimming()));
+        value.set("flying", LuaValue.valueOf(movement.flying()));
+        value.set("gliding", LuaValue.valueOf(movement.gliding()));
+        return value;
     }
 
     /** Uma lista de textos como tabela Lua indexada a partir de um. */

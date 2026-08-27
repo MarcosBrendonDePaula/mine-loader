@@ -460,6 +460,26 @@ public class NeoForgePlayerHandle implements PlayerHandle {
         player.removeAllEffects();
     }
 
+    @Override
+    public List<ActiveEffect> activeEffects() {
+        List<ActiveEffect> result = new java.util.ArrayList<>();
+        for (var effect : player.getActiveEffects()) {
+            ResourceLocation id = BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value());
+            if (id == null) continue;
+            result.add(new ActiveEffect(id.toString(), effect.getDuration(), effect.getAmplifier(),
+                    effect.isAmbient(), effect.isVisible()));
+        }
+        return List.copyOf(result);
+    }
+
+    @Override
+    public Movement movement() {
+        var velocity = player.getDeltaMovement();
+        return new Movement(velocity.x, velocity.y, velocity.z,
+                player.onGround(), player.isCrouching(), player.isSprinting(),
+                player.isSwimming(), player.getAbilities().flying, player.isFallFlying());
+    }
+
     // ------------------------------------------------------------------ feedback
 
     @Override

@@ -178,6 +178,35 @@ Para câmeras condicionais, o Lua pode registar a definição durante a execuç�
 
 O elemento `map` referencia a câmera com `render = "client_camera"` e `camera = "meu_mod:minimap"`. `resolution`, `radius` e `update_ticks` do elemento são overrides opcionais; quando omitidos, herdam da câmera. O bridge gere o recurso físico e rasteriza uma imagem pequena a partir do estado client-side disponível. Esta capability não é uma câmera 3D arbitrária nem dá ao Lua acesso a framebuffer, OpenGL, `NativeImage`, `Identifier` ou `RenderSystem`.
 
+### 2.6 APIs úteis de runtime
+
+As APIs de runtime seguem o mesmo princípio: o manifesto negocia capabilities, o Lua recebe dados simples e o bridge traduz para a versão do Minecraft. As quatro combinações mantidas entregam as capabilities abaixo na versão `1.0.0`.
+
+| Capability | API | Permissão | Contrato |
+|---|---|---|---|
+| `player.effects.read` | `ctx.player.effects()` | `player.read` | Lista snapshot com `id`, `duration`, `amplifier`, `ambient` e `show_particles`. |
+| `player.movement.read` | `ctx.player.movement()` | `player.read` | Snapshot com `velocity.x/y/z`, `on_ground`, `sneaking`, `sprinting`, `swimming`, `flying` e `gliding`. |
+| `world.item_drop` | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks válidos; quantidade entre 1 e 4096; devolve a quantidade criada. |
+| `scheduler.every` | `mod.every(ticks, callback)` e `mod.cancel(id)` | nenhuma nova | Intervalo entre 1 e 1.728.000 ticks; o callback repete até devolver `false`, falhar ou ser cancelado pelo próprio mod. |
+
+Exemplo mínimo de requisito:
+
+```json
+{
+  "permissions": ["player.read", "entity.spawn"],
+  "requires": {
+    "capabilities": {
+      "player.effects.read": "1.0.0",
+      "player.movement.read": "1.0.0",
+      "world.item_drop": "1.0.0",
+      "scheduler.every": "1.0.0"
+    }
+  }
+}
+```
+
+`mod.after` continua sendo a tarefa única compatível com mods existentes. A tarefa recorrente lembra o jogador do callback original, é eliminada ao recarregar o mod e nunca executa Lua numa thread do cliente. Efeitos e movimento são leituras: não há mutação de `Player`, `MobEffectInstance`, vector ou qualquer objecto vivo atravessando a fronteira.
+
 ## 3. Blocos
 
 A declaração de bloco é composta por identidade, material, configurações, estados, renderização, item, drops, tags e comportamento.

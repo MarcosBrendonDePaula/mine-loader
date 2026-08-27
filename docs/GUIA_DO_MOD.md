@@ -296,24 +296,46 @@ ctx.server.entity_types({ namespace = "minecraft" })
 
 As tres aceitam o mesmo filtro e o mesmo teto -- sem limite declarado, 256; o maximo e 4096.
 
-## Uma tela que se atualiza sozinha
+## Tarefas agendadas
 
-`mod.after` agenda uma funcao para daqui a N tiques. **A tarefa lembra de quem a agendou**: se ela
-nasceu dentro de um evento de jogador -- um clique de tela, um comando --, `ctx.player` volta a
-valer dentro dela. E o que permite uma maquina ter numero que anda.
+`mod.after(ticks, callback)` agenda uma execução única. `mod.every(ticks, callback)` cria uma tarefa
+recorrente e devolve um ID lógico privado ao mod. A tarefa continua enquanto o callback não devolver
+`false`; `mod.cancel(id)` também a encerra. Erros no callback encerram a tarefa recorrente para evitar
+que um erro se repita a cada tick.
+
+**A tarefa lembra de quem a agendou**: se nasceu dentro de um evento de jogador — um clique de tela,
+um comando ou um join —, `ctx.player` volta a valer dentro dela. Se esse jogador sair, o callback
+recebe `ctx.player == nil`.
 
 ```lua
-local INTERVALO = 1   -- um tique; a tela do jogo anda assim
+local INTERVALO = 5
+local tarefa
 
+tarefa = mod.every(INTERVALO, function(ctx)
+    if ctx.player == nil then
+        return false
+    end
+
+    ctx.player.send_action_bar("posição: " .. table.concat(ctx.player.position(), ","))
+    return true
+end)
+
+-- Mais tarde, a própria lógica pode parar o processo:
+-- mod.cancel(tarefa)
+```
+
+Para uma tela que abre e fecha, a guarda de estado continua importante:
+
+```lua
 local function acompanhar(ctx, estado, geracao)
-    mod.after(INTERVALO, function(depois)
-        -- Para quando a tela fecha, e quando outra abertura tomou o lugar desta.
-        if not estado.aberta or estado.geracao ~= geracao then return end
-        if depois.player == nil then return end
-
+    local tarefa = mod.every(1, function(depois)
+        if not estado.aberta or estado.geracao ~= geracao or depois.player == nil then
+            return false
+        end
         depois.player.update_screen(desenhar(depois, estado))
-        acompanhar(depois, estado, geracao)
+        return true
     end)
+    estado.tarefa = tarefa
 end
 ```
 
@@ -483,11 +505,12 @@ declarar a permissão dela é erro em tempo de execução.
 | `player.menu` | Abrir, atualizar e fechar janelas |
 | `world.read` | Ler blocos, estado, regras, dificuldade, bioma, luz, hora, clima e redstone; tocar som e emitir partículas |
 | `world.write` | Alterar blocos/estado, regras, dificuldade, preencher, posicionar estrutura, gravar dados e agendar tique |
+| `entity.spawn` | Invocar entidades e criar itens soltos com `ctx.server.drop_item` |
 | `world.containers` | Ler, inserir e extrair do inventário de um bloco |
 | `server.read` | Jogadores conectados, hora do dia, dimensão, regras, dificuldade e mods carregados |
 | `server.command.register` | Registrar comandos |
 | `server.install` | Instalar e desinstalar mods por link — veja `INSTALACAO.md` |
-| `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
+| `entity.read` / `entity.spawn` / `entity.modify` | Entidades; `entity.spawn` também autoriza `ctx.server.drop_item` |
 | `entity.register` | Declarar espécie nova por script. Mais forte que as três acima: acrescenta um tipo ao registro do jogo, que vale para o mundo inteiro e não se desfaz sem reiniciar |
 
 ## Saber para onde quem joga está olhando
@@ -503,6 +526,38 @@ end
 
 Devolve `x`, `y`, `z` e `side` (`"up"`, `"down"`, `"north"`, `"south"`, `"west"`, `"east"`), ou
 **nil** quando a linha de visão não encontra bloco. Exige `player.read`.
+
+## Estado do jogador, efeitos e itens soltos
+
+`ctx.player.effects()` devolve uma lista snapshot. Cada entrada contém `id`, `duration`, `amplifier`,
+`ambient` e `show_particles`; os valores são copiados no momento da consulta e não são referências a
+objectos do Minecraft.
+
+```lua
+for _, efeito in ipairs(ctx.player.effects()) do
+    if efeito.id == "minecraft:slowness" then
+        ctx.player.send_action_bar("lento por " .. efeito.duration .. " ticks")
+    end
+end
+```
+
+`ctx.player.movement()` devolve `velocity = { x, y, z }` e os booleanos `on_ground`, `sneaking`,
+`sprinting`, `swimming`, `flying` e `gliding`. A leitura exige `player.read`.
+
+```lua
+local movimento = ctx.player.movement()
+if movimento.sprinting and not movimento.on_ground then
+    ctx.player.send_action_bar("salto em sprint")
+end
+```
+
+Para gerar loot fora do inventário, use `ctx.server.drop_item(item, x, y, z, count)`. A operação
+exige `entity.spawn`, aceita de 1 a 4096 itens e devolve a quantidade criada. O bridge divide a
+quantidade em stacks válidos para o item e não aceita identificadores sem namespace.
+
+```lua
+local quantidade = ctx.server.drop_item("minecraft:diamond", 0.5, 65, 0.5, 3)
+```
 
 **`nil` e não zero:** olhar para o céu é uma resposta legítima, e devolver uma posição faria o mod
 agir sobre a origem do mundo sem ninguém ter mirado nela.

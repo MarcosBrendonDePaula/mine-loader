@@ -327,6 +327,25 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public int dropItem(String itemId, double x, double y, double z, int count) {
+        Item item = resolveItemForTransfer(itemId);
+        ServerWorld world = requireWorld();
+        int remaining = count;
+        int dropped = 0;
+        while (remaining > 0) {
+            int batch = Math.min(remaining, item.getMaxCount());
+            net.minecraft.entity.ItemEntity entity = new net.minecraft.entity.ItemEntity(
+                    world, x, y, z, new ItemStack(item, batch));
+            if (!world.spawnEntity(entity)) {
+                throw new BridgeException("nao foi possivel largar " + itemId);
+            }
+            dropped += batch;
+            remaining -= batch;
+        }
+        return dropped;
+    }
+
+    @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
         Identifier id = parseIdentifier(entityId);
         if (!Registries.ENTITY_TYPE.containsId(id)) {

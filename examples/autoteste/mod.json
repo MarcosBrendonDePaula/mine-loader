@@ -20,6 +20,11 @@
     "server.command.register",
     "player.menu"
   ],
+  "requires": {
+    "capabilities": {
+      "scheduler.every": "1.0.0"
+    }
+  },
   "enabled": true,
   "events": {
     "loader_ready": "on_loader_ready",

@@ -22,6 +22,10 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.server.weather()` | `world.read` | `clear`, `rain` ou `thunder` | quatro runtimes |
 | `ctx.server.set_weather(kind, duration)` | `world.write` | Altera o clima por uma duração em ticks | quatro runtimes |
 | `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
+| `ctx.player.effects()` | `player.read` | Lista snapshot de efeitos activos: id, duração, amplificador e flags visuais | quatro runtimes |
+| `ctx.player.movement()` | `player.read` | Snapshot de velocidade, chão, agachamento, sprint, natação, voo e elytra | quatro runtimes |
+| `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks, devolvendo a quantidade criada; máximo 4096 por chamada | quatro runtimes |
+| `mod.every(ticks, callback)` / `mod.cancel(id)` | `scheduler.every` | Tarefa recorrente com ID lógico; `false` no callback ou cancelamento encerra | core e runtimes |
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
 | `mod.camera(id, definição)` | `client.camera.register` e `client.camera.virtual` | Câmera lógica ortográfica, publicada como catálogo S2C versionado; o bridge gere a textura | quatro runtimes |
 | `commands` no JSON + `mod.command`/`mod.command_extend` no Lua | `server.command.register` e `server.command.schema` | Árvore tipada, autocomplete e `ctx.command.arguments`, com merge que recusa conflitos | quatro runtimes |
@@ -175,9 +179,9 @@ Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige
 
 ## Próximas APIs priorizadas
 
-**Drops no mundo e evento de quebra** vêm primeiro. A operação deve criar um item solto com quantidade e limite por chamada; o evento de quebra deve preservar posição, bloco, jogador e contexto de drops antes de o bloco desaparecer. Depois vêm explosão e raio, também com limites de força, frequência e área.
+As APIs de `drop_item`, efeitos activos, movimento e tarefas recorrentes já fazem parte da primeira expansão útil. O drop cria entidades limitadas e exige `entity.spawn`; efeitos e movimento devolvem snapshots neutros, sem referências ao jogador real; `mod.every` mantém o mesmo vínculo ao jogador que `mod.after` e é removido automaticamente quando o callback falha ou devolve `false`.
 
-Na sequência entram efeitos ativos, armadura, postura, vetor de movimento e slots do jogador. Fluidos e energia precisam de unidades próprias do loader, não `FluidStack`, capabilities ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
+**Evento de quebra**, explosão e raio continuam como próximos trabalhos porque precisam de contratos explícitos de cancelamento, ordem entre mods, contexto de drops e limites de área/frequência. Fluidos e energia precisam de unidades próprias do loader, não `FluidStack`, capabilities ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
 
 Networking declarativo deve usar payloads pequenos e versionados, schema fechado, direção explícita, limite de tamanho e validação no servidor. Expor `send_packet` com bytes arbitrários seria incompatível com a sandbox [2]. Data components devem ser expostos somente como dados imutáveis e portáveis para itens declarados, não como o mapa inteiro de componentes internos [8].
 

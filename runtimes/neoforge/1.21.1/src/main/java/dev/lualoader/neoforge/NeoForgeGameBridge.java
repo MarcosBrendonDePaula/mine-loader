@@ -557,6 +557,31 @@ public class NeoForgeGameBridge implements GameBridge {
     // ------------------------------------------------------------------ entidades
 
     @Override
+    public int dropItem(String itemId, double x, double y, double z, int count) {
+        ResourceLocation parsed = parse(itemId);
+        if (!BuiltInRegistries.ITEM.containsKey(parsed)) {
+            throw new BridgeException("item desconhecido: " + itemId);
+        }
+        Item item = BuiltInRegistries.ITEM.get(parsed);
+        ServerLevel level = requireLevel();
+        int remaining = count;
+        int dropped = 0;
+        int maxStackSize = new ItemStack(item).getMaxStackSize();
+        while (remaining > 0) {
+            int batch = Math.min(remaining, maxStackSize);
+            net.minecraft.world.entity.item.ItemEntity entity =
+                    new net.minecraft.world.entity.item.ItemEntity(
+                            level, x, y, z, new ItemStack(item, batch));
+            if (!level.addFreshEntity(entity)) {
+                throw new BridgeException("nao foi possivel largar " + itemId);
+            }
+            dropped += batch;
+            remaining -= batch;
+        }
+        return dropped;
+    }
+
+    @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
         ResourceLocation id = parse(entityId);
         var type = BuiltInRegistries.ENTITY_TYPE.getOptional(id)

@@ -15,7 +15,7 @@ na mesma mudança que o implementa.
 | Dados por bloco | `get_block_data`, `set_block_data` |
 | Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
 | Feedback | `play_sound` com categoria, `spawn_particles` com velocidade |
-| Jogador — leitura | `name`, `uuid`, `position`, `health`, `food`, `experience`, `game_mode`, `dimension`, `held_item`, `inventory`, `screen_size` |
+| Jogador — leitura | `name`, `uuid`, `position`, `health`, `food`, `experience`, `game_mode`, `dimension`, `held_item`, `inventory`, `screen_size`, `effects`, `movement` |
 | Jogador — escrita | `teleport`, `set_health`, `set_food`, `give_experience`, `set_game_mode`, `apply_effect`, `clear_effects` |
 | Jogador — mensagem | `send_message`, `send_action_bar`, `show_title`, `play_sound_to` |
 | Inventário | `count_item`, `give_item`, `take_item`, `clear_inventory` |
@@ -23,14 +23,14 @@ na mesma mudança que o implementa.
 | Tela desenhada | `mod.screen`, `open_screen`, `update_screen`, `close_screen`, `set_hud`, `supports_screens` — as tres primeiras e `set_hud` dizem se chegaram ao cliente |
 | Tela do jogo | `set_overlay`, `clear_overlay` |
 | Diagnóstico de tela | `dump_screen` — devolve onde cada elemento foi parar, e vai para o log |
-| Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity`, `teleport_entity`, `push_entity` |
+| Entidades | `spawn_entity`, `drop_item`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity`, `teleport_entity`, `push_entity` |
 | Bestiário do loader | `declared_entities`, `entity_definition` |
 | Fase de registro | `register.entity`, `register.declared` |
 | Leitura de mundo | `biome_at`, `light_at`, `block_state`, `game_rule` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
 | Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
-| Agendamento | `mod.after` |
+| Agendamento | `mod.after`, `mod.every`, `mod.cancel` |
 | Comandos | `commands` no `mod.json` + `mod.command`/`mod.command_extend` no Lua, publicado em `/mod <nome>`; schema tipado e autocomplete via `server.command.schema` |
 | Cliente | `client_screen_opened`, `client_screen_closed`, com `ctx.client.screen` |
 | Estado | `mod.state`, por mod, persistido em disco |
@@ -40,6 +40,10 @@ na mesma mudança que o implementa.
 
 Entidade e item aceitam dados declarados na criação — nome, equipamento, efeitos, encantamentos,
 atributos. Veja `GUIA_DO_MOD.md`. Exemplos de `requires` estão em `docs/examples/README.md`.
+
+`mod.every(ticks, callback)` exige `requires.capabilities.scheduler.every: "1.0.0"`, aceita intervalos de
+1 a 1.728.000 ticks e devolve um ID que só o próprio mod pode cancelar. A tarefa é removida no
+reload do mod; `false` encerra a repetição e qualquer erro no callback também a encerra.
 
 ## O que dá para construir hoje
 
@@ -59,9 +63,7 @@ mais surpreendem quem esbarra nelas.
 
 | Existe | Falta |
 |---|---|
-| `apply_effect`, `clear_effects` no jogador | ler os efeitos ativos |
 | `spawn_entity`, `damage_entity`, `heal_entity` | mover uma entidade |
-| `mod.after`, que dispara uma vez | repetir a cada N tiques, e cancelar |
 | `play_sound_to`, direcionado a um jogador | partícula direcionada |
 | `map` no HUD, com grelha, marcadores e câmera aérea v1 | mapa-múndi persistente, texturas completas de blocos e navegação integrada |
 
@@ -93,15 +95,17 @@ para regras customizadas nem para alterar a dificuldade de apenas um jogador.
 **Direção do olhar — fechada.** `ctx.player.looking_at(distância)` devolve o primeiro bloco atingido, a
 face e a posição, com alcance limitado. O retorno é `nil` quando a linha de visão não encontra bloco.
 
-**Postura** continua pendente: agachado, correndo, voando e nadando ainda não têm um snapshot estável
-no contrato. Também faltam velocidade e vetor de movimento.
+**Postura e movimento — fechados.** `ctx.player.movement()` devolve velocidade, chão, agachamento,
+sprint, natação, voo e elytra num snapshot estável, sem expor a entidade real nem classes de uma
+plataforma.
 
 ### Efeitos de mundo
 
 **Explosão** e **raio** não existem. São os dois efeitos que um mod de magia ou combate procura
 primeiro.
 
-**Largar item solto no mundo**, sem passar pelo inventário de alguém, também não.
+**Largar item solto — fechado.** `ctx.server.drop_item(item, x, y, z, count)` cria entidades de item
+em stacks válidos, com limite de 4096 itens por chamada, e exige `entity.spawn`.
 
 **Bioma e nível de luz** são legíveis por `biome_at` e `light_at`. A luz volta separada por origem
 — bloco, céu e total —, porque é a luz de **bloco** que decide se um monstro nasce: um lugar

@@ -935,6 +935,19 @@ TESTES.jogador = function(ctx)
     ctx.player.show_title("Autoteste", "verificando a API", 5, 20, 5)
     ctx.player.play_sound_to("minecraft:block.note_block.bell", 0.4, 1.5)
 
+    local efeitos = ctx.player.effects()
+    exigir(type(efeitos) == "table", "effects deveria devolver uma tabela")
+    for _, efeito in ipairs(efeitos) do
+        exigir(efeito.id ~= nil and efeito.duration >= 0 and efeito.amplifier >= 0,
+            "snapshot de efeito invalido")
+    end
+
+    local movimento = ctx.player.movement()
+    exigir(type(movimento) == "table" and type(movimento.velocity) == "table",
+        "movement deveria devolver velocidade")
+    exigir(type(movimento.on_ground) == "boolean" and type(movimento.gliding) == "boolean",
+        "movement deveria devolver estados booleanos")
+
     local carregado = ctx.player.inventory()
     exigir(type(carregado) == "table", "inventory deveria devolver uma tabela")
 end
@@ -991,6 +1004,12 @@ local function on_loader_ready(ctx)
     mod.after(20, function(depois)
         depois.state.agendador_rodou = true
     end)
+    local execucoes = 0
+    mod.every(5, function(depois)
+        execucoes = execucoes + 1
+        depois.state.agendador_recorrente = execucoes
+        return execucoes < 2
+    end)
 end
 
 local function on_player_joined(ctx)
@@ -1026,6 +1045,8 @@ end
 TESTES.agendador = function(ctx)
     exigir(ctx.state.agendador_rodou,
            "mod.after agendado na carga nunca executou; o agendador nao avanca nesta plataforma")
+    exigir(ctx.state.agendador_recorrente == 2,
+           "mod.every deveria executar duas vezes e parar com false")
 end
 
 -- ---------------------------------------------------------------------------------------------

@@ -168,6 +168,15 @@ public interface GameBridge {
     void setBlockData(int x, int y, int z, String json);
 
     /**
+     * Cria entidades de item no mundo, dividindo a quantidade conforme o tamanho máximo do item.
+     *
+     * @return quantidade efectivamente criada
+     */
+    default int dropItem(String itemId, double x, double y, double z, int count) {
+        throw new BridgeException("drop_item nao existe neste adaptador");
+    }
+
+    /**
      * Invoca uma entidade do jogo na posição indicada.
      *
      * @param entityId identificador, por exemplo {@code minecraft:zombie}

@@ -176,9 +176,9 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] **Escrever o estado do bloco** — alteração parcial com propriedades validadas
 - [x] Ler bioma numa posição
 - [x] Ler nível de luz numa posição
+- [x] Largar item solto no mundo, com limite por chamada
 - [ ] Explosão
 - [ ] Raio
-- [ ] Largar item solto no mundo, sem passar pelo inventário de alguém
 - [x] Ler sinal de redstone — emissão dinâmica ainda não faz parte do contrato
 - [x] Game Rules com whitelist e dificuldade do mundo
 - [x] Tique agendado por posição (`schedule_block` / `on_scheduled`) — "volte aqui em N tiques"
@@ -197,9 +197,9 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Contar, dar, tirar e limpar item
 - [x] Item declarado ao dar — nome, lore, dano, encantamento, `custom_model_data`
 - [x] **Direção do olhar** — `player.looking_at` devolve o bloco mirado e a face atingida
-- [ ] Ler efeitos ativos
-- [ ] Postura — agachado, correndo, voando, nadando
-- [ ] Velocidade e vetor de movimento
+- [x] Ler efeitos ativos — snapshot com duração, amplificador e flags visuais
+- [x] Postura — agachado, correndo, voando, nadando
+- [x] Velocidade e vetor de movimento
 - [ ] Empurrão e impulso
 - [ ] Partícula direcionada a um jogador
 - [ ] Ler e escrever um slot específico do inventário do jogador
@@ -233,6 +233,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Servidor: iniciou, parou, loader pronto
 - [x] Tique de servidor
 - [x] `mod.after` — agendado e executado nas duas
+- [x] `mod.every` e `mod.cancel` — tarefa recorrente limitada, com retorno `false` e limpeza em reload
 - [ ] `mod_reloaded` — aceito no registro, **nunca disparado em plataforma nenhuma**
 - [ ] `menu_closed` — aceito no registro, **nunca disparado em plataforma nenhuma**
 - [ ] `onPlace` — campo do manifesto registrado e nunca disparado
@@ -527,10 +528,10 @@ orientação de escadas e troncos, e a impossibilidade de ler se uma porta está
 
 ### Nível 3 — Agência do jogador → destrava *magia*, *arma*, *ferramenta*
 
-- [ ] Direção do olhar
-- [ ] Raycast
-- [ ] Postura e velocidade
-- [ ] Ler efeitos ativos
+- [x] Direção do olhar
+- [x] Raycast
+- [x] Postura e velocidade
+- [x] Ler efeitos ativos
 - [ ] Empurrão e impulso
 - [ ] Partícula direcionada
 - [ ] Explosão e raio

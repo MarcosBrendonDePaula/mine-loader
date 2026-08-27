@@ -108,7 +108,7 @@ O servidor lê mods de `run/mods-lua`. Para testar uma versão específica, use 
 
 ## Manifesto e compatibilidade
 
-O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`.
+O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`. A API Lua também oferece snapshots neutros de efeitos e movimento do jogador, drop de itens no mundo e tarefas recorrentes.
 
 ```json
 {
@@ -126,13 +126,19 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
       "player": "1.0.0"
     },
     "capabilities": {
-      "world.block_state.read": "1.0.0"
+      "world.block_state.read": "1.0.0",
+      "player.effects.read": "1.0.0",
+      "player.movement.read": "1.0.0",
+      "world.item_drop": "1.0.0",
+      "scheduler.every": "1.0.0"
     }
   }
 }
 ```
 
 `dependencies` permite usar `mod.require("ui_lib")` e controla a ordem de carga. `requires` apenas verifica se o runtime oferece o contrato; não instala código nem substitui uma dependency entre mods. A resolução de bibliotecas é feita sob demanda quando necessário e recusa ciclos com a cadeia completa, sem recursão infinita nem scripts parciais.
+
+No Lua, `ctx.player.effects()` e `ctx.player.movement()` devolvem tabelas snapshot, sem objectos Minecraft. `ctx.server.drop_item(item, x, y, z, count)` cria loot limitado no mundo e exige `entity.spawn`. Para lógica periódica, `mod.every(ticks, callback)` exige `scheduler.every: "1.0.0"`, devolve um ID privado e termina quando o callback devolve `false` ou quando o mod chama `mod.cancel(id)`. O guia completo está em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md) e [`docs/GUIA_DO_MOD.md`](docs/GUIA_DO_MOD.md).
 
 As regras completas, campos aceites e limites estão em [docs/MOD_FORMAT_SPEC.md](docs/MOD_FORMAT_SPEC.md). O schema oficial está em [spec/mod.schema.json](spec/mod.schema.json).
 
