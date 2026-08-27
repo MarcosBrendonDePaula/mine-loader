@@ -247,6 +247,7 @@ class ContentContractTest {
         assertEquals("1.0.0", contract.capabilityVersion("registry.item.food"));
         assertEquals("1.0.0", contract.capabilityVersion("registry.item.food.effects"));
         assertEquals("1.0.0", contract.capabilityVersion("registry.item.fuel"));
+        assertEquals("1.0.0", contract.capabilityVersion("events.action.authorization"));
     }
 
     @Test

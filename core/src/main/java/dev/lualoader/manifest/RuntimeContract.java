@@ -49,6 +49,7 @@ public final class RuntimeContract {
         capabilities.put("world.explode", "1.0.0");
         capabilities.put("world.lightning", "1.0.0");
         capabilities.put("events.block.break", "1.0.0");
+        capabilities.put("events.action.authorization", "1.0.0");
         capabilities.put("player.looking_at.read", "1.0.0");
         capabilities.put("player.effects.read", "1.0.0");
         capabilities.put("player.movement.read", "1.0.0");

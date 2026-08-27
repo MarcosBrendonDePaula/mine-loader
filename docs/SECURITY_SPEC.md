@@ -21,6 +21,12 @@ O manifesto declara as capacidades do mod. O loader verifica a permissão durant
 
 Permissões não reconhecidas são erro de validação. O loader não deve inferir permissões a partir do conteúdo Lua.
 
+`events.action.authorization` é uma capability de negociação, não uma permissão administrativa: ela
+habilita o callback `action_attempt`, mas não concede `world.write`, acesso a inventários ou qualquer
+operação adicional. O callback recebe apenas snapshots e pode devolver `false` para negar a ação.
+Como uma falha de um autorizador poderia abrir uma brecha, erros Lua, de bridge ou de runtime são
+tratados como veto (**fail-closed**) e ficam associados ao mod no log.
+
 ## 3. Sandbox Lua
 
 O ambiente Lua deve remover ou substituir bibliotecas que forneçam acesso ao sistema operacional, rede, arquivos, processos, reflexão ou carregamento arbitrário. A ponte Java não será publicada como API genérica.

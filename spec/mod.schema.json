@@ -89,6 +89,7 @@
           "player_left",
           "tick",
           "mod_reloaded",
+          "action_attempt",
           "client_screen_opened",
           "client_screen_closed",
           "block_used",

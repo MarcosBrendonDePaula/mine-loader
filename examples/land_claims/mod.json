@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "land_claims",
+  "name": "Land Claims",
+  "version": "0.1.0",
+  "description": "Exemplo de autorização global para uma regra de claim.",
+  "entrypoint": "main.lua",
+  "requires": {
+    "capabilities": {
+      "events.action.authorization": "1.0.0"
+    }
+  }
+}

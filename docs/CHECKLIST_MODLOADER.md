@@ -226,6 +226,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 ## 8. Eventos
 
 - [x] Bloco: usado, atacado, quebrado, colocado — `block_broken` global cobre ids vanilla e declarativos e `false` cancela a quebra de jogador
+- [x] Autorização global antes de `block.break`, `block.place` e `block.use` — `action_attempt`, capability versionada e fail-closed
 - [x] Item: usado, usado em bloco
 - [x] Menu: clique
 - [x] Tela: `click`, `change`, `submit`, `close`
@@ -245,10 +246,10 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [ ] Item: craftado, fundido, consumido, quebrou
 - [ ] Bloco: explodiu, queimou, cresceu
 - [ ] Chunk: carregou, descarregou
-- [ ] **Cancelamento** — um evento que o mod possa vetar
+- [x] **Cancelamento** — `action_attempt` e eventos de uso/quebra permitem veto por `false`; erro de autorizador bloqueia por segurança
 
-Dezessete eventos, e nenhum de entidade. Sete deles não disparam no NeoForge; dois não disparam em
-lugar nenhum.
+O catálogo mantém eventos legados e agora inclui autorização global antes de ações de bloco. Os
+hooks indirectos continuam separados até existir paridade pré-mutação nos quatro runtimes.
 
 ## 9. Interface
 

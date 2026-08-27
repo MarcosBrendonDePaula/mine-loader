@@ -80,6 +80,7 @@ contrato, não do Minecraft; por isso o mesmo manifesto pode funcionar nos bridg
       "world.block_state.read": "1.0.0",
       "player.looking_at.read": "1.0.0",
       "world.explode": "1.0.0",
+      "events.action.authorization": "1.0.0",
       "player.equipment.read": "1.0.0",
       "player.inventory.slot": "1.0.0"
     }
@@ -144,6 +145,42 @@ end)
 O callback global não recebe explosões, pistões, substituições de script ou outras remoções indirectas.
 Para um bloco declarativo, `behavior.on_broken` continua sendo o callback específico e não duplica o
 global do próprio mod.
+
+### Autorizar ações antes da mutação
+
+Para uma política de claims que precisa proteger blocos de qualquer mod, use `action_attempt`. Ela
+requer a capability `events.action.authorization: 1.0.0` e cobre `block.break`, `block.place` e
+`block.use` antes da ação do jogador. Devolver `false` bloqueia; `nil`, `true` ou outro valor deixa a
+ação seguir. Erros do callback também bloqueiam por segurança.
+
+```json
+{
+  "schema": 1,
+  "id": "land_claims",
+  "name": "Land Claims",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "requires": {
+    "capabilities": {
+      "events.action.authorization": "1.0.0"
+    }
+  }
+}
+```
+
+```lua
+mod.on("action_attempt", function(ctx)
+    -- ctx.actor e ctx.target são snapshots; não são objetos Minecraft.
+    if ctx.action == "block.break"
+       and ctx.target.id == "minecraft:obsidian" then
+        return false
+    end
+end)
+```
+
+O contexto oferece `action`, `dimension`, `x`, `y`, `z`, `target.id`, `actor.uuid`, `actor.name`,
+`source` e `face` quando disponível. A primeira versão só autoriza ações iniciadas por jogador; não
+inclui abertura de containers, pistões, explosões, fogo, fluidos ou outras alterações indirectas.
 
 ### Ler e alterar o estado real de um bloco
 

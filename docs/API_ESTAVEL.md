@@ -37,6 +37,7 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
 | `mod.camera(id, definição)` | `client.camera.register` e `client.camera.virtual` | Câmera lógica ortográfica, publicada como catálogo S2C versionado; o bridge gere a textura | quatro runtimes |
 | `commands` no JSON + `mod.command`/`mod.command_extend` no Lua | `server.command.register` e `server.command.schema` | Árvore tipada, autocomplete e `ctx.command.arguments`, com merge que recusa conflitos | quatro runtimes |
+| `mod.on("action_attempt", callback)` | `events.action.authorization` | Autoriza `block.break`, `block.place` e `block.use` antes da mutação; `false` ou erro cancela | quatro runtimes |
 
 A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
 
@@ -52,6 +53,42 @@ ctx.server.explode(120, 64, -30, 1.5, true) -- destruição explícita
 ```
 
 `ctx.server.strike_lightning(x, y, z)` cria um raio na posição indicada. Ambas as operações exigem uma permissão própria e a capability correspondente; `requires.capabilities` é negociação explícita do contrato, não um bypass de `permissions`. O loader não implementa neste evento uma política de frequência por mod além dos limites da chamada: scripts devem agendar efeitos com parcimónia e evitar loops por tick.
+
+## Autorização global de ações
+
+`mod.on("action_attempt", callback)` é o contrato comum para mods de claims, proteção e permissões.
+O callback é executado antes de uma ação de jogador em bloco vanilla, modded ou declarativo. O manifesto
+deve exigir `events.action.authorization: 1.0.0`; essa capability negocia a superfície do evento, mas
+não concede permissões de escrita ao mod.
+
+```json
+{
+  "requires": {
+    "capabilities": {
+      "events.action.authorization": "1.0.0"
+    }
+  }
+}
+```
+
+O contexto é uma fotografia composta apenas por tabelas, IDs e escalares: `ctx.action` (`block.break`,
+`block.place` ou `block.use`), `ctx.dimension`, `ctx.x/y/z`, `ctx.target.id`, `ctx.actor.uuid/name`,
+`ctx.source` e `ctx.face` quando disponível. Não há `ItemStack`, `BlockState`, entidade Java ou outro
+objeto vivo atravessando o core. Devolver `false` de qualquer autorizador bloqueia a ação; erros de
+Lua, bridge ou runtime também bloqueiam (**fail-closed**). `nil`, `true` ou outro retorno permite-a.
+
+O evento é separado de `block_broken`, `block_placed` e `block_used`. O callback de autorização corre
+primeiro; callbacks legados continuam a ser chamados uma vez para preservar compatibilidade. A
+primeira versão cobre somente ações iniciadas por jogador. Containers, pistões, explosões, fogo,
+fluidos e remoções indirectas ainda não fazem parte do contrato.
+
+```lua
+mod.on("action_attempt", function(ctx)
+    if ctx.action == "block.break" and ctx.target.id == "minecraft:obsidian" then
+        return false
+    end
+end)
+```
 
 ## Evento global de quebra de bloco
 
@@ -163,6 +200,7 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
       "world.explode": "1.0.0",
       "registry.item.food": "1.0.0",
       "registry.item.fuel": "1.0.0",
+      "events.action.authorization": "1.0.0",
       "player.equipment.read": "1.0.0",
       "player.inventory.slot": "1.0.0"
     }

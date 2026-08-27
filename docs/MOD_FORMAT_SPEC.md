@@ -94,6 +94,7 @@ Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 podem satisfazer
     "world.redstone.read": "1.0.0",
     "world.explode": "1.0.0",
     "world.lightning": "1.0.0",
+    "events.action.authorization": "1.0.0",
     "player.equipment.read": "1.0.0",
     "player.inventory.slot": "1.0.0"
   }
@@ -103,8 +104,14 @@ Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 podem satisfazer
 Um **domínio** agrupa uma área da API, como `world`, `player`, `entity`, `inventory`, `registry`,
 `events`, `scheduler`, `ui`, `client` ou `resources`.
  Uma **capability** identifica uma operação menor e mais
-precisa, como `world.block_state.read` ou `world.game_rule.write`. Todos os requisitos declarados são
-obrigatórios: o mod só é descoberto para execução quando todos são satisfeitos.
+precisa, como `world.block_state.read`, `world.game_rule.write` ou `events.action.authorization`.
+Todos os requisitos declarados são obrigatórios: o mod só é descoberto para execução quando todos são
+satisfeitos.
+
+`events.action.authorization: 1.0.0` habilita `mod.on("action_attempt", callback)`. Esse callback
+global corre antes de `block.break`, `block.place` e `block.use`, recebe apenas tabelas, IDs e escalares,
+e pode cancelar devolvendo `false`. Erros do autorizador também bloqueiam a ação. A capability não
+concede permissões de escrita e não cobre containers, pistões, explosões ou outras mutações indirectas.
 
 O nome do domínio usa `^[a-z][a-z0-9_-]{0,31}$`; o nome da capability usa segmentos separados por ponto,
 como `world.block_state.read`. A versão usa `maior.menor.correcao`, com eventual sufixo de pré-lançamento.

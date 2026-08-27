@@ -194,6 +194,22 @@ public class BlockInteractionGameTest implements FabricGameTest {
     }
 
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void authorizationExampleCanDenyAnAction(TestContext context) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) throw new AssertionError("runtime Lua nao foi montado");
+        var denied = runtime.triggerAuthorization(new dev.lualoader.authorization.AuthorizationEventData(
+                "block.break", "minecraft:overworld", 1, 65, 1,
+                "minecraft:obsidian", null, null, "player", "up"), null);
+        var allowed = runtime.triggerAuthorization(new dev.lualoader.authorization.AuthorizationEventData(
+                "block.break", "minecraft:overworld", 1, 65, 1,
+                "minecraft:stone", null, null, "player", "up"), null);
+        if (!denied || allowed) {
+            throw new AssertionError("o autorizador land_claims nao aplicou a politica esperada");
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void bridgeReadsAndWritesDifficulty(TestContext context) {
         var bridge = LuaLoaderMod.gameBridge();
         if (bridge == null) throw new AssertionError("a bridge nao foi montada");

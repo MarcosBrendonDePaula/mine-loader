@@ -33,6 +33,7 @@ exigir `client.input.keybind` sem pedir o domínio inteiro de UI.
     "world.redstone.read": "1.0.0",
     "world.explode": "1.0.0",
     "world.lightning": "1.0.0",
+    "events.action.authorization": "1.0.0",
     "player.looking_at.read": "1.0.0",
     "player.equipment.read": "1.0.0",
     "player.inventory.slot": "1.0.0",
@@ -68,6 +69,13 @@ a `mod.require`. `requires` declara o contrato do **runtime** e não carrega có
 `full_consumer` usa os dois mecanismos: importa código de `library_provider` e, separadamente, exige
 que o runtime ofereça a leitura de estado de bloco.
 
+## `land_claims`
+
+O exemplo executável [`examples/land_claims`](../../examples/land_claims) mostra a nova capability
+`events.action.authorization`. O callback `mod.on("action_attempt", ...)` recebe a tentativa antes da
+mutação e bloqueia a quebra de `minecraft:obsidian`, sem acessar `BlockState`, `ItemStack` ou qualquer
+objeto Java. Ele é deliberadamente pequeno: um mod real guardaria claims e permissões em `mod.state`.
+
 ## Regras de compatibilidade
 
 O loader valida `requires` antes de registrar conteúdo ou executar Lua. Um domínio ou capability
@@ -85,5 +93,6 @@ O perfil comum actual entrega todos estes domínios na versão `1.0.0`: `core`, 
 `entity`, `inventory`, `registry`, `events`, `scheduler`, `ui`, `client` e `resources`.
  O catálogo detalhado de capabilities está em `docs/API_ESTAVEL.md` e no `RuntimeContract` do core.
 A nova leva acrescenta `world.explode`, `world.lightning`, `player.equipment.read`,
-`player.inventory.slot` e `events.block.break`; as duas últimas APIs de jogador continuam protegidas
+`player.inventory.slot`, `events.block.break` e `events.action.authorization`. A autorização global
+é exercida pelo exemplo `land_claims`; as duas últimas APIs de jogador continuam protegidas
 por `player.read` ou `player.inventory` além da capability declarada.

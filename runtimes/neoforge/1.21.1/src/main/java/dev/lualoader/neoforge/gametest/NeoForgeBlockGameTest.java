@@ -216,6 +216,23 @@ public class NeoForgeBlockGameTest {
         helper.succeed();
     }
 
+    /** O exemplo land_claims veta obsidiana e deixa outras quebras passarem. */
+    @GameTest(template = EMPTY)
+    public static void exemploDeAutorizacaoPodeNegarUmaAcao(GameTestHelper helper) {
+        var runtime = dev.lualoader.neoforge.NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null) throw new AssertionError("runtime Lua nao foi montado");
+        var denied = runtime.triggerAuthorization(new dev.lualoader.authorization.AuthorizationEventData(
+                "block.break", "minecraft:overworld", 1, 65, 1,
+                "minecraft:obsidian", null, null, "player", "up"), null);
+        var allowed = runtime.triggerAuthorization(new dev.lualoader.authorization.AuthorizationEventData(
+                "block.break", "minecraft:overworld", 1, 65, 1,
+                "minecraft:stone", null, null, "player", "up"), null);
+        if (!denied || allowed) {
+            throw new AssertionError("o autorizador land_claims nao aplicou a politica esperada");
+        }
+        helper.succeed();
+    }
+
     /** O setter de dificuldade aceita o valor atual sem alterar o mundo global do GameTest. */
     @GameTest(template = EMPTY)
     public static void bridgeLeEEscreveDificuldade(GameTestHelper helper) {

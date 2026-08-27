@@ -72,7 +72,9 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 
 ## Convenções
 
-Os documentos de API devem usar nomes exactos do Lua, distinguir leitura de escrita e indicar a permissão necessária. Uma capability só deve ser marcada como comum depois de existir no core, nas quatro bridges mantidas e nos testes correspondentes. Nesta leva, isso inclui `world.explode`, `world.lightning`, `player.equipment.read`, `player.inventory.slot` e `events.block.break`.
+Os documentos de API devem usar nomes exactos do Lua, distinguir leitura de escrita e indicar a permissão necessária. Uma capability só deve ser marcada como comum depois de existir no core, nas quatro bridges mantidas e nos testes correspondentes. Nesta leva, isso inclui `world.explode`, `world.lightning`, `player.equipment.read`, `player.inventory.slot`,
+`events.block.break` e `events.action.authorization`. O exemplo executável `examples/land_claims`
+demonstra a última capability.
 
 Documentos de estudo podem conter alternativas e código ilustrativo, mas precisam indicar claramente quando uma proposta ainda não é implementada. Em particular, shaders, pipelines de renderização avançados, mapa-múndi persistente e integrações com Iris/Sodium/Canvas não fazem parte do contrato actual. O minimapa documentado em [MINIMAP.md](MINIMAP.md) é uma demonstração funcional baseada na capability de câmera virtual; não é uma API de cartografia completa nem uma câmera 3D geral.
 

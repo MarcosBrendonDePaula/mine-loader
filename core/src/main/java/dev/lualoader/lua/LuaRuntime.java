@@ -1,5 +1,7 @@
 package dev.lualoader.lua;
 
+import dev.lualoader.authorization.AuthorizationActions;
+import dev.lualoader.authorization.AuthorizationEventData;
 import dev.lualoader.camera.CameraProtocol;
 import dev.lualoader.command.CommandSchema;
 import dev.lualoader.input.KeybindProtocol;
@@ -942,6 +944,44 @@ public final class LuaRuntime {
     }
 
     /**
+     * Dispara uma autorização global antes de uma acção do jogo.
+     *
+     * <p>Diferente dos callbacks de conteúdo, o evento não tem dono: cada mod que declarou a
+     * capability pode avaliar a mesma acção vanilla, modded ou declarativa. Um veto vence sempre.
+     * Falhas são fail-closed de propósito, porque um autorizador quebrado não pode abrir uma brecha.
+     */
+    public boolean triggerAuthorization(AuthorizationEventData action, PlayerHandle player) {
+        boolean cancelled = false;
+        for (LoadedScript script : List.copyOf(scripts.values())) {
+            LuaFunction callback = script.callbacks().get("action_attempt");
+            if (callback == null) continue;
+            try {
+                script.budget().start();
+                LuaValue result = callback.call(authorizationContext(script.mod(), player, action));
+                if (result.isboolean() && !result.toboolean()) cancelled = true;
+            } catch (LuaError error) {
+                cancelled = true;
+                logger.error("Erro Lua no autorizador do mod {} durante {}: {}",
+                        script.mod().manifest().id, action.action(), error.getMessage());
+                reportToPlayer(player, script.mod(), "action_attempt", error.getMessage());
+            } catch (BridgeException error) {
+                cancelled = true;
+                logger.error("Erro de plataforma no autorizador do mod {} durante {}: {}",
+                        script.mod().manifest().id, action.action(), error.getMessage());
+                reportToPlayer(player, script.mod(), "action_attempt", error.getMessage());
+            } catch (RuntimeException error) {
+                cancelled = true;
+                logger.error("Erro Java no autorizador do mod {} durante {}",
+                        script.mod().manifest().id, action.action(), error);
+                reportToPlayer(player, script.mod(), "action_attempt", error.getMessage());
+            } finally {
+                script.budget().stop();
+            }
+        }
+        return cancelled;
+    }
+
+    /**
      * Executa os callbacks e informa se a ação padrão deve ser cancelada.
      *
      * <p>Um callback cancela devolvendo {@code false}. Devolver {@code nil}, nada ou qualquer outro
@@ -1017,6 +1057,45 @@ public final class LuaRuntime {
         return context;
     }
 
+    /** Monta o snapshot Lua da autorização sem atravessar objectos vivos da plataforma. */
+    private LuaTable authorizationContext(ModLoader.LoadedMod mod, PlayerHandle player,
+                                          AuthorizationEventData action) {
+        LuaTable context = context(mod, player, null);
+        context.set("action", LuaValue.valueOf(action.action()));
+        context.set("dimension", LuaValue.valueOf(action.dimension()));
+        context.set("x", LuaValue.valueOf(action.x()));
+        context.set("y", LuaValue.valueOf(action.y()));
+        context.set("z", LuaValue.valueOf(action.z()));
+        context.set("source", action.source() == null
+                ? LuaValue.NIL : LuaValue.valueOf(action.source()));
+        context.set("face", action.face() == null
+                ? LuaValue.NIL : LuaValue.valueOf(action.face()));
+
+        LuaTable target = new LuaTable();
+        if (action.targetId() != null) target.set("id", LuaValue.valueOf(action.targetId()));
+        context.set("target", target);
+
+        if (action.hasActor()) {
+            LuaTable actor = new LuaTable();
+            actor.set("uuid", LuaValue.valueOf(action.actorUuid()));
+            if (action.actorName() != null) actor.set("name", LuaValue.valueOf(action.actorName()));
+            if (player != null) {
+                actor.set("send_message", new OneArgFunction() {
+                    @Override
+                    public LuaValue call(LuaValue value) {
+                        requirePermission(mod.manifest(), "chat.send");
+                        player.sendMessage(value.tojstring());
+                        return LuaValue.NIL;
+                    }
+                });
+            }
+            context.set("actor", actor);
+        } else {
+            context.set("actor", LuaValue.NIL);
+        }
+        return context;
+    }
+
     private boolean trigger(String event, PlayerHandle player, BlockEventData block) {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
@@ -1068,6 +1147,11 @@ public final class LuaRuntime {
                 String event = eventValue.tojstring();
                 if (!EVENTS.contains(event)) {
                     throw new LuaError("evento desconhecido: " + event);
+                }
+                if ("action_attempt".equals(event)
+                        && !mod.manifest().requires.capabilities.containsKey(AuthorizationActions.CAPABILITY)) {
+                    throw new LuaError("action_attempt exige requires.capabilities."
+                            + AuthorizationActions.CAPABILITY);
                 }
                 if (!callbackValue.isfunction()) {
                     throw new LuaError("callback de " + event + " precisa ser função");

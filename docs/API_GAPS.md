@@ -127,6 +127,18 @@ ou armadura, e comida não combina com durabilidade, ferramenta ou armadura. Nã
 negociação. A futura declaração de efeitos de poção reutilizáveis, fora de uma comida, continua
 pendente.
 
+**Autorização global de ações — fechada no MVP.** `mod.on("action_attempt", callback)` exige a
+capability `events.action.authorization: 1.0.0` e cobre, nos quatro runtimes, tentativas de jogador
+para `block.break`, `block.place` e `block.use`. O contexto é um snapshot com `action`, dimensão,
+coordenadas, alvo, actor, source e face quando disponível. `false` cancela; erros também cancelam
+por segurança. A implementação mantém os callbacks legados separados e não expõe objetos vivos do
+Minecraft ao Lua.
+
+Abertura de containers, pistões, explosões, fogo, fluidos e remoções indirectas continuam pendentes:
+o primeiro evento de abertura de container estudado no NeoForge não é cancelável e não oferece o ponto
+pré-mutação necessário para um contrato portátil. Essas áreas devem entrar em lotes próprios, cada uma
+com hook equivalente e GameTests nos quatro runtimes.
+
 **Bioma e nível de luz** são legíveis por `biome_at` e `light_at`.
  A luz volta separada por origem
 — bloco, céu e total —, porque é a luz de **bloco** que decide se um monstro nasce: um lugar

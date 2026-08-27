@@ -22,7 +22,8 @@ public final class LoaderEvents {
             "player_joined",
             "player_left",
             "tick",
-            "mod_reloaded"
+            "mod_reloaded",
+            "action_attempt"
     );
 
     /**

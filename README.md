@@ -15,12 +15,16 @@ O projecto testa a mesma ideia em quatro combinações: **Fabric 1.21.1, Fabric 
 | Fabric 1.21.4 | Experimental, com limitações visuais documentadas |
 | NeoForge 1.21.1 | Implementado e testado |
 | NeoForge 1.21.4 | Experimental, com limitações visuais documentadas |
-| GameTests | 25/25 em cada combinação mantida |
+| GameTests | 26/26 em cada combinação mantida |
 | `mod.require()` | Bibliotecas entre mods, com resolução sob demanda e detecção de ciclos |
-| `requires.domains` / `requires.capabilities` | Negociação de contrato no manifesto |
+| `requires.domains` / `requires.capabilities` | Negociação de contrato no manifesto, incluindo autorização global de ações |
 | Shaders client-side | Ainda não fazem parte da API estável |
 
 A matriz completa, incluindo OBJ, renderers de entidades, partículas, receitas e outras degradações, está em [docs/COMPATIBILIDADE.md](docs/COMPATIBILIDADE.md). **Compilar não é o mesmo que ter paridade visual**: os GameTests são principalmente server-side e não provam pixels, iluminação, telas client-side ou shaders.
+
+A autorização declarativa global já está disponível em `mod.on("action_attempt", callback)`. Ela cobre
+`block.break`, `block.place` e `block.use` antes da mutação, com a capability
+`events.action.authorization: 1.0.0`, e é demonstrada em [`examples/land_claims`](examples/land_claims).
 
 ## Documentação
 
@@ -135,6 +139,7 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
       "registry.item.food": "1.0.0",
       "registry.item.food.effects": "1.0.0",
       "registry.item.fuel": "1.0.0",
+      "events.action.authorization": "1.0.0",
       "player.equipment.read": "1.0.0",
       "player.inventory.slot": "1.0.0",
       "scheduler.every": "1.0.0"

@@ -34,6 +34,7 @@ observar blocos vanilla e ids declarativos que não tenham esse comportamento es
 | `player_joined` | Um jogador entrou | `ctx.player` |
 | `tick` | Fim de cada tick do servidor | `ctx.server` |
 | `player_left` | Um jogador saiu | `ctx.player` |
+| `action_attempt` | Antes de uma quebra, colocação ou uso de bloco feito por jogador | `ctx.action`, `ctx.dimension`, `ctx.x/y/z`, `ctx.target`, `ctx.actor`, `ctx.source`, `ctx.face`; `false` cancela |
 | `block_used` | Clique direito em bloco declarativo | `ctx.block`, `ctx.player` |
 | `block_attacked` | Clique esquerdo em bloco declarativo | `ctx.block`, `ctx.player` |
 | `block_placed` | O bloco foi colocado no mundo | `ctx.block`, `ctx.player` |
@@ -169,6 +170,40 @@ O contexto de um evento de item traz `ctx.item.id` e, quando o uso teve alvo, `c
 com as coordenadas em `ctx.item.x/y/z`. Ambos aceitam cancelamento: devolver `false` impede o efeito
 padrão do item.
 
+## Autorização global de ações
+
+`action_attempt` é um evento global voltado para políticas de claims, proteção e permissões. Ele é
+executado antes da ação de um jogador e alcança blocos vanilla, modded e declarativos. O mod precisa
+declarar `requires.capabilities.events.action.authorization: 1.0.0`; sem essa capability o registro do
+callback é recusado, para que uma política não pareça activa num runtime sem o contrato.
+
+O callback recebe somente uma fotografia de valores simples:
+
+| Campo | Conteúdo |
+|---|---|
+| `ctx.action` | `block.break`, `block.place` ou `block.use` |
+| `ctx.dimension` | ID completo da dimensão, como `minecraft:overworld` |
+| `ctx.x`, `ctx.y`, `ctx.z` | Coordenadas da posição envolvida |
+| `ctx.target.id` | Bloco que será quebrado/usado ou bloco que será colocado, quando conhecido |
+| `ctx.actor.uuid`, `ctx.actor.name` | Jogador que iniciou a tentativa |
+| `ctx.source` | `player` nesta primeira versão |
+| `ctx.face` | Face atingida quando o hook fornece essa informação; pode ser `nil` na quebra |
+
+Devolver `false` de qualquer autorizador cancela a ação. Um erro Lua ou de plataforma também cancela
+por segurança (**fail-closed**), e é registado no log. Um handler que não devolva booleano, ou devolva
+`true`, apenas permite a continuação. O callback não deve guardar referências do contexto: ele contém
+tabelas e escalares construídos para aquela chamada, nunca `ItemStack`, `BlockState`, entidade Java ou
+outro objeto vivo.
+
+`action_attempt` é separado de `block_broken`, `block_placed` e `block_used`. Quando aplicável, o
+callback global de autorização corre primeiro; os callbacks legados continuam a correr uma vez e o
+veto de qualquer um bloqueia a ação. Isso preserva mods existentes e permite que um mod de claims não
+precise assumir a propriedade de cada bloco.
+
+A primeira versão cobre apenas ações iniciadas por jogador. Abertura de containers, pistões,
+explosões, fogo, fluidos e alterações indiretas continuam fora do contrato até existir um hook
+pré-mutação equivalente nos quatro runtimes.
+
 ## Cancelamento
 
 Um callback pode impedir a ação padrão do jogo devolvendo `false`:
@@ -185,9 +220,9 @@ Devolver `nil`, nada ou qualquer outro valor deixa o jogo seguir normalmente, pa
 que apenas observa não precise se preocupar com o retorno. Se vários mods reagem ao mesmo evento,
 basta um pedir cancelamento para a ação ser bloqueada.
 
-Hoje o cancelamento vale para `block_used`, `block_attacked`, `block_broken`, `item_used` e
-`item_used_on_block`. No caso de `block_broken`, o hook é chamado antes da quebra de jogador ser
-concluída; devolver `false` impede a operação. Ele não é emitido para explosões, pistões,
+Hoje o cancelamento vale para `action_attempt`, `block_used`, `block_attacked`, `block_broken`,
+`item_used` e `item_used_on_block`. No caso de `block_broken`, o hook é chamado antes da quebra de
+jogador ser concluída; devolver `false` impede a operação. Ele não é emitido para explosões, pistões,
 substituições de script ou outras remoções indirectas.
 
 ## Estado compartilhado
@@ -250,6 +285,12 @@ A ordem reflete utilidade para quem cria conteúdo, não facilidade de implement
 | `player_respawned` | O jogador renasceu | média |
 | `player_chat` | O jogador enviou uma mensagem | média |
 | `player_changed_dimension` | O jogador mudou de dimensão | baixa |
+
+### Autorização, global
+
+| Evento | Quando ocorre | Prioridade |
+|---|---|---|
+| `action_attempt` | Antes de quebrar, colocar ou usar um bloco por ação de jogador | **alta — implementado** |
 
 ### Mundo e servidor, global
 
