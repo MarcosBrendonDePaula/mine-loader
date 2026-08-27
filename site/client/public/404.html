@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MineLoader</title>
+    <script>
+      (function () {
+        var base = "/mine-loader";
+        var path = window.location.pathname;
+        if (path.indexOf(base + "/") === 0) {
+          sessionStorage.setItem("mineloader-pages-route", path.slice(base.length) + window.location.search + window.location.hash);
+          window.location.replace(base + "/");
+        }
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

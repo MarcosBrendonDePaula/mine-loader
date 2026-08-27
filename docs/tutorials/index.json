@@ -8,6 +8,25 @@
     "format_version": 1,
     "principle": "O tutorial descreve somente contrato publicado: manifesto JSON, API Lua e dados simples atravessando os bridges."
   },
+  "page": {
+    "index": "T0",
+    "eyebrow": "Tutoriais práticos",
+    "title": "Aprenda pelo mod|que realmente vai rodar.",
+    "summary": "Cada tutorial começa no manifesto, aponta permissões e capabilities necessárias e termina com uma peça funcional. O formato é o mesmo usado pelos exemplos do repositório.",
+    "intro": {
+      "label": "T0.1",
+      "title": "Ordem sugerida",
+      "lead": "Faça o bloco e o item primeiro. Depois conecte comportamento Lua e, quando precisar de interação, adicione uma UI.",
+      "paragraphs": [
+        "Não há pré-requisito de Java. O único ponto que muda entre Fabric, NeoForge e versões é o bridge que o mod não precisa tocar.",
+        "Os exemplos mostram uma versão mínima e uma expansão segura. Copie o mínimo, valide a carga e só então acrescente o próximo contrato."
+      ]
+    },
+    "callout": {
+      "title": "Antes de testar",
+      "text": "Todos os exemplos pressupõem um pacote em run/mods-lua/seu_mod/. O manifesto é validado antes do Lua executar; começar pequeno torna qualquer erro de contrato fácil de localizar."
+    }
+  },
   "items": [
     {
       "id": "bloco",

@@ -1,0 +1,87 @@
+name: Validate and build documentation site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/tutorials/**"
+      - "docs/compatibility.json"
+      - "docs/assets/**"
+      - ".github/workflows/site-pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/tutorials/**"
+      - "docs/compatibility.json"
+      - "docs/assets/**"
+      - ".github/workflows/site-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: documentation-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-site:
+    name: Validate and build site
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        run: pnpm --dir site install --frozen-lockfile
+
+      - name: Validate published tutorial documents
+        run: node docs/tutorials/verify.mjs
+
+      - name: Check frontend types
+        run: pnpm --dir site check
+
+      - name: Build GitHub Pages artifact in docs
+        run: pnpm --dir site build:pages
+
+      - name: Verify static Pages output
+        run: |
+          test -f docs/index.html
+          test -f docs/404.html
+          test -f docs/.nojekyll
+          grep -q '/mine-loader/assets/' docs/index.html
+          ! grep -E 'manus-runtime|debug-collector|manus-storage' docs/index.html
+
+      - name: Require generated output in pull requests
+        if: github.event_name == 'pull_request'
+        run: |
+          if test -n "$(git status --porcelain -- docs)"; then
+            echo "O build do site alterou ou criou arquivos em docs/. Inclua o artefato atualizado no pull request."
+            git status --short -- docs
+            exit 1
+          fi
+
+      - name: Commit refreshed Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- docs; then
+            echo "O artefato docs/ já está atualizado."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git commit -m "chore(site): rebuild GitHub Pages"
+          git push

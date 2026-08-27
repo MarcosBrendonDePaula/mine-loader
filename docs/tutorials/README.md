@@ -24,3 +24,7 @@ node docs/tutorials/verify.mjs
 ```
 
 O verificador confirma que os quatro documentos existem, têm identificadores únicos, declaram os campos que o site precisa e usam layouts de seção conhecidos. Ele não substitui a bateria do loader: alterações em código, manifesto ou bridge continuam exigindo os testes Gradle aplicáveis.
+
+## Site público e CI
+
+O site React vive em [`site/`](../../site/) e é gerado em `docs/`, que é a fonte configurada do GitHub Pages deste repositório. O navegador lê os arquivos deste diretório diretamente da branch `main`, então uma alteração publicada em `tutorials/*.json` aparece sem recompilar o frontend. O workflow [`site-pages.yml`](../../.github/workflows/site-pages.yml) valida estes documentos em toda mudança relevante e reconstrói o artefato estático quando necessário.
