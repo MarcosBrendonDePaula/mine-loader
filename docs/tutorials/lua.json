@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "kind": "mine_loader_tutorial",
+  "id": "lua",
+  "index": "T4",
+  "eyebrow": "Tutorial · Criar código Lua",
+  "title": "Escreva regras.|Não persiga mappings.",
+  "summary": "Lua controla comportamento: eventos, comandos, tarefas e menus. Contextos são snapshots com tabelas, IDs e escalares; o core nunca entrega referências Java vivas ao script.",
+  "updated_at": "2026-08-27",
+  "sources": ["docs/GUIA_DO_MOD.md", "docs/API_ESTAVEL.md", "examples/land_claims/main.lua"],
+  "contracts": {
+    "permissions": ["chat.send", "player.read", "server.command.register"],
+    "capabilities": ["player.looking_at.read: 1.0.0", "events.action.authorization: 1.0.0 quando usar action_attempt", "scheduler.every: 1.0.0 quando usar mod.every"],
+    "limits": ["Lua recebe apenas dados simples", "erros em action_attempt falham fechado", "GameTest de autorização cobre dispatcher/exemplo, não simulação nativa completa de cada interação física"]
+  },
+  "outcome": {
+    "icon": "code",
+    "label": "LUA // SANDBOX",
+    "title": "Você terá o comando /mod onde",
+    "text": "Ele só roda para um jogador, pergunta onde ele está mirando e devolve coordenadas usando as APIs seguras do loader."
+  },
+  "evidence": {
+    "kind": "lua_flow",
+    "label": "EVENT FLOW // DADOS SIMPLES",
+    "meta": "CORE AGNÓSTICO",
+    "stages": [["EVENTO", "bridge"], ["CTX", "tabelas"], ["LUA", "regra"], ["RETORNO", "allow/block"]]
+  },
+  "sections": [
+    {
+      "id": "T4.2",
+      "title": "Escreva a regra",
+      "layout": "split",
+      "lead": "O código não precisa descobrir se está em Fabric ou NeoForge. looking_at() devolve a mesma tabela do contrato nas quatro combinações.",
+      "paragraphs": [
+        "Quando a chamada nasce de um comando, clique ou join, ctx.player representa quem acionou a regra. Fora desse contexto ele pode ser nil, então confira antes de tocar APIs pessoais.",
+        "Use ctx.log para diagnóstico de mod; use mensagens para retorno ao jogador e declare chat.send."
+      ],
+      "code": {
+        "language": "mod.json + main.lua",
+        "value": "// mod.json\n{\n  \"entrypoint\": \"main.lua\",\n  \"permissions\": [\"chat.send\", \"player.read\", \"server.command.register\"],\n  \"requires\": { \"capabilities\": { \"player.looking_at.read\": \"1.0.0\" } }\n}\n\n-- main.lua\nmod.command(\"onde\", function(ctx)\n  if ctx.player == nil then return end\n  local alvo = ctx.player.looking_at()\n  if alvo == nil then\n    ctx.player.send_message(\"Olhe para um bloco.\")\n    return\n  end\n  ctx.player.send_message(\"Alvo: \" .. alvo.x .. \", \" .. alvo.y .. \", \" .. alvo.z)\nend)"
+      }
+    },
+    {
+      "id": "T4.3",
+      "title": "Separe callbacks e eventos globais",
+      "layout": "split",
+      "lead": "events no manifesto aponta uma função de ciclo de vida. mod.on registra um observador global: são dois caminhos diferentes.",
+      "paragraphs": [
+        "Para bloquear uma ação, registre mod.on(action_attempt, fn) e exija events.action.authorization: 1.0.0. Somente false cancela; nil, true e outros retornos deixam seguir.",
+        "O MVP cobre quebra, colocação e uso iniciados por jogador. Containers, pistons, explosões, fogo, fluidos e ações indiretas não entram nesse contrato."
+      ],
+      "code": {
+        "language": "mod.json + main.lua",
+        "value": "// mod.json: callback de ciclo de vida\n{ \"events\": { \"server_started\": \"on_server_started\" } }\n\n-- main.lua: evento global cancelável\nmod.on(\"action_attempt\", function(ctx)\n  if ctx.action == \"block.break\"\n    and ctx.target.id == \"minecraft:obsidian\" then\n    return false\n  end\nend)\n\nfunction on_server_started(ctx)\n  ctx.log.info(\"mod carregado\")\nend\n\nreturn { on_server_started = on_server_started }"
+      },
+      "callout": {
+        "tone": "warning",
+        "title": "Prova precisa, não promessa ampla",
+        "text": "A autorização tem GameTest do dispatcher e do exemplo, além dos bridges compilados. Isso não equivale a uma simulação GameTest nativa completa de clique, quebra e colocação por jogador conectado."
+      }
+    },
+    {
+      "id": "T4.4",
+      "title": "Escolha a ferramenta certa",
+      "layout": "table",
+      "table": {
+        "headers": ["Você quer…", "Use", "Observação"],
+        "rows": [
+          ["Guardar dados do mod", "mod.state", "Estado persistente do pacote; mantenha valores simples e versionáveis."],
+          ["Responder a acontecimento global", "mod.on(evento, fn)", "Exemplo: action_attempt para autorização."],
+          ["Adicionar um comando", "mod.command(nome, fn)", "Publicado como /mod nome."],
+          ["Executar depois", "mod.after(ticks, fn)", "Execução única, sem criar loop em tick."],
+          ["Repetir até encerrar", "mod.every(ticks, fn)", "Exige scheduler.every; devolva false para interromper."],
+          ["Dividir código do próprio mod", "mod.import(\"lib/x.lua\")", "Caminho preso ao pacote e ciclos são recusados."],
+          ["Usar biblioteca de outro mod", "mod.require(\"outro_mod\")", "Exige outro_mod em dependencies; não é import de arquivo local."]
+        ]
+      },
+      "callout": {
+        "tone": "proof",
+        "title": "Regra de fronteira",
+        "text": "Não use require, dofile ou loadfile. O sandbox expõe mod.import para o próprio pacote; mod.require usa somente a API pública de outro mod declarado em dependencies."
+      }
+    }
+  ]
+}

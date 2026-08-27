@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "kind": "mine_loader_tutorial",
+  "id": "item",
+  "index": "T2",
+  "eyebrow": "Tutorial · Criar um item",
+  "title": "Comece pelo item.|Evolua pelo contrato.",
+  "summary": "Itens simples são declarativos. Para comida, efeitos e combustível, o manifesto acrescenta apenas os campos comuns que os quatro bridges conseguem traduzir.",
+  "updated_at": "2026-08-27",
+  "sources": ["docs/GUIA_DO_MOD.md", "docs/MOD_FORMAT_SPEC.md", "examples/hello_lua/parts/items/ruby.json", "examples/hello_lua/parts/items/racao.json"],
+  "contracts": {
+    "permissions": ["nenhuma permissão nova para registrar conteúdo"],
+    "capabilities": ["registry.item.food: 1.0.0", "registry.item.food.effects: 1.0.0", "registry.item.fuel: 1.0.0"],
+    "limits": ["até 8 efeitos pós-consumo", "comida não combina com max_damage", "combustível não combina com ferramenta ou armadura"]
+  },
+  "outcome": {
+    "icon": "box",
+    "label": "REGISTRY // ITEM",
+    "title": "Você terá um item na aba criativa do mod",
+    "text": "Identidade, empilhamento, raridade, resistência ao fogo e textura bastam para uma peça colecionável ou ingrediente de receita."
+  },
+  "evidence": {
+    "kind": "item_registry",
+    "label": "REGISTRY // CAPABILITY",
+    "meta": "DECLARADO",
+    "rows": [
+      ["ITEM", "identity + texture + stack", "BASE"],
+      ["FOOD", "nutrition + saturation", "registry.item.food"],
+      ["EFFECTS", "id + duração + chance", "registry.item.food.effects"],
+      ["FUEL", "fuel_burn_time", "registry.item.fuel"]
+    ]
+  },
+  "sections": [
+    {
+      "id": "T2.1",
+      "title": "Primeiro item",
+      "layout": "code",
+      "code": {
+        "language": "mod.json",
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"fragmentos\",\n  \"name\": \"Fragmentos Lunares\",\n  \"version\": \"0.1.0\",\n  \"items\": [{\n    \"id\": \"fragmento_lunar\",\n    \"name\": \"Fragmento Lunar\",\n    \"max_stack_size\": 64,\n    \"rarity\": \"rare\",\n    \"fire_resistant\": false,\n    \"texture\": \"@fragmento_lunar\"\n  }]\n}"
+      }
+    },
+    {
+      "id": "T2.2",
+      "title": "Transforme-o em comida",
+      "layout": "split",
+      "lead": "Comida e combustível podem coexistir no mesmo item. Cada bridge escolhe os componentes da sua versão.",
+      "paragraphs": [
+        "O campo saturation é um modificador, não o valor final de saturação do jogo. Efeitos são aplicados quando o consumo termina e usam duração em ticks.",
+        "Como essa é uma superfície estendida, declare as três capabilities usadas pelo exemplo no mesmo manifesto."
+      ],
+      "code": {
+        "language": "mod.json",
+        "value": "{\n  \"items\": [{\n    \"id\": \"racao_lunar\",\n    \"name\": \"Ração Lunar\",\n    \"texture\": { \"fallback\": \"minecraft:item/bread\" },\n    \"food\": {\n      \"nutrition\": 6,\n      \"saturation\": 0.8,\n      \"always_edible\": true,\n      \"consume_seconds\": 2.5,\n      \"effects\": [{\n        \"id\": \"minecraft:speed\",\n        \"duration\": 100,\n        \"amplifier\": 1,\n        \"chance\": 0.75,\n        \"ambient\": true,\n        \"show_particles\": false\n      }]\n    },\n    \"fuel_burn_time\": 400\n  }],\n  \"requires\": {\n    \"capabilities\": {\n      \"registry.item.food\": \"1.0.0\",\n      \"registry.item.food.effects\": \"1.0.0\",\n      \"registry.item.fuel\": \"1.0.0\"\n    }\n  }\n}"
+      }
+    },
+    {
+      "id": "T2.3",
+      "title": "Limites que importam",
+      "layout": "table",
+      "table": {
+        "headers": ["Campo", "Regra", "Motivo"],
+        "rows": [
+          ["nutrition", "inteiro de 0 a 20", "Reproduz o limite comum da declaração de alimento."],
+          ["saturation", "número finito de 0 a 4", "É o modificador usado pelo jogo para calcular saturação efetiva."],
+          ["consume_seconds", "0.05 a 30", "Define a duração completa de consumo em todos os bridges."],
+          ["effects", "até 8 entradas", "Ids completos; duração de 1 a 120000; amplificador de 0 a 255."],
+          ["fuel_burn_time", "0 a 32767 ticks", "Zero não torna o item combustível."]
+        ]
+      },
+      "callout": {
+        "tone": "warning",
+        "title": "Não misture papéis incompatíveis",
+        "text": "Comida não combina com ferramenta, armadura ou max_damage. Combustível não combina com ferramenta ou armadura. O core recusa essas combinações antes do registro."
+      }
+    }
+  ]
+}

@@ -34,6 +34,7 @@ O índice em [docs/README.md](docs/README.md) organiza os documentos por públic
 |---|---|
 | Entender a proposta | [Especificação geral](docs/SPECIFICATION.md) |
 | Criar um mod | [Guia do mod](docs/GUIA_DO_MOD.md) |
+| Seguir um tutorial que o site atualiza pelo Git | [Tutoriais JSON](docs/tutorials/README.md) |
 | Escrever `mod.json` | [Formato do manifesto](docs/MOD_FORMAT_SPEC.md) |
 | Consultar funções estáveis | [API estável](docs/API_ESTAVEL.md) |
 | Declarar capabilities e domínios | [Exemplos de requirements](docs/examples/README.md) |

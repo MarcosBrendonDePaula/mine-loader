@@ -21,6 +21,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 | Documento | Conteúdo |
 |---|---|
 | [GUIA_DO_MOD.md](GUIA_DO_MOD.md) | Tutorial prático de manifestos, Lua, blocos, itens, entidades, inventário, UI, recursos e permissões. |
+| [tutorials/README.md](tutorials/README.md) | Fonte JSON canónica dos guias de bloco, item, UI e Lua consumida diretamente pelo site público. |
 | [MOD_FORMAT_SPEC.md](MOD_FORMAT_SPEC.md) | Especificação normativa do `mod.json`, campos aceites, recursos, dependencies, requirements e limites. |
 | [API_ESTAVEL.md](API_ESTAVEL.md) | Contrato público agnóstico, snapshots, APIs de mundo, jogador, bibliotecas e regras de evolução. |
 | [EVENTS.md](EVENTS.md) | Eventos globais e por objecto, contexto, cancelamento e prioridades. |
@@ -64,6 +65,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 | Pergunta | Fonte principal |
 |---|---|
 | O que a API significa? | [API_ESTAVEL.md](API_ESTAVEL.md) e [MOD_FORMAT_SPEC.md](MOD_FORMAT_SPEC.md) |
+| Que conteúdo o site apresenta nos tutoriais? | [tutorials/index.json](tutorials/index.json) e os documentos por guia em [`tutorials/`](tutorials/) |
 | Funciona nas versões mantidas? | [COMPATIBILIDADE.md](COMPATIBILIDADE.md) |
 | Como foi implementado? | Código em `core/` e `runtimes/`, acompanhado pelos testes |
 | O que ainda não existe? | [API_GAPS.md](API_GAPS.md) e a secção de limitações da matriz |

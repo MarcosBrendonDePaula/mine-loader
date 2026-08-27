@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "kind": "mine_loader_tutorial",
+  "id": "bloco",
+  "index": "T1",
+  "eyebrow": "Tutorial · Criar um bloco",
+  "title": "Um bloco começa como|uma declaração de mundo.",
+  "summary": "Material, física, forma, render e drop pertencem ao manifesto. Assim o bridge consegue registrá-los no momento correto, antes de o jogo congelar seu registry.",
+  "updated_at": "2026-08-27",
+  "sources": ["docs/GUIA_DO_MOD.md", "docs/MOD_FORMAT_SPEC.md", "examples/hello_lua/parts/blocks/ruby_block.json"],
+  "contracts": {
+    "permissions": ["chat.send (somente se o on_use enviar mensagem)"],
+    "capabilities": ["registry.content (contrato de registro de conteúdo)"],
+    "limits": ["type além de generic e base ainda não têm tradução genérica publicada"]
+  },
+  "outcome": {
+    "icon": "blocks",
+    "label": "ESTRUTURA // 01",
+    "title": "Você terá um bloco cúbico colocável",
+    "text": "Ele terá som de pedra, exigirá ferramenta para ser minerado e ganhará automaticamente um BlockItem porque item.register está ativo."
+  },
+  "evidence": {
+    "kind": "block_geometry",
+    "label": "VOXEL // GEOMETRIA",
+    "meta": "1 × 1 × 1",
+    "items": ["COLLISION: FULL_CUBE", "OUTLINE: FULL_CUBE", "MODEL: CUBE_ALL"]
+  },
+  "sections": [
+    {
+      "id": "T1.2",
+      "title": "Declare o bloco mínimo",
+      "layout": "split",
+      "lead": "Salve esta raiz como mod.json dentro de uma pasta de mod.",
+      "paragraphs": [
+        "type: generic é a forma declarativa publicada para começar. Não use type ou base para tentar criar escadas, slabs ou portas: essas famílias ainda não têm um contrato publicado.",
+        "O alias @pedra_lunar aponta para um recurso definido na seção resources do manifesto completo."
+      ],
+      "code": {
+        "language": "mod.json",
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"pedra_lunar\",\n  \"name\": \"Pedra Lunar\",\n  \"version\": \"0.1.0\",\n  \"blocks\": [{\n    \"id\": \"pedra_lunar\",\n    \"name\": \"Pedra Lunar\",\n    \"type\": \"generic\",\n    \"material\": {\n      \"map_color\": \"gray\",\n      \"sound\": \"stone\",\n      \"solid\": true,\n      \"opaque\": true\n    },\n    \"settings\": {\n      \"hardness\": 3.0,\n      \"resistance\": 6.0,\n      \"requires_tool\": true\n    },\n    \"shape\": { \"collision\": \"full_cube\" },\n    \"render\": {\n      \"model\": \"cube_all\",\n      \"texture\": \"@pedra_lunar\"\n    },\n    \"item\": { \"register\": true }\n  }]\n}"
+      },
+      "callout": {
+        "tone": "warning",
+        "title": "Declare somente valores que têm tradução",
+        "text": "hardness mede o tempo de quebra; resistance influencia explosões; requires_tool mantém a regra de ferramenta. O formato não aceita propriedades nativas arbitrárias de BlockState."
+      }
+    },
+    {
+      "id": "T1.3",
+      "title": "Escolha a física e o loot",
+      "layout": "table",
+      "table": {
+        "headers": ["Área", "Comece com", "Expanda quando precisar"],
+        "rows": [
+          ["material", "cor de mapa, som, sólido e opaco", "inflamabilidade, propagação, instrumento e comportamento de pistão"],
+          ["settings", "hardness, resistance, requires_tool", "luz, escorregamento, ticks, offset e bounds dinâmicos"],
+          ["shape", "full_cube", "caixas declaradas de colisão, contorno e visual"],
+          ["loot", "ausente: comportamento padrão", "item, quantidade, tabela ou drops de outro bloco"],
+          ["state", "ausente: estado simples", "propriedades próprias e default declarado"]
+        ]
+      }
+    },
+    {
+      "id": "T1.4",
+      "title": "Reagir a um clique",
+      "layout": "split",
+      "lead": "Comportamento específico vai em um arquivo Lua e é referenciado pelo bloco.",
+      "paragraphs": [
+        "Adicione o objeto behavior com on_use apontando para scripts/pedra_lunar/on_use.lua e declare chat.send em permissions se for enviar mensagem.",
+        "O callback recebe o contexto do bloco em valores simples: id, posição e variante. Ele não recebe a instância Java do bloco."
+      ],
+      "code": {
+        "language": "scripts/pedra_lunar/on_use.lua",
+        "value": "-- scripts/pedra_lunar/on_use.lua\nreturn function(ctx)\n  ctx.player.send_message(\n    \"Você tocou a pedra em \" .. ctx.block.x .. \", \" .. ctx.block.y\n  )\nend"
+      },
+      "callout": {
+        "tone": "proof",
+        "title": "Próxima extensão",
+        "text": "Depois de validar o bloco, acrescente tags para mineração, recipes para fabricação ou state.properties se ele precisar mudar de variante."
+      }
+    }
+  ]
+}

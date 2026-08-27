@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "kind": "mine_loader_tutorial",
+  "id": "ui",
+  "index": "T3",
+  "eyebrow": "Tutorial · Criar uma UI",
+  "title": "Uma UI útil começa|com uma grade de itens.",
+  "summary": "Menus usam a tela de container nativa do Minecraft. Cada slot é uma célula visual e um botão; os cliques voltam ao Lua como dados simples.",
+  "updated_at": "2026-08-27",
+  "sources": ["docs/GUIA_DO_MOD.md", "examples/loja/mod.json", "examples/loja/main.lua"],
+  "contracts": {
+    "permissions": ["chat.send", "player.read", "player.inventory", "player.menu", "server.command.register"],
+    "capabilities": ["contrato básico de menu oferecido pelo runtime"],
+    "limits": ["menu usa item, quantidade e rótulo", "não entrega HUD, campos de texto ou botões desenhados"]
+  },
+  "outcome": {
+    "icon": "panels",
+    "label": "UI // VANILLA",
+    "title": "Você terá um comando que abre uma janela",
+    "text": "O menu tem uma linha, recebe uma lista de itens e retorna ctx.menu.slot quando a pessoa clica. Nada é retirado dos slots."
+  },
+  "evidence": {
+    "kind": "menu_grid",
+    "label": "CONTAINER // 9 × 1",
+    "meta": "EVENTO: SLOT 1",
+    "selected_slot": 1
+  },
+  "sections": [
+    {
+      "id": "T3.2",
+      "title": "Declare o acesso",
+      "layout": "split",
+      "lead": "Abrir ou atualizar uma janela exige player.menu. Registrar o atalho /mod loja exige server.command.register.",
+      "paragraphs": [
+        "Essas permissões pertencem ao pacote, não ao jogador. O callback precisa confirmar ctx.player porque um comando também pode vir do console.",
+        "A compra demonstrada pelo exemplo também lê e altera inventário; por isso declara player.read e player.inventory."
+      ],
+      "code": {
+        "language": "mod.json",
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"loja\",\n  \"name\": \"Loja de Exemplo\",\n  \"version\": \"1.0.0\",\n  \"entrypoint\": \"main.lua\",\n  \"permissions\": [\n    \"chat.send\",\n    \"player.read\",\n    \"player.inventory\",\n    \"player.menu\",\n    \"server.command.register\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "T3.3",
+      "title": "Registre e abra o menu",
+      "layout": "code",
+      "code": {
+        "language": "main.lua",
+        "value": "local CATALOGO = {\n  { item = \"minecraft:golden_apple\", preco = 4, moeda = \"minecraft:gold_ingot\" }\n}\n\nlocal function desenhar(ctx)\n  return {\n    { item = CATALOGO[1].item, label = \"Comprar por 4\" },\n    { item = \"minecraft:barrier\", label = \"Fechar\" }\n  }\nend\n\nmod.menu(\"balcao\", function(ctx)\n  if ctx.player == nil then return end\n  if ctx.menu.slot == 1 then\n    ctx.player.close_menu()\n    return\n  end\n  ctx.player.update_menu(desenhar(ctx))\nend)\n\nmod.command(\"loja\", function(ctx)\n  if ctx.player == nil then return end\n  ctx.player.open_menu(\"balcao\", \"Loja\", 1, desenhar(ctx))\nend)"
+      },
+      "callout": {
+        "tone": "warning",
+        "title": "Slots começam em zero",
+        "text": "No exemplo, o segundo item da tabela Lua é lido como ctx.menu.slot == 1. O contexto também traz ctx.menu.id, ctx.menu.button e ctx.menu.item."
+      }
+    },
+    {
+      "id": "T3.4",
+      "title": "Regras da grade",
+      "layout": "table",
+      "table": {
+        "headers": ["Operação", "O que faz", "Quando usar"],
+        "rows": [
+          ["mod.menu(id, fn)", "Registra o callback da janela uma vez.", "Na carga do main.lua."],
+          ["open_menu(id, título, linhas, itens)", "Abre uma grade de 9 × linhas.", "Ao reagir a comando, clique ou outro evento de jogador."],
+          ["update_menu(itens)", "Redesenha e mantém a janela aberta.", "Depois de compra, seleção, paginação ou mudança de saldo."],
+          ["close_menu()", "Fecha a janela atual.", "Ao clicar em Fechar ou completar um fluxo."]
+        ]
+      },
+      "callout": {
+        "tone": "proof",
+        "title": "Limite intencional",
+        "text": "Menus funcionam em clientes vanilla porque reutilizam a tela de container. open_screen pertence à superfície client-side proposta e não é a base estável deste tutorial; não dependa dela como se fosse paridade universal."
+      }
+    }
+  ]
+}

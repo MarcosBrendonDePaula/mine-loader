@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "kind": "mine_loader_tutorial_index",
+  "title": "Tutoriais práticos",
+  "updated_at": "2026-08-27",
+  "contract": {
+    "name": "MineLoader",
+    "format_version": 1,
+    "principle": "O tutorial descreve somente contrato publicado: manifesto JSON, API Lua e dados simples atravessando os bridges."
+  },
+  "items": [
+    {
+      "id": "bloco",
+      "index": "T1",
+      "title": "Criar um bloco",
+      "description": "Declare material, resistência, colisão, render e o item que coloca o bloco no mundo.",
+      "minutes": 15,
+      "evidence": "block_geometry",
+      "document": "docs/tutorials/bloco.json"
+    },
+    {
+      "id": "item",
+      "index": "T2",
+      "title": "Criar um item",
+      "description": "Comece com um item simples e evolua para comida, combustível e efeitos pós-consumo.",
+      "minutes": 10,
+      "evidence": "item_registry",
+      "document": "docs/tutorials/item.json"
+    },
+    {
+      "id": "ui",
+      "index": "T3",
+      "title": "Criar uma UI",
+      "description": "Abra uma grade de itens vanilla e transforme cada slot em um botão controlado pelo Lua.",
+      "minutes": 20,
+      "evidence": "menu_grid",
+      "document": "docs/tutorials/ui.json"
+    },
+    {
+      "id": "lua",
+      "index": "T4",
+      "title": "Criar código Lua",
+      "description": "Registre eventos, comandos e regras sem atravessar objetos nativos da plataforma.",
+      "minutes": 15,
+      "evidence": "lua_flow",
+      "document": "docs/tutorials/lua.json"
+    }
+  ]
+}
