@@ -61,3 +61,10 @@
 - [x] Revisar os tutoriais de bloco, item, UI e Lua como um percurso completo de primeiro mod.
 - [x] Fazer cada tutorial indicar pré-requisito, arquivos a criar, resultado esperado e continuação sugerida.
 - [x] Validar o percurso e a navegação em desktop e mobile; `pnpm check`, build e CI concluídos.
+
+## Prova do primeiro mod publicado
+
+- [x] Conferir o comando, o manifesto e o callback mostrados no roteiro de início.
+- [x] Carregar um pacote mínimo criado somente com os passos publicados no Fabric 1.21.4.
+- [x] Corrigir o roteiro: comando qualificado, diretório de runtime e aceite explícito da EULA antes da segunda execução.
+- [ ] Publicar a correção do roteiro e confirmar a versão estática no GitHub Pages.

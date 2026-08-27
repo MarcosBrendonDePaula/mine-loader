@@ -9,12 +9,20 @@ campo, o [formato de mods](MOD_FORMAT_SPEC.md). Para o que ainda não existe, o
 
 ## O menor mod possível
 
-Um mod é uma pasta dentro de `run/mods-lua/` cujo nome é igual ao seu `id`:
+Um mod é uma pasta dentro de `run/mods-lua/` do runtime que você escolheu, cujo nome é igual ao seu `id`. Para começar pelo runtime Fabric 1.21.4, o caminho completo é:
 
 ```text
-mods-lua/meu_mod/
+runtimes/fabric/1.21.4/run/mods-lua/meu_mod/
 └── mod.json
 ```
+
+Na raiz do repositório, inicie esse runtime com:
+
+```bash
+./gradlew :runtimes:fabric:1.21.4:runServer
+```
+
+Na primeira execução o Minecraft cria `runtimes/fabric/1.21.4/run/eula.txt` e encerra. Leia a EULA do Minecraft; somente se você concordar, mude `eula=false` para `eula=true` e rode o mesmo comando de novo.
 
 ```json
 {
