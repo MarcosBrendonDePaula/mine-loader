@@ -7,7 +7,9 @@ import { Check, FileCode2, FolderTree, Play, TerminalSquare } from "lucide-react
 import { Link } from "wouter";
 import { DocCallout, DocCode, DocsShell } from "@/components/DocsShell";
 
-const startServer = String.raw`# Linux e macOS
+const windowsWrapper = ".\\";
+
+const startServer = `# Linux e macOS
 git clone https://github.com/MarcosBrendonDePaula/mine-loader.git
 cd mine-loader
 ./gradlew runServer
@@ -15,7 +17,7 @@ cd mine-loader
 # Windows PowerShell
 git clone https://github.com/MarcosBrendonDePaula/mine-loader.git
 cd mine-loader
-.\gradlew.bat runServer`;
+${windowsWrapper}gradlew.bat runServer`;
 
 const firstManifest = `{
   "schema": 1,
