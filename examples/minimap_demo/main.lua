@@ -429,20 +429,7 @@ local function on_player_joined(ctx)
     end
 end
 
-mod.command("minimap_demo", {
-    { literal = "on" },
-    { literal = "off" },
-    { literal = "config" },
-    { literal = "zoom", children = {
-        { argument = {
-            name = "level",
-            type = "integer",
-            min = ZOOM_MIN,
-            max = ZOOM_MAX,
-            suggestions = { "1", "2", "3", "4" }
-        }}
-    }}
-}, function(ctx)
+mod.command("minimap_demo", function(ctx)
     if ctx.player == nil then
         return
     end

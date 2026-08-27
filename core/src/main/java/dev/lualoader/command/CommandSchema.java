@@ -1,5 +1,7 @@
 package dev.lualoader.command;
 
+import dev.lualoader.manifest.ModManifest;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,6 +45,41 @@ public final class CommandSchema {
         return roots;
     }
 
+    /** Converte a declaração de {@code mod.json} para o contrato neutro do core. */
+    public static CommandSchema fromManifest(ModManifest.CommandDefinition definition) {
+        if (definition == null || definition.children == null || definition.children.isEmpty()) {
+            throw new IllegalArgumentException("comando do manifesto precisa de pelo menos um child");
+        }
+        List<Node> roots = new ArrayList<>();
+        for (ModManifest.CommandNodeDefinition node : definition.children) {
+            roots.add(fromManifestNode(node));
+        }
+        return new CommandSchema(roots);
+    }
+
+    private static Node fromManifestNode(ModManifest.CommandNodeDefinition definition) {
+        if (definition == null) throw new IllegalArgumentException("no de comando nulo");
+        boolean hasLiteral = definition.literal != null;
+        boolean hasArgument = definition.argument != null;
+        if (hasLiteral == hasArgument) {
+            throw new IllegalArgumentException("no deve declarar exactamente um de literal ou argument");
+        }
+        List<Node> children = new ArrayList<>();
+        if (definition.children != null) {
+            for (ModManifest.CommandNodeDefinition child : definition.children) {
+                children.add(fromManifestNode(child));
+            }
+        }
+        boolean executable = definition.executes == null
+                ? children.isEmpty() : definition.executes;
+        if (hasArgument) {
+            ModManifest.CommandArgumentDefinition argument = definition.argument;
+            return Node.argument(new Argument(argument.name, argument.type, argument.min, argument.max,
+                    argument.suggestions), executable, children);
+        }
+        return Node.literal(definition.literal, executable, children);
+    }
+
     public int nodeCount() {
         return nodeCount;
     }
@@ -50,6 +87,48 @@ public final class CommandSchema {
     /** Procura a definição de argumento usada no caminho actual ou em outra ramificação compatível. */
     public Argument argument(String name) {
         return findArgument(roots, name);
+    }
+
+    /**
+     * Junta uma extensão à árvore, preservando a ordem e recusando colisões semânticas.
+     * Literais iguais podem juntar filhos; argumentos iguais precisam ter a mesma definição.
+     */
+    public CommandSchema merge(CommandSchema extension) {
+        if (extension == null) return this;
+        return new CommandSchema(mergeNodes(roots, extension.roots));
+    }
+
+    private static List<Node> mergeNodes(List<Node> base, List<Node> extension) {
+        List<Node> merged = new ArrayList<>(base);
+        for (Node incoming : extension) {
+            int existingIndex = indexOfNode(merged, incoming.name());
+            if (existingIndex < 0) {
+                merged.add(incoming);
+                continue;
+            }
+
+            Node existing = merged.get(existingIndex);
+            if ((existing.literal() == null) != (incoming.literal() == null)) {
+                throw new IllegalArgumentException("literal e argumento colidem no caminho "
+                        + incoming.name());
+            }
+            if (existing.argument() != null && !existing.argument().equals(incoming.argument())) {
+                throw new IllegalArgumentException("argumento " + incoming.argument().name()
+                        + " foi declarado com definições diferentes");
+            }
+            merged.set(existingIndex, new Node(
+                    existing.literal(), existing.argument(),
+                    existing.executable() || incoming.executable(),
+                    mergeNodes(existing.children(), incoming.children())));
+        }
+        return List.copyOf(merged);
+    }
+
+    private static int indexOfNode(List<Node> nodes, String name) {
+        for (int index = 0; index < nodes.size(); index++) {
+            if (nodes.get(index).name().equals(name)) return index;
+        }
+        return -1;
     }
 
     /** Nomes de argumentos declarados, sem duplicatas, para extrair valores do contexto Brigadier. */

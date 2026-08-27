@@ -107,7 +107,7 @@ O servidor lê mods de `run/mods-lua`. Para testar uma versão específica, use 
 
 ## Manifesto e compatibilidade
 
-O manifesto declara conteúdo, permissões, eventos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`.
+O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`.
 
 ```json
 {
@@ -146,7 +146,7 @@ O Lua recebe tabelas e escalares simples. Classes Java, referências vivas do Mi
 | Conteúdo | blocos, itens, entidades, spawn eggs, tags, loot, estruturas, processos e herança declarativa |
 | Eventos | ciclo de vida, ticks, jogador, blocos, itens, entidades, cliente e menus |
 | Interface | menus, telas, HUD, sobreposições e protocolo fechado servidor-cliente |
-| Comandos | `mod.command()` legado ou schema tipado com autocomplete |
+| Comandos | `commands` no `mod.json` + `mod.command`/`mod.command_extend` no Lua; schema tipado com autocomplete |
 | Bibliotecas | `mod.require()` para exports Lua de outro mod declarado em `dependencies` |
 | Contrato | `requires.domains` e `requires.capabilities` com versões do MineLoader |
 
@@ -172,7 +172,7 @@ A pasta [examples/](examples/) contém mods usados pela bateria de GameTests e p
 | `gerenciador` | Catálogo, activação e instalação por link |
 | `bestiario` | Entidades declaradas, variantes e herança |
 | `logistica` | Rede de canos e entrega de itens |
-| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, configuração, marcador, coordenadas e dimensão |
+| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, configuração, marcador, coordenadas, dimensão e comando estruturado no manifesto |
 
 Os exemplos documentais de capabilities, domínios e bibliotecas entre mods ficam separados em [docs/examples/](docs/examples/), para não serem carregados pela bateria de GameTests.
 

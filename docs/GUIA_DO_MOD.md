@@ -626,7 +626,7 @@ O comando é publicado como `/mod <nome>`. O contexto traz três formas do que f
 | `ctx.argv` | `{"dar", "diamante", "3"}` |
 | `ctx.subcommand` | `"dar"` |
 
-Para ter uma estrutura real no autocomplete, declare o schema e exija a capability `server.command.schema`:
+Para ter uma estrutura real no autocomplete, declare o schema no `mod.json` e exija a capability `server.command.schema`:
 
 ```json
 {
@@ -635,23 +635,35 @@ Para ter uma estrutura real no autocomplete, declare o schema e exija a capabili
     "capabilities": {
       "server.command.schema": "1.0.0"
     }
+  },
+  "commands": {
+    "guilda": {
+      "children": [
+        { "literal": "status" },
+        { "literal": "dar", "children": [
+          { "argument": {
+            "name": "item",
+            "type": "word",
+            "suggestions": ["diamante", "ferro", "ouro"]
+          }, "children": [
+            { "argument": {
+              "name": "quantidade",
+              "type": "integer",
+              "min": 1,
+              "max": 64
+            }}
+          ]}
+        ]}
+      ]
+    }
   }
 }
 ```
 
+No Lua, associe apenas o callback:
+
 ```lua
-mod.command("guilda", {
-    { literal = "status" },
-    { literal = "dar", children = {
-        { argument = {
-            name = "item",
-            type = "word",
-            suggestions = { "diamante", "ferro", "ouro" }
-        }, children = {
-            { argument = { name = "quantidade", type = "integer", min = 1, max = 64 } }
-        }}
-    }}
-}, function(ctx)
+mod.command("guilda", function(ctx)
     if ctx.argv[1] == "dar" then
         local item = ctx.command.arguments.item
         local quantidade = ctx.command.arguments.quantidade
@@ -660,7 +672,7 @@ mod.command("guilda", {
 end)
 ```
 
-Neste formato, o Minecraft sugere `status` e `dar`, valida a quantidade entre 1 e 64 e entrega os valores nomeados em `ctx.command.arguments`. O formato antigo continua válido para mods que preferem interpretar `ctx.args` manualmente. A referência completa está em [COMMANDS.md](COMMANDS.md).
+Neste formato, o Minecraft sugere `status`, `dar` e os itens declarados, valida a quantidade entre 1 e 64 e entrega os valores nomeados em `ctx.command.arguments`. O formato antigo continua válido para mods que preferem interpretar `ctx.args` manualmente. A referência completa está em [COMMANDS.md](COMMANDS.md).
 
 ## Tempo
 

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.JsonParseException;
+import dev.lualoader.command.CommandSchema;
 import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.platform.EntityDefinition;
 import dev.lualoader.platform.EntitySpec;
@@ -403,6 +404,7 @@ public final class ModLoader {
             }
         }
         validateKeybinds(manifest);
+        validateCommands(manifest);
 
         validateDependencies(manifest);
         validateRequirements(manifest);
@@ -611,6 +613,34 @@ public final class ModLoader {
             String category = binding.category == null ? "keybinds" : binding.category;
             require(category.matches("^[a-z][a-z0-9_.-]{0,63}$"),
                     "categoria de keybind invalida: " + category);
+        }
+    }
+
+    private void validateCommands(ModManifest manifest) {
+        if (manifest.commands == null || manifest.commands.isEmpty()) return;
+
+        require(manifest.permissions != null
+                        && manifest.permissions.contains("server.command.register"),
+                "commands exigem a permissao server.command.register");
+        require(manifest.requires != null
+                        && manifest.requires.capabilities != null
+                        && manifest.requires.capabilities.containsKey("server.command.schema"),
+                "commands exigem requires.capabilities.server.command.schema");
+        require(runtimeContract.satisfiesCapability("server.command.schema", "1.0.0"),
+                "o runtime nao entrega a capability server.command.schema 1.0.0");
+
+        Set<String> names = new HashSet<>();
+        for (Map.Entry<String, ModManifest.CommandDefinition> entry : manifest.commands.entrySet()) {
+            String name = entry.getKey();
+            require(name != null && name.matches("^[a-z][a-z0-9_-]{0,31}$"),
+                    "nome de comando invalido: " + name);
+            require(names.add(name), "comando duplicado no manifesto: " + name);
+            try {
+                CommandSchema.fromManifest(entry.getValue());
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("schema do comando " + name
+                        + " invalido: " + error.getMessage(), error);
+            }
         }
     }
 

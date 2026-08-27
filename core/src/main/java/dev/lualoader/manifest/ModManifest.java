@@ -33,6 +33,31 @@ public final class ModManifest {
         /** Subconjunto fechado: ctrl, shift e alt. */
         public List<String> modifiers = new ArrayList<>();
     }
+
+    /** Comandos estáticos que o loader publica antes de executar o entrypoint Lua. */
+    public Map<String, CommandDefinition> commands = new LinkedHashMap<>();
+
+    public static final class CommandDefinition {
+        /** Nós de primeiro nível depois de {@code /mod <nome>}. */
+        public List<CommandNodeDefinition> children = new ArrayList<>();
+    }
+
+    /** Nó de comando: declara {@code literal} ou {@code argument}, nunca os dois. */
+    public static final class CommandNodeDefinition {
+        public String literal;
+        public CommandArgumentDefinition argument;
+        public Boolean executes;
+        public List<CommandNodeDefinition> children = new ArrayList<>();
+    }
+
+    /** Argumento portável do schema de comando. */
+    public static final class CommandArgumentDefinition {
+        public String name;
+        public String type = "word";
+        public Double min;
+        public Double max;
+        public List<String> suggestions = new ArrayList<>();
+    }
     /**
      * Scripts da fase de registro, no formato {@code evento -> arquivo .lua}.
      *

@@ -8,7 +8,7 @@ mod.command("exemplo", function(ctx)
 end)
 ```
 
-A forma estruturada declara a árvore do comando antes do callback. O bridge transforma essa árvore no dispatcher de comandos da plataforma, e o Minecraft passa a conseguir validar argumentos e sugerir literais.
+A forma estruturada separa a forma do comando do seu comportamento. Comandos estáticos são declarados no `mod.json`; o Lua associa o callback e pode registar comandos condicionais quando a estrutura só é conhecida em runtime. O bridge transforma a árvore final no dispatcher de comandos da plataforma, e o Minecraft passa a conseguir validar argumentos e sugerir literais.
 
 ## Capability e permissões
 
@@ -27,34 +27,60 @@ Um mod que usa schema deve manter a permissão normal de registo e exigir a capa
 
 A capability é independente da versão do Minecraft. O core valida a versão do contrato e Fabric/NeoForge materializam a mesma árvore através dos seus respectivos bridges.
 
-## Forma Lua
+## Declaração estática no manifesto
 
-A assinatura estruturada é:
+O campo `commands` é a fonte de verdade para comandos estáticos. Cada chave é o nome usado depois de `/mod`, e `children` contém os nós publicados no dispatcher:
 
-```lua
-mod.command("nome", schema, callback)
+```json
+{
+  "commands": {
+    "minimap_demo": {
+      "children": [
+        { "literal": "on" },
+        { "literal": "off" },
+        { "literal": "config" },
+        { "literal": "zoom", "children": [
+          { "argument": {
+            "name": "level",
+            "type": "integer",
+            "min": 1,
+            "max": 4,
+            "suggestions": ["1", "2", "3", "4"]
+          }}
+        ]}
+      ]
+    }
+  }
+}
 ```
 
-O schema é uma lista de nós. Cada nó declara exactamente um `literal` ou um `argument` e pode possuir `children`:
+O `.lua` associa o callback ao nome já declarado:
 
 ```lua
-mod.command("minimap_demo", {
-    { literal = "on" },
-    { literal = "off" },
-    { literal = "config" },
-    { literal = "zoom", children = {
-        { argument = {
-            name = "level",
-            type = "integer",
-            min = 1,
-            max = 4,
-            suggestions = { "1", "2", "3", "4" }
-        }}
-    }}
-}, function(ctx)
-    -- callback
+mod.command("minimap_demo", function(ctx)
+    local action = ctx.argv[1]
+    local level = ctx.command.arguments.level
 end)
 ```
+
+A declaração precisa de `server.command.register` e `server.command.schema: 1.0.0`, como mostrado na secção de capability acima. Um comando declarado no manifesto sem callback Lua é recusado durante a carga, para não publicar uma entrada que não tenha comportamento.
+
+## Declaração dinâmica no Lua
+
+Para uma estrutura que só pode ser conhecida ao executar o entrypoint, o Lua pode declarar schema e callback juntos:
+
+```lua
+if mod.require("economia") ~= nil then
+    mod.command("mercado", {
+        { literal = "abrir" },
+        { literal = "saldo" }
+    }, function(ctx)
+        -- comando disponível apenas quando a biblioteca existe
+    end)
+end
+```
+
+Este é o formato indicado para condições globais, como biblioteca opcional ou configuração do servidor. Se o mesmo comando existir no JSON e no Lua com schema, as árvores precisam ser exactamente iguais; uma diferença é erro de carga, nunca uma escolha silenciosa.
 
 A árvore resultante é equivalente a:
 
@@ -84,20 +110,24 @@ Os tipos são intencionalmente pequenos e portáveis. O core não expõe `Argume
 
 ## Contexto do callback
 
-O callback mantém os campos antigos e recebe um campo `ctx.command` novo:
+O callback mantém os campos antigos e recebe um campo `ctx.command` novo. Quando o comando está no manifesto, o Lua só associa o callback:
 
 ```lua
-mod.command("teleport", {
-    { literal = "to", children = {
-        { argument = { name = "x", type = "integer" }, children = {
-            { argument = { name = "z", type = "integer" } }
-        }}
-    }}
-}, function(ctx)
+mod.command("teleport", function(ctx)
     local x = ctx.command.arguments.x
     local z = ctx.command.arguments.z
     local caminho = ctx.command.path
 end)
+```
+
+Para um comando que só existe sob uma condição global, o Lua pode declarar schema e callback juntos. Para acrescentar ramos a um comando estático, use `mod.command_extend` durante a carga:
+
+```lua
+if mod.require("economia") ~= nil then
+    mod.command_extend("admin", {
+        { literal = "economia" }
+    })
+end
 ```
 
 | Campo | Conteúdo |
@@ -130,7 +160,22 @@ A primeira versão não permite callback Lua para sugestões dinâmicas. Isto é
 
 Nada obriga um mod existente a migrar. O formato antigo continua a ser publicado com um argumento `greedy_string`, e `ctx.args`, `ctx.argv` e `ctx.subcommand` mantêm o comportamento anterior.
 
-A migração recomendada é trocar:
+A migração recomendada é colocar a árvore no `mod.json`:
+
+```json
+{
+  "commands": {
+    "minimap_demo": {
+      "children": [
+        { "literal": "on" },
+        { "literal": "off" }
+      ]
+    }
+  }
+}
+```
+
+E manter no Lua apenas:
 
 ```lua
 mod.command("minimap_demo", function(ctx)
@@ -138,16 +183,7 @@ mod.command("minimap_demo", function(ctx)
 end)
 ```
 
-por:
-
-```lua
-mod.command("minimap_demo", {
-    { literal = "on" },
-    { literal = "off" }
-}, function(ctx)
-    local action = ctx.argv[1]
-end)
-```
+Para comandos condicionais ou protótipos, a forma `mod.command(nome, schema, callback)` continua disponível. Para ramos adicionais de um comando JSON, use `mod.command_extend(nome, schema)`. Se JSON e Lua declararem schema para o mesmo comando, as árvores precisam ser exactamente iguais; o loader recusa qualquer divergência.
 
 Para comandos migrados, o callback deve usar `ctx.command.arguments.<nome>` para argumentos tipados, em vez de converter manualmente posições de `ctx.argv`.
 
@@ -161,6 +197,6 @@ O schema não cria uma API de cliente. Ele apenas descreve a sintaxe que o servi
 
 ## Estado actual
 
-A capability está implementada no core e nos quatro bridges mantidos. O exemplo `minimap_demo` usa schema para `/mod minimap_demo on|off|config|zoom <1..4>`. Os comandos sem schema continuam a funcionar no formato livre.
+A capability está implementada no core e nos quatro bridges mantidos. O exemplo `minimap_demo` declara a árvore de `/mod minimap_demo on|off|config|zoom <1..4>` no `mod.json` e associa o callback no Lua. Os comandos sem schema continuam a funcionar no formato livre.
 
 GameTests de servidor validam carregamento dos manifestos e os testes do core validam parsing, argumentos nomeados, limites e compatibilidade legada. A sugestão visual do cliente deve ser confirmada num cliente Minecraft, pois GameTests não simulam a caixa de chat nem pixels da interface.

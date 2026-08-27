@@ -12,6 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -168,6 +171,52 @@ class ServerReadAndReloadTest {
 
         for (int tick = 0; tick < 10; tick++) runtime.advanceScheduler();
         assertTrue(bridge.calls.isEmpty(), "nada do script antigo pode rodar depois da recarga");
+    }
+
+    @Test
+    void reloadRefreshesCommandTreeAfterSuccessfulReplacement(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        AtomicInteger refreshes = new AtomicInteger();
+        runtime.onCommandsChanged(refreshes::incrementAndGet);
+
+        runtime.load(writeMod(root, "\"server.command.register\"", """
+                mod.command("antigo", function(ctx) end)
+                """));
+        assertEquals(0, refreshes.get(), "carga inicial publica a árvore no bootstrap");
+
+        Files.writeString(root.resolve("read_mod").resolve("main.lua"), """
+                mod.command("novo", function(ctx) end)
+                """, StandardCharsets.UTF_8);
+        runtime.reload("read_mod");
+
+        assertEquals(1, refreshes.get());
+        assertTrue(runtime.commandNames().contains("novo"));
+        assertTrue(!runtime.commandNames().contains("antigo"));
+    }
+
+    @Test
+    void reloadRestoresOldCommandWhenReplacementFails(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"server.command.register\"", """
+                mod.command("oi", function(ctx)
+                    ctx.server.broadcast("versao antiga")
+                end)
+                """));
+        Files.writeString(root.resolve("read_mod").resolve("main.lua"), """
+                mod.command("oi", function(ctx)
+                    ctx.server.broadcast("script quebrado")
+                """
+                , StandardCharsets.UTF_8);
+
+        assertThrows(IOException.class, () -> runtime.reload("read_mod"));
+        assertTrue(runtime.commandNames().contains("oi"));
+        runtime.runCommand("oi", null, "");
+        assertEquals(List.of("versao antiga"), bridge.calls);
     }
 
     @Test

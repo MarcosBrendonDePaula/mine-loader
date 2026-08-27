@@ -91,6 +91,9 @@ public final class LuaRuntime {
     /** Cadeia activa de entrypoints a serem compilados por require(); vive na thread do servidor. */
     private final Deque<String> resolvingMods = new ArrayDeque<>();
 
+    /** Profundidade de compilação; evita republicar a árvore a cada declaração do entrypoint. */
+    private int compilationDepth;
+
     /**
      * Estado compartilhado por mod, exposto como {@code mod.state} e {@code ctx.state}.
      *
@@ -233,17 +236,8 @@ public final class LuaRuntime {
             for (ModLoader.LoadedMod found : discovered) {
                 if (!found.manifest().id.equals(modId)) continue;
 
-                // Reinstalar por cima de um mod ja carregado troca o script no lugar, e o antigo
-                // precisa soltar o que registrou -- comando, tela, tarefa agendada.
-                if (scripts.containsKey(modId)) {
-                    scheduled.removeIf(task -> task.modId().equals(modId));
-                    commands.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
-                    keybinds.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
-                    menus.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
-                    screens.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
-                    processes.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
-                }
-
+                // A substituição é transaccional dentro de load(): o mod antigo só solta seus
+                // registros depois que o novo entrypoint passa pela compilação inteira.
                 load(found);
                 if (commandRefresh != null) commandRefresh.run();
                 if (keybindRefresh != null) keybindRefresh.run();
@@ -298,19 +292,61 @@ public final class LuaRuntime {
             throw new IOException("dependencia circular dinamica: " + resolutionPath(id));
         }
         if (!replaceExisting && scripts.containsKey(id)) return;
+        availableMods.put(id, mod);
 
+        RegistrationSnapshot previous = detachRegistrations(id);
         resolvingMods.addLast(id);
+        compilationDepth++;
         try {
             LoadedScript script = compile(mod);
             scripts.put(id, script);
             logger.info("Script Lua carregado: {}", id);
+        } catch (IOException | RuntimeException error) {
+            restoreRegistrations(previous);
+            throw error;
         } finally {
+            compilationDepth--;
             if (!resolvingMods.isEmpty() && id.equals(resolvingMods.peekLast())) {
                 resolvingMods.removeLast();
             } else {
                 resolvingMods.remove(id);
             }
         }
+    }
+
+    /**
+     * Inicia uma substituição isolando todos os registos do mod.
+     *
+     * <p>O snapshot inteiro preserva a ordem dos mapas no rollback. Em sucesso, o entrypoint novo
+     * já ocupou os mapas vazios e os registos antigos não reaparecem.
+     */
+    private RegistrationSnapshot detachRegistrations(String modId) {
+        RegistrationSnapshot snapshot = new RegistrationSnapshot(
+                new LinkedHashMap<>(commands), new LinkedHashMap<>(keybinds),
+                new LinkedHashMap<>(menus), new LinkedHashMap<>(screens),
+                new LinkedHashMap<>(processes), new ArrayList<>(scheduled));
+        commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        keybinds.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        scheduled.removeIf(task -> task.modId().equals(modId));
+        return snapshot;
+    }
+
+    private void restoreRegistrations(RegistrationSnapshot snapshot) {
+        commands.clear();
+        commands.putAll(snapshot.commands());
+        keybinds.clear();
+        keybinds.putAll(snapshot.keybinds());
+        menus.clear();
+        menus.putAll(snapshot.menus());
+        screens.clear();
+        screens.putAll(snapshot.screens());
+        processes.clear();
+        processes.putAll(snapshot.processes());
+        scheduled.clear();
+        scheduled.addAll(snapshot.scheduled());
     }
 
     /** Resolve uma dependency declarada, compilando-a apenas quando ainda não está carregada. */
@@ -681,26 +717,13 @@ public final class LuaRuntime {
         LoadedScript previous = scripts.get(modId);
         if (previous == null) return false;
 
-        // O ambiente antigo e descartado, entao o que aponta para ele precisa sair junto: uma
-        // tarefa agendada ou um comando do script anterior chamaria uma funcao orfa.
-        int discarded = 0;
-        for (var iterator = scheduled.iterator(); iterator.hasNext(); ) {
-            if (iterator.next().modId().equals(modId)) {
-                iterator.remove();
-                discarded++;
-            }
-        }
-        commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
-        keybinds.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
-        menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
-        screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
-        processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
-
-        LoadedScript replacement = compile(rereadManifest(previous.mod()));
-        scripts.put(modId, replacement);
+        int discarded = (int) scheduled.stream()
+                .filter(task -> task.modId().equals(modId)).count();
+        compileAndInstall(rereadManifest(previous.mod()), true);
 
         logger.info("Script Lua recarregado: {}{}", modId,
                 discarded == 0 ? "" : " (" + discarded + " tarefa(s) pendente(s) descartada(s))");
+        if (commandRefresh != null) commandRefresh.run();
         if (keybindRefresh != null) keybindRefresh.run();
         return true;
     }
@@ -996,6 +1019,8 @@ public final class LuaRuntime {
         LuaTable state = states.computeIfAbsent(mod.manifest().id, key -> stateStore.load(key));
         modApi.set("state", state);
 
+        registerManifestCommands(mod.manifest());
+
         // API de servidor com as permissoes deste mod, independente de quem chamar.
         modApi.set("server", serverApiFor(mod));
 
@@ -1122,7 +1147,51 @@ public final class LuaRuntime {
                 if (existing != null && !existing.modId().equals(mod.manifest().id)) {
                     throw new LuaError("comando " + name + " ja registrado pelo mod " + existing.modId());
                 }
+                if (existing != null && existing.schema() != null) {
+                    if (schema != null && !existing.schema().equals(schema)) {
+                        throw new LuaError("schema do comando " + name
+                                + " difere do manifesto ou de outra declaracao");
+                    }
+                    if (schema == null) schema = existing.schema();
+                }
                 commands.put(name, new RegisteredCommand(mod.manifest().id, schema, callback));
+                refreshCommandsIfRuntimeMutation();
+                return LuaValue.NIL;
+            }
+        });
+
+        modApi.set("command_extend", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.command.register");
+                if (args.narg() < 2 || !args.arg(2).istable()) {
+                    throw new LuaError("command_extend exige nome e um schema");
+                }
+                if (mod.manifest().requires == null
+                        || mod.manifest().requires.capabilities == null
+                        || !mod.manifest().requires.capabilities.containsKey("server.command.schema")) {
+                    throw new LuaError("command_extend exige requires.capabilities.server.command.schema");
+                }
+
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("nome de comando invalido: " + name);
+                }
+                RegisteredCommand existing = commands.get(name);
+                if (existing == null || existing.schema() == null
+                        || !existing.modId().equals(mod.manifest().id)) {
+                    throw new LuaError("command_extend exige um comando estruturado do proprio mod: " + name);
+                }
+
+                CommandSchema extension = readCommandSchema((LuaTable) args.arg(2));
+                CommandSchema merged;
+                try {
+                    merged = existing.schema().merge(extension);
+                } catch (IllegalArgumentException error) {
+                    throw new LuaError("extensao do comando " + name + " invalida: " + error.getMessage());
+                }
+                commands.put(name, new RegisteredCommand(existing.modId(), merged, existing.callback()));
+                refreshCommandsIfRuntimeMutation();
                 return LuaValue.NIL;
             }
         });
@@ -1252,9 +1321,41 @@ public final class LuaRuntime {
             }
         }
 
+        for (Map.Entry<String, RegisteredCommand> entry : commands.entrySet()) {
+            RegisteredCommand command = entry.getValue();
+            if (command.modId().equals(mod.manifest().id)
+                    && command.schema() != null && command.callback() == null) {
+                throw new IOException("comando " + entry.getKey()
+                        + " foi declarado no manifesto, mas nao recebeu callback Lua");
+            }
+        }
+
         return new LoadedScript(mod, Map.copyOf(callbacks),
                 loadBlockHandlers(mod, globals, exported),
                 loadItemHandlers(mod, globals, exported), exported, budget);
+    }
+
+    private void refreshCommandsIfRuntimeMutation() {
+        if (compilationDepth == 0 && commandRefresh != null) commandRefresh.run();
+    }
+
+    private void registerManifestCommands(ModManifest manifest) {
+        if (manifest.commands == null || manifest.commands.isEmpty()) return;
+        for (Map.Entry<String, ModManifest.CommandDefinition> entry : manifest.commands.entrySet()) {
+            String name = entry.getKey();
+            try {
+                CommandSchema schema = CommandSchema.fromManifest(entry.getValue());
+                RegisteredCommand existing = commands.get(name);
+                if (existing != null && !existing.modId().equals(manifest.id)) {
+                    throw new IllegalArgumentException("comando " + name
+                            + " ja registrado pelo mod " + existing.modId());
+                }
+                commands.put(name, new RegisteredCommand(manifest.id, schema, null));
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("schema do comando " + name
+                        + " invalido: " + error.getMessage(), error);
+            }
+        }
     }
 
     /**
@@ -3930,6 +4031,14 @@ public final class LuaRuntime {
             table.set(entry.getKey(), value);
         }
         return table;
+    }
+
+    private record RegistrationSnapshot(Map<String, RegisteredCommand> commands,
+                                         Map<String, RegisteredKeybind> keybinds,
+                                         Map<String, RegisteredMenu> menus,
+                                         Map<String, RegisteredMenu> screens,
+                                         Map<String, RegisteredProcess> processes,
+                                         List<ScheduledTask> scheduled) {
     }
 
     private record RegisteredMenu(String modId, LuaFunction callback) {

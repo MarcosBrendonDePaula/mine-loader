@@ -9,6 +9,24 @@
   "keybinds": [
     { "id": "toggle", "key": "key.keyboard.m", "category": "minimap_demo" }
   ],
+  "commands": {
+    "minimap_demo": {
+      "children": [
+        { "literal": "on" },
+        { "literal": "off" },
+        { "literal": "config" },
+        { "literal": "zoom", "children": [
+          { "argument": {
+            "name": "level",
+            "type": "integer",
+            "min": 1,
+            "max": 4,
+            "suggestions": ["1", "2", "3", "4"]
+          }}
+        ]}
+      ]
+    }
+  },
   "requires": {
     "domains": {
       "world": "1.0.0",

@@ -259,7 +259,7 @@ lugar nenhum.
 - [x] Diagnóstico de tela (`dump_screen`) — posições resolvidas e colisões
 - [ ] Botão e campo de texto dentro de um viewport — hoje recusado: widget não rola
 - [x] Evento de tecla, com atalho declarado no manifesto (`client.input.keybind`)
-- [x] Schema declarativo de comandos, argumentos tipados e autocomplete (`server.command.schema`)
+- [x] Schema declarativo de comandos no JSON/Lua, merge determinístico, argumentos tipados e autocomplete (`server.command.schema`)
 - [x] Geometria e ancoragem no núcleo, compartilhadas entre as plataformas
 - [x] Recusa explícita quando a plataforma não suporta (`supports_screens`)
 - [x] O cliente interpreta dados, nunca código

@@ -86,6 +86,16 @@
         ]
       }
     },
+    "commands": {
+      "type": "object",
+      "description": "Árvores estáticas publicadas depois de /mod.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/commandDefinition"
+      }
+    },
     "blocks": {
       "type": "array",
       "uniqueItems": true,
@@ -140,6 +150,82 @@
     }
   },
   "$defs": {
+    "commandDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["children"],
+      "properties": {
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/commandNode"
+          }
+        }
+      }
+    },
+    "commandNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": ["literal"],
+          "not": { "required": ["argument"] }
+        },
+        {
+          "required": ["argument"],
+          "not": { "required": ["literal"] }
+        }
+      ],
+      "properties": {
+        "literal": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,31}$"
+        },
+        "argument": {
+          "$ref": "#/$defs/commandArgument"
+        },
+        "executes": {
+          "type": "boolean"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commandNode"
+          }
+        }
+      }
+    },
+    "commandArgument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,31}$"
+        },
+        "type": {
+          "enum": ["word", "string", "greedy_string", "integer", "double", "boolean"],
+          "default": "word"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "suggestions": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      }
+    },
     "block": {
       "type": "object",
       "additionalProperties": false,

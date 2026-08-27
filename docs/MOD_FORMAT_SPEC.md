@@ -37,6 +37,13 @@ O loader não executará arquivos que escapem da raiz do pacote. Separadores alt
   "keybinds": [
     { "id": "toggle_map", "key": "key.keyboard.m", "category": "map" }
   ],
+  "commands": {
+    "example": {
+      "children": [
+        { "literal": "status" }
+      ]
+    }
+  },
   "events": {
     "server_started": "on_server_started",
     "tick": "on_tick"
@@ -140,7 +147,7 @@ um consumidor de domínio e um mod que combina `dependencies` com `requires`.
 
 ### 2.4 Schemas declarativos de comandos
 
-A forma estruturada de `mod.command(nome, schema, callback)` exige a capability `server.command.schema` além da permissão `server.command.register`. O schema é declarado no Lua, não como um campo arbitrário do manifesto, porque o callback e a árvore são compilados juntos no mesmo entrypoint. Literais, argumentos tipados, limites e sugestões são validados pelo core e publicados pelo bridge. A forma legada `mod.command(nome, callback)` continua válida e usa texto livre. Consulte [COMMANDS.md](COMMANDS.md) para o contrato completo.
+A forma estática de comandos usa o campo `commands` do manifesto e exige a capability `server.command.schema` além da permissão `server.command.register`. O Lua associa o callback com `mod.command(nome, callback)`. Para comandos condicionais ou protótipos, `mod.command(nome, schema, callback)` continua disponível, e `mod.command_extend(nome, schema)` acrescenta ramos durante a carga. Literais, argumentos tipados, limites e sugestões são validados pelo core e publicados pelo bridge. A forma legada `mod.command(nome, callback)` sem declaração no manifesto continua válida e usa texto livre. Consulte [COMMANDS.md](COMMANDS.md) para o contrato completo.
 
 ## 3. Blocos
 
