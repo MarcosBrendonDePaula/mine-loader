@@ -277,6 +277,16 @@ class ModLibraryTest {
     }
 
     @Test
+    void threeNodeCircularDependencyIsRejected(@TempDir Path root) throws IOException {
+        writeMod(root, "mod_a", "", "\"mod_b\": \"1.0.0\"", "return {}\n");
+        writeMod(root, "mod_b", "", "\"mod_c\": \"1.0.0\"", "return {}\n");
+        writeMod(root, "mod_c", "", "\"mod_a\": \"1.0.0\"", "return {}\n");
+
+        assertTrue(discover(root).isEmpty(),
+                "um ciclo de tres nos nao pode carregar nenhum dos mods");
+    }
+
+    @Test
     void versionComparisonHandlesCommonFormats() {
         assertTrue(ModDependencies.satisfies("1.2.3", "1.2.3"));
         assertTrue(ModDependencies.satisfies("1.3.0", "1.2.9"));
