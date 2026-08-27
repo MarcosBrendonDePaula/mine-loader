@@ -2,66 +2,89 @@
 
 O MineLoader não tenta exportar todas as classes de Fabric, NeoForge ou Minecraft. Ele exporta **capacidades de gameplay** com nomes e dados estáveis, enquanto cada bridge traduz essa intenção para a versão em execução. O mod Lua depende deste documento e do manifesto; não depende de mappings, mixins, `IItemHandler`, `Storage<ItemVariant>`, `AttachmentType` ou classes internas.
 
-A seleção segue os padrões que aparecem nas documentações oficiais dos loaders: eventos são hooks para casos comuns e compatibilidade entre mods [1], networking mantém o estado sincronizado entre cliente e servidor [2], registros são a base para itens/blocos/entidades [3], capabilities separam comportamento de implementação [4] e dados persistentes podem ser associados a entidades, chunks, block entities e níveis [5]. Recursos como receitas, loot, tags e worldgen também fazem parte do ecossistema normal de modding [6] [7].
+A seleção segue padrões comuns das documentações oficiais: eventos são hooks para casos recorrentes e compatibilidade entre mods [1], networking mantém o estado sincronizado entre cliente e servidor [2], registros são a base para itens, blocos e entidades [3], capabilities separam comportamento de implementação [4] e dados persistentes podem ser associados a entidades, chunks, block entities e níveis [5]. Receitas, loot, tags e worldgen também fazem parte do ecossistema normal de modding [6] [7].
 
-## Capacidades adicionadas nesta versão
+## Contrato disponível
 
-| API Lua | Permissão | Contrato | Implementação |
+A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4.
+
+| API Lua | Permissão | Retorno/efeito | Matriz |
 |---|---|---|---|
-| `ctx.server.redstone_signal(x, y, z)` | `world.read` | Retorna a potência redstone recebida, entre `0` e `15` | Fabric 1.21.1/1.21.4 e NeoForge 1.21.1/1.21.4 |
-| `ctx.player.data.get(chave, padrão)` | `player.read` | Lê um valor persistente associado ao jogador e ao mod | Core, serialização JSON atômica |
-| `ctx.player.data.has(chave)` | `player.read` | Indica se a chave existe | Core |
-| `ctx.player.data.set(chave, valor)` | `player.modify` | Grava texto, número, booleano ou tabela serializável | Core, autosave e salvamento no desligamento |
-| `ctx.player.data.remove(chave)` | `player.modify` | Remove a chave e retorna se ela existia | Core |
+| `ctx.server.redstone_signal(x, y, z)` | `world.read` | Potência recebida, de `0` a `15` | quatro runtimes |
+| `ctx.server.block_state(x, y, z)` | `world.read` | `{ id = "mod:bloco", properties = { nome = "valor" } }` | quatro runtimes |
+| `ctx.server.set_block_state(x, y, z, properties)` | `world.write` | `true` quando o mundo aceita a alteração | quatro runtimes |
+| `ctx.server.game_rule(name)` | `world.read` | Texto estável: `true`, `false` ou inteiro | quatro runtimes |
+| `ctx.server.set_game_rule(name, value)` | `world.write` | Altera uma regra da whitelist | quatro runtimes |
+| `ctx.server.difficulty()` | `world.read` | `peaceful`, `easy`, `normal` ou `hard` | quatro runtimes |
+| `ctx.server.set_difficulty(value)` | `world.write` | Altera a dificuldade, se o mundo não estiver bloqueado | quatro runtimes |
+| `ctx.server.time_of_day()` | `world.read` | Hora em ticks, de `0` a `23999` | quatro runtimes |
+| `ctx.server.set_time_of_day(value)` | `world.write` | Altera a hora sem rebobinar os dias já passados | quatro runtimes |
+| `ctx.server.weather()` | `world.read` | `clear`, `rain` ou `thunder` | quatro runtimes |
+| `ctx.server.set_weather(kind, duration)` | `world.write` | Altera o clima por uma duração em ticks | quatro runtimes |
+| `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
 
-A potência redstone foi modelada como leitura do sinal que chega à posição. Ela não finge que qualquer bloco pode emitir sinal dinâmico: emissão depende do conteúdo registrado e da semântica do bloco. Essa escolha evita uma API enganosa e permite que máquinas declarativas reajam a alavancas, comparadores, trilhos e blocos de outros mods.
+A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
+
+## Estado de bloco
+
+`block_state` responde com um snapshot agnóstico. O Lua recebe apenas o identificador do bloco e um mapa de propriedades convertidas para texto. Nenhuma instância `BlockState`, `Property`, mundo ou objeto Java atravessa a fronteira.
+
+```lua
+local state = ctx.server.block_state(x, y, z)
+if state.id == "minecraft:oak_door" then
+    ctx.log.info("porta aberta: " .. tostring(state.properties.open))
+    ctx.log.info("direcao: " .. state.properties.facing)
+end
+```
+
+`set_block_state` altera somente propriedades que já pertencem ao bloco naquela posição. Ele não troca o bloco, não cria uma propriedade nova e não aceita um nome ou valor desconhecido silenciosamente. O mapa pode ser parcial: para abrir uma porta não é preciso reenviar `facing`, `hinge`, `half` e `powered`.
+
+```lua
+ctx.server.set_block_state(x, y, z, {
+    open = "true",
+    facing = "south"
+})
+```
+
+O valor é textual porque o nome e o conjunto de valores de uma propriedade mudam de classe entre mappings, mas a intenção é a mesma. O bridge traduz o texto para o tipo real da versão, por exemplo uma propriedade booleana, direcional ou enumerada. Um valor inválido produz erro de bridge; não há fallback para um estado aproximado.
+
+## Game Rules com whitelist
+
+Game Rules são configurações do mundo, não um mapa livre para qualquer chave. O contrato usa o conjunto fechado abaixo para manter a mesma superfície nas quatro combinações e impedir acesso acidental a regras de comando, debug ou específicas de uma versão.
+
+| Tipo | Nomes estáveis |
+|---|---|
+| Booleano | `do_fire_tick`, `mob_griefing`, `keep_inventory`, `do_mob_spawning`, `do_mob_loot`, `do_tile_drops`, `do_entity_drops`, `natural_regeneration`, `do_daylight_cycle`, `do_weather_cycle`, `send_command_feedback`, `announce_advancements`, `disable_raids`, `do_insomnia`, `do_immediate_respawn`, `drowning_damage`, `fall_damage`, `fire_damage`, `freeze_damage`, `do_patrol_spawning`, `do_trader_spawning`, `do_warden_spawning`, `forgive_dead_players`, `universal_anger`, `do_vines_spread`, `show_death_messages` |
+| Inteiro | `random_tick_speed`, `spawn_radius`, `max_entity_cramming`, `players_sleeping_percentage`, `snow_accumulation_height`, `spawn_chunk_radius` |
+
+A leitura devolve sempre texto para não criar dois formatos de retorno entre Lua e Java. A escrita aceita texto, número ou booleano simples no Lua, mas o bridge confirma o tipo real da regra. Valores inteiros negativos ou excessivamente grandes são recusados pelo contrato de segurança. A permissão `world.write` deve ser tratada como poder administrativo quando o mod altera regras globais do mundo.
+
+```lua
+local ciclo = ctx.server.game_rule("do_daylight_cycle")
+if ciclo == "true" then
+    ctx.server.set_game_rule("do_daylight_cycle", false)
+end
+
+local dificuldade = ctx.server.difficulty()
+if dificuldade == "peaceful" then
+    ctx.server.set_difficulty("normal")
+end
+```
+
+Apenas `peaceful`, `easy`, `normal` e `hard` são aceitos para dificuldade. Se o mundo tiver a dificuldade bloqueada, `set_difficulty` recusa a operação em vez de contornar a configuração. A alteração é global ao servidor de teste ou mundo em execução; um mod deve restaurar valores temporários e não disputar a configuração com outros mods.
+
+## Redstone e dados persistentes
+
+A potência redstone foi modelada como leitura do sinal que chega à posição. Ela não finge que qualquer bloco pode emitir sinal dinâmico: emissão depende do conteúdo registrado e da semântica do bloco. Essa escolha permite que máquinas declarativas reajam a alavancas, comparadores, trilhos e blocos de outros mods sem expor a API interna de nenhuma plataforma.
 
 Os dados do jogador são separados de `mod.state`. O primeiro pertence a um jogador específico; o segundo pertence ao mod como um todo. O MineLoader guarda os dados em um ficheiro escopado, `<mod>.players.json`, com troca atômica. O script nunca escolhe o caminho do ficheiro. As chaves aceitam somente `[A-Za-z0-9_.-]` e no máximo 64 caracteres; os valores aceitam apenas tipos que sobrevivem a JSON, com profundidade limitada a 32 níveis.
-
-## Exemplos
-
-Um mod de máquina pode reagir a redstone no evento `tick`:
-
-```lua
-mod.on("tick", function(ctx)
-    if ctx.server.redstone_signal(10, 64, -3) > 0 then
-        -- A máquina recebeu sinal e pode avançar o processo declarado.
-    end
-end)
-```
-
-A forma mais clara para testar o sinal é guardá-lo e reagir somente quando muda:
-
-```lua
-local ultimo_sinal = -1
-
-mod.on("tick", function(ctx)
-    local sinal = ctx.server.redstone_signal(10, 64, -3)
-    if sinal ~= ultimo_sinal then
-        ultimo_sinal = sinal
-        ctx.server.broadcast("Sinal da máquina: " .. sinal)
-    end
-end)
-```
-
-Um mod de progressão pode guardar visitas sem usar NBT, attachments ou classes de entidade:
 
 ```lua
 mod.on("player_joined", function(ctx)
     local visitas = ctx.player.data.get("visitas", 0)
     ctx.player.data.set("visitas", visitas + 1)
-    ctx.player.send_message("Esta é a sua visita número " .. (visitas + 1))
+    ctx.player.send_message("Visita número " .. (visitas + 1))
 end)
-```
-
-A API também permite distinguir ausência de valor de um valor falso ou zero:
-
-```lua
-if not ctx.player.data.has("tutorial_concluido") then
-    ctx.player.data.set("tutorial_concluido", false)
-end
-
-ctx.player.data.remove("chave_temporaria")
 ```
 
 ## Regras de estabilidade
@@ -77,24 +100,29 @@ O Lua recebe tabelas e escalares simples. Ele não recebe objetos Java, referên
 | Mudança de formato ou semântica | Exige versão nova do contrato e validação dos manifests |
 | Capability inexistente em um runtime | Recusa explícita ou fallback documentado |
 | API específica de uma plataforma | Fica dentro do bridge, não entra no core |
+| Nova Game Rule | Só entra após existir nas quatro versões e ter tipo/limite comum |
+
+## Mapa não é uma única capability
+
+“Mapa” pode significar três coisas diferentes. A consulta física do mundo já inclui bloco, estado, bioma, luz, altura, clima e redstone. Navegação inclui posição, raycast, teleporte e dimensão. Cartografia inclui waypoints e marcadores próprios.
+
+O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa. Uma futura API de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
+
+Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige definir céu, bioma, geração, altura, respawn e acesso. Não é correto prometer `teleport_dimension` ou dimensão declarativa completa antes de existir um schema fechado e GameTests para mundos novos.
 
 ## Próximas APIs priorizadas
 
-A pesquisa mostra que networking, data components, recursos/datapacks e worldgen são áreas frequentes. Elas não foram adicionadas como simples aliases porque precisam de contratos mais cuidadosos.
+**Drops no mundo e evento de quebra** vêm primeiro. A operação deve criar um item solto com quantidade e limite por chamada; o evento de quebra deve preservar posição, bloco, jogador e contexto de drops antes de o bloco desaparecer. Depois vêm explosão e raio, também com limites de força, frequência e área.
 
-**Networking declarativo** deve vir como payloads pequenos e versionados, com schema fechado, limite de tamanho, direção explícita e validação no servidor. A documentação Fabric reforça que o servidor deve validar o conteúdo recebido; expor `send_packet` com bytes arbitrários seria incompatível com a sandbox [2].
+Na sequência entram efeitos ativos, armadura, postura, vetor de movimento e slots do jogador. Fluidos e energia precisam de unidades próprias do loader, não `FluidStack`, capabilities ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
 
-**Data components** devem ser expostos somente como dados imutáveis e portáveis para itens declarados, não como o mapa inteiro de componentes internos. A documentação NeoForge recomenda valores imutáveis, frequentemente records, e codecs para persistência e rede [8].
-
-**Worldgen** deve começar por um vocabulário fechado para features, colocação e filtros de bioma. Fabric separa configured features, placed features e biome modifications [7], enquanto NeoForge trata worldgen como registros dinâmicos/datapack [3]. A diferença torna essa capability adequada para uma etapa própria, com GameTests de geração e verificação de datapack.
-
-**Receitas, loot, tags e advancements** devem ganhar operações declarativas adicionais quando houver um formato comum testável nas quatro combinações atuais. O MineLoader já consulta receitas, drops e tags; a próxima evolução deve ampliar tipos e composição sem copiar codecs específicos no core.
+Networking declarativo deve usar payloads pequenos e versionados, schema fechado, direção explícita, limite de tamanho e validação no servidor. Expor `send_packet` com bytes arbitrários seria incompatível com a sandbox [2]. Data components devem ser expostos somente como dados imutáveis e portáveis para itens declarados, não como o mapa inteiro de componentes internos [8].
 
 ## Validação
 
-A expansão é considerada válida quando o core passa a sua suíte JUnit, os quatro bridges compilam e os GameTests existentes continuam verdes. A leitura redstone possui teste de contrato no core e implementação real nos quatro bridges. A persistência de jogador possui teste de reinicialização do runtime, usando o mesmo UUID em duas instâncias.
+A expansão é considerada válida quando o core passa a suíte JUnit, os quatro bridges compilam e os GameTests reais continuam verdes. O pacote atual tem testes de contrato para `block_state`, `set_block_state`, Game Rules, dificuldade, permissões e validação de entrada; cada runtime também exercita estado de porta, uma Game Rule e o getter/setter de dificuldade dentro de um servidor Minecraft real.
 
-A validação completa da matriz continua sendo:
+A validação completa da matriz é:
 
 ```bash
 ./gradlew :core:test
@@ -104,7 +132,7 @@ A validação completa da matriz continua sendo:
 ./gradlew checkAllRuntimes
 ```
 
-A implementação não promove automaticamente capabilities visuais experimentais como OBJ ou renderização customizada de entidades. Essas áreas continuam discriminadas em `docs/COMPATIBILIDADE.md`.
+A implementação não promove automaticamente capabilities visuais experimentais como OBJ ou renderização customizada. Essas áreas continuam discriminadas em `docs/COMPATIBILIDADE.md`.
 
 ## Referências
 

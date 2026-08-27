@@ -172,14 +172,15 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Partícula posicionada, com direção
 - [x] Inventário de bloco — capacidades, conteúdo, inserir, extrair, e por slot
 - [x] Consulta ao registro — itens, blocos, tipos de entidade, receitas, drops
-- [ ] **Ler o estado do bloco** — facing, open, waterlogged, powered, axis
-- [ ] **Escrever o estado do bloco**
-- [ ] Ler bioma numa posição
-- [ ] Ler nível de luz numa posição
+- [x] **Ler o estado do bloco** — facing, open, waterlogged, powered, axis
+- [x] **Escrever o estado do bloco** — alteração parcial com propriedades validadas
+- [x] Ler bioma numa posição
+- [x] Ler nível de luz numa posição
 - [ ] Explosão
 - [ ] Raio
 - [ ] Largar item solto no mundo, sem passar pelo inventário de alguém
-- [ ] Ler e emitir sinal de redstone
+- [x] Ler sinal de redstone — emissão dinâmica ainda não faz parte do contrato
+- [x] Game Rules com whitelist e dificuldade do mundo
 - [x] Tique agendado por posição (`schedule_block` / `on_scheduled`) — "volte aqui em N tiques"
 - [x] Raycast — o primeiro bloco que uma linha atravessa (`player.looking_at`)
 - [ ] Carregar e manter chunk sob demanda
@@ -285,10 +286,10 @@ geometria terem ido para o núcleo.
 ## 11. Plataformas
 
 - [x] Fabric
-- [~] NeoForge — registro, ponte e interface completos; eventos globais, data pack, ferramenta,
-      armadura e metade das propriedades de bloco, não
+- [x] NeoForge — bridge e interface alinhadas com Fabric na matriz mantida; limitações visuais de
+      1.21.4 continuam discriminadas em `COMPATIBILIDADE.md`
 - [x] Núcleo que não conhece nenhuma das duas
-- [~] Matriz de compatibilidade mantida — existe, e **afirma coisas que o código contradiz**
+- [x] Matriz de compatibilidade mantida — capability nova só entra após compilação e teste real
 - [ ] Quilt
 - [ ] Paper / Spigot — servidor puro, sem registro de conteúdo
 - [ ] Mais de uma versão do Minecraft
@@ -300,7 +301,7 @@ geometria terem ido para o núcleo.
 - [x] Autoteste rodável dentro do jogo (`/mod autoteste`)
 - [x] Servidor dirigível por arquivo, sem cliente
 - [x] Documentação de formato, API, eventos, segurança e interface
-- [x] GameTest em servidor real — oito casos em cada plataforma
+- [x] GameTest em servidor real — 22 casos em cada combinação mantida
 - [ ] Template de mod novo, gerado por comando
 - [ ] Validador CLI independente do jogo
 - [ ] Stubs de tipo ou autocompletar para o Lua
@@ -456,9 +457,9 @@ Antes de acrescentar qualquer capacidade nova, fazer valer o que já foi prometi
 - [x] Os campos mortos: `drops_like`, `flammability` e `burn_spread` aplicados nas duas;
       `required_features` e a classe `ItemBehaviorAdvanced` removidas
 - [x] `ManifestDiagnostics` completo — e um aviso novo para `drops_like` anulado por `drops_nothing`
-- [x] **GameTests rodando no NeoForge** — oito casos, e no CI junto com os do Fabric
+- [x] **GameTests rodando no NeoForge** — 22 casos, e no CI junto com os do Fabric
 
-**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 8/8 em cada uma.
+**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 22/22 em cada combinação.
 Os casos `eventos_globais` e `agendador` foram escritos *antes* de olhar o resultado e falharam no
 NeoForge na primeira execução — que é o que os torna prova e não cerimônia.
 
@@ -473,7 +474,7 @@ A correção foi acrescentar `hello_lua:bloco_de_prova`, cujo único propósito 
 **diferentes** dos padrões. Só depois disso o teste falhou com o defeito e passou sem ele — nas duas
 plataformas.
 
-**Um teste que não se viu falhar não é verificação, é decoração.** Vale para os oito casos daqui: a
+**Um teste que não se viu falhar não é verificação, é decoração.** Vale para os 22 casos daqui: a
 regressão foi introduzida de propósito e revertida em cada plataforma, e o que ficou registrado é
 que eles *conseguem* falhar.
 

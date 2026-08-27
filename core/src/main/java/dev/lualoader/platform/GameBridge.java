@@ -30,6 +30,22 @@ public interface GameBridge {
             "master", "music", "records", "weather", "blocks",
             "hostile", "neutral", "players", "ambient", "voice");
 
+    /**
+     * Nomes de Game Rules que formam o contrato comum do loader.
+     *
+     * <p>Os bridges traduzem esta lista para as constantes da plataforma. Regras de comando, debug
+     * ou específicas de uma versão ficam fora dela até existir uma semântica portável e segura.
+     */
+    java.util.Set<String> GAME_RULES = java.util.Set.of(
+            "do_fire_tick", "mob_griefing", "keep_inventory", "do_mob_spawning", "do_mob_loot",
+            "do_tile_drops", "do_entity_drops", "natural_regeneration", "do_daylight_cycle",
+            "do_weather_cycle", "send_command_feedback", "announce_advancements", "disable_raids",
+            "do_insomnia", "do_immediate_respawn", "drowning_damage", "fall_damage", "fire_damage",
+            "freeze_damage", "do_patrol_spawning", "do_trader_spawning", "do_warden_spawning",
+            "forgive_dead_players", "universal_anger", "do_vines_spread", "show_death_messages",
+            "random_tick_speed", "spawn_radius", "max_entity_cramming", "players_sleeping_percentage",
+            "snow_accumulation_height", "spawn_chunk_radius");
+
     /** Envia uma mensagem pública a todos os jogadores conectados. */
     void broadcast(String message);
 
@@ -76,6 +92,21 @@ public interface GameBridge {
      * @return identificador no formato {@code mod:bloco}, por exemplo {@code minecraft:stone}
      */
     String getBlock(int x, int y, int z);
+
+    /** Retorna o bloco e suas propriedades simples, sem expor {@code BlockState}. */
+    default BlockStateSnapshot blockState(int x, int y, int z) {
+        throw new BridgeException("block_state nao existe neste adaptador");
+    }
+
+    /**
+     * Altera propriedades existentes do bloco na posição indicada.
+     *
+     * <p>O adaptador deve rejeitar propriedades desconhecidas ou valores inválidos; não deve criar
+     * um estado aproximado silenciosamente.
+     */
+    default boolean setBlockState(int x, int y, int z, java.util.Map<String, String> properties) {
+        throw new BridgeException("set_block_state nao existe neste adaptador");
+    }
 
     /**
      * Substitui o bloco na posição indicada por qualquer bloco registrado, do jogo ou de um mod.
@@ -570,7 +601,27 @@ public interface GameBridge {
      * nascer util antes de nascer completo.
      */
 
-    // ------------------------------------------------------------------ tempo e clima
+    // ------------------------------------------------------------------ tempo, clima e regras
+
+    /** Lê uma regra de jogo da whitelist, devolvendo sempre texto estável. */
+    default String gameRule(String name) {
+        throw new BridgeException("game_rule nao existe neste adaptador");
+    }
+
+    /** Altera uma regra de jogo da whitelist usando texto validado pelo bridge. */
+    default void setGameRule(String name, String value) {
+        throw new BridgeException("set_game_rule nao existe neste adaptador");
+    }
+
+    /** Dificuldade atual: {@code peaceful}, {@code easy}, {@code normal} ou {@code hard}. */
+    default String difficulty() {
+        throw new BridgeException("difficulty nao existe neste adaptador");
+    }
+
+    /** Altera a dificuldade, com os quatro nomes do jogo. */
+    default void setDifficulty(String difficulty) {
+        throw new BridgeException("set_difficulty nao existe neste adaptador");
+    }
 
     /**
      * Define a hora do dia, no mesmo relógio de 24000 tiques que {@link #timeOfDay()} lê.

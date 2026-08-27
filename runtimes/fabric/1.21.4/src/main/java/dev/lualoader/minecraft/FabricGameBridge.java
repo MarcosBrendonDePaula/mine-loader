@@ -166,6 +166,39 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public dev.lualoader.platform.BlockStateSnapshot blockState(int x, int y, int z) {
+        var state = requireWorld().getBlockState(new BlockPos(x, y, z));
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
+        var properties = new java.util.LinkedHashMap<String, String>();
+        for (var property : state.getProperties()) {
+            properties.put(property.getName(), ((net.minecraft.state.property.Property) property)
+                    .name((Comparable) state.get((net.minecraft.state.property.Property) property)));
+        }
+        return new dev.lualoader.platform.BlockStateSnapshot(
+                id == null ? "minecraft:air" : id.toString(), properties);
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public boolean setBlockState(int x, int y, int z,
+                                 java.util.Map<String, String> properties) {
+        var world = requireWorld();
+        var position = new BlockPos(x, y, z);
+        var state = world.getBlockState(position);
+        var next = state;
+        for (var entry : properties.entrySet()) {
+            var property = state.getBlock().getStateManager().getProperty(entry.getKey());
+            if (property == null) {
+                throw new BridgeException("propriedade desconhecida: " + entry.getKey());
+            }
+            var parsed = property.parse(entry.getValue()).orElseThrow(() ->
+                    new BridgeException("valor invalido para " + entry.getKey() + ": " + entry.getValue()));
+            next = next.with((net.minecraft.state.property.Property) property, (Comparable) parsed);
+        }
+        return world.setBlockState(position, next, 3);
+    }
+
+    @Override
     public void setBlock(String blockId, int x, int y, int z) {
         Block block = requireAnyBlock(blockId);
         requireWorld().setBlockState(new BlockPos(x, y, z), block.getDefaultState(), 3);
@@ -1145,6 +1178,111 @@ public final class FabricGameBridge implements GameBridge {
             case "rain" -> world.setWeather(0, ticks, true, false);
             default -> world.setWeather(ticks, 0, false, false);
         }
+    }
+
+    // ------------------------------------------------------------------ regras e dificuldade
+
+    @Override
+    public String gameRule(String name) {
+        var rule = gameRuleValue(name);
+        if (rule instanceof net.minecraft.world.GameRules.BooleanRule booleanRule) {
+            return Boolean.toString(booleanRule.get());
+        }
+        if (rule instanceof net.minecraft.world.GameRules.IntRule intRule) {
+            return Integer.toString(intRule.get());
+        }
+        throw new BridgeException("tipo de regra nao suportado: " + name);
+    }
+
+    @Override
+    public void setGameRule(String name, String value) {
+        if (value == null) throw new BridgeException("valor de regra ausente: " + name);
+        var rule = gameRuleValue(name);
+        if (rule instanceof net.minecraft.world.GameRules.BooleanRule booleanRule) {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                throw new BridgeException("regra booleana exige true ou false: " + name);
+            }
+            booleanRule.set(Boolean.parseBoolean(value), requireServer());
+            return;
+        }
+        if (rule instanceof net.minecraft.world.GameRules.IntRule intRule) {
+            final int parsed;
+            try {
+                parsed = Integer.parseInt(value);
+            } catch (NumberFormatException error) {
+                throw new BridgeException("regra inteira exige um numero: " + name, error);
+            }
+            if (parsed < 0 || parsed > 1_000_000) {
+                throw new BridgeException("valor de regra fora do limite seguro: " + name);
+            }
+            intRule.set(parsed, requireServer());
+            return;
+        }
+        throw new BridgeException("tipo de regra nao suportado: " + name);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private net.minecraft.world.GameRules.Rule<?> gameRuleValue(String name) {
+        if (name == null || !GameBridge.GAME_RULES.contains(name)) {
+            throw new BridgeException("Game Rule nao permitida: " + name);
+        }
+        net.minecraft.world.GameRules.Key<?> key = switch (name) {
+            case "do_fire_tick" -> net.minecraft.world.GameRules.DO_FIRE_TICK;
+            case "mob_griefing" -> net.minecraft.world.GameRules.DO_MOB_GRIEFING;
+            case "keep_inventory" -> net.minecraft.world.GameRules.KEEP_INVENTORY;
+            case "do_mob_spawning" -> net.minecraft.world.GameRules.DO_MOB_SPAWNING;
+            case "do_mob_loot" -> net.minecraft.world.GameRules.DO_MOB_LOOT;
+            case "do_tile_drops" -> net.minecraft.world.GameRules.DO_TILE_DROPS;
+            case "do_entity_drops" -> net.minecraft.world.GameRules.DO_ENTITY_DROPS;
+            case "natural_regeneration" -> net.minecraft.world.GameRules.NATURAL_REGENERATION;
+            case "do_daylight_cycle" -> net.minecraft.world.GameRules.DO_DAYLIGHT_CYCLE;
+            case "do_weather_cycle" -> net.minecraft.world.GameRules.DO_WEATHER_CYCLE;
+            case "send_command_feedback" -> net.minecraft.world.GameRules.SEND_COMMAND_FEEDBACK;
+            case "announce_advancements" -> net.minecraft.world.GameRules.ANNOUNCE_ADVANCEMENTS;
+            case "show_death_messages" -> net.minecraft.world.GameRules.SHOW_DEATH_MESSAGES;
+            case "disable_raids" -> net.minecraft.world.GameRules.DISABLE_RAIDS;
+            case "do_insomnia" -> net.minecraft.world.GameRules.DO_INSOMNIA;
+            case "do_immediate_respawn" -> net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN;
+            case "drowning_damage" -> net.minecraft.world.GameRules.DROWNING_DAMAGE;
+            case "fall_damage" -> net.minecraft.world.GameRules.FALL_DAMAGE;
+            case "fire_damage" -> net.minecraft.world.GameRules.FIRE_DAMAGE;
+            case "freeze_damage" -> net.minecraft.world.GameRules.FREEZE_DAMAGE;
+            case "do_patrol_spawning" -> net.minecraft.world.GameRules.DO_PATROL_SPAWNING;
+            case "do_trader_spawning" -> net.minecraft.world.GameRules.DO_TRADER_SPAWNING;
+            case "do_warden_spawning" -> net.minecraft.world.GameRules.DO_WARDEN_SPAWNING;
+            case "forgive_dead_players" -> net.minecraft.world.GameRules.FORGIVE_DEAD_PLAYERS;
+            case "universal_anger" -> net.minecraft.world.GameRules.UNIVERSAL_ANGER;
+            case "do_vines_spread" -> net.minecraft.world.GameRules.DO_VINES_SPREAD;
+            case "random_tick_speed" -> net.minecraft.world.GameRules.RANDOM_TICK_SPEED;
+            case "spawn_radius" -> net.minecraft.world.GameRules.SPAWN_RADIUS;
+            case "max_entity_cramming" -> net.minecraft.world.GameRules.MAX_ENTITY_CRAMMING;
+            case "players_sleeping_percentage" -> net.minecraft.world.GameRules.PLAYERS_SLEEPING_PERCENTAGE;
+            case "snow_accumulation_height" -> net.minecraft.world.GameRules.SNOW_ACCUMULATION_HEIGHT;
+            case "spawn_chunk_radius" -> net.minecraft.world.GameRules.SPAWN_CHUNK_RADIUS;
+            default -> throw new BridgeException("Game Rule nao permitida: " + name);
+        };
+        return requireWorld().getGameRules().get((net.minecraft.world.GameRules.Key) key);
+    }
+
+    @Override
+    public String difficulty() {
+        return requireServer().getSaveProperties().getDifficulty().getName();
+    }
+
+    @Override
+    public void setDifficulty(String difficulty) {
+        if (difficulty == null) throw new BridgeException("dificuldade ausente");
+        net.minecraft.world.Difficulty parsed = switch (difficulty) {
+            case "peaceful" -> net.minecraft.world.Difficulty.PEACEFUL;
+            case "easy" -> net.minecraft.world.Difficulty.EASY;
+            case "normal" -> net.minecraft.world.Difficulty.NORMAL;
+            case "hard" -> net.minecraft.world.Difficulty.HARD;
+            default -> throw new BridgeException("dificuldade invalida: " + difficulty);
+        };
+        if (requireServer().getSaveProperties().isDifficultyLocked()) {
+            throw new BridgeException("a dificuldade do mundo esta bloqueada");
+        }
+        requireServer().setDifficulty(parsed, true);
     }
 
     // ------------------------------------------------------------------ mundo

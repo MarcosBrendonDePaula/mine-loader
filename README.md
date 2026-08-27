@@ -39,7 +39,7 @@ Linux/macOS:
 ```bash
 ./gradlew compileAllRuntimes   # core + Fabric/NeoForge 1.21.1 e 1.21.4
 ./gradlew testAllRuntimes      # suíte JUnit do core e tarefas test dos runtimes
-./gradlew gameTestAllRuntimes  # 19 GameTests em cada combinação
+./gradlew gameTestAllRuntimes  # 22 GameTests em cada combinação
 ./gradlew checkAllRuntimes     # verificação completa, incluindo GameTests
 ```
 
@@ -197,7 +197,7 @@ end
 return { on_tick = on_tick }
 ```
 
-A API inicial e a expansão atual expõem `ctx.log.info`, `ctx.log.warn`, `ctx.server.broadcast`, `ctx.server.set_block_variant`, `ctx.server.set_block_property`, `ctx.server.redstone_signal`, `ctx.player.name`, `ctx.player.uuid`, `ctx.player.send_message` e `ctx.player.data`, sempre respeitando as permissões do manifesto. A especificação completa, os limites e as próximas prioridades estão em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md).
+A API inicial e a expansão atual expõem `ctx.log.info`, `ctx.log.warn`, `ctx.server.broadcast`, `ctx.server.set_block_variant`, `ctx.server.set_block_property`, `ctx.server.redstone_signal`, `ctx.server.block_state`, `ctx.server.set_block_state`, `ctx.server.game_rule`, `ctx.server.set_game_rule`, `ctx.server.difficulty`, `ctx.server.set_difficulty`, hora, clima, `ctx.player.name`, `ctx.player.uuid`, `ctx.player.send_message` e `ctx.player.data`, sempre respeitando as permissões do manifesto. A especificação completa, os limites e as próximas prioridades estão em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md).
 
 ## Comandos
 
@@ -224,7 +224,7 @@ O sistema de IA será adicionado sobre este contrato: a IA produzirá um pacote 
 ./gradlew checkAllRuntimes
 ```
 
-Os GameTests rodam nas quatro combinações e o CI executa a matriz em todo push. Cada runtime carrega os mesmos exemplos e precisa mostrar `All 19 required tests passed :)`. A compilação client
+Os GameTests rodam nas quatro combinações e o CI executa a matriz em todo push. Cada runtime carrega os mesmos exemplos e precisa mostrar `All 22 required tests passed :)`. A compilação client
 não substitui esses testes, e os GameTests não substituem uma inspeção visual; as limitações estão
 separadas na matriz.
 

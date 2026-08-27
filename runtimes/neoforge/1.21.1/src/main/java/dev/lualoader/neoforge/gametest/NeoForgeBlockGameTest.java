@@ -71,6 +71,79 @@ public class NeoForgeBlockGameTest {
         helper.succeed();
     }
 
+    /** A bridge lê e escreve propriedades vanilla sem expor BlockState ao Lua. */
+    @GameTest(template = EMPTY)
+    public static void bridgeLeEEscreveEstadoDoBloco(GameTestHelper helper) {
+        BlockPos relativa = new BlockPos(1, 1, 1);
+        BlockPos absoluta = helper.absolutePos(relativa);
+        var level = helper.getLevel();
+        level.setBlock(absoluta, net.minecraft.world.level.block.Blocks.OAK_DOOR.defaultBlockState(), 3);
+
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentLevel(level);
+        try {
+            var snapshot = bridge.blockState(absoluta.getX(), absoluta.getY(), absoluta.getZ());
+            if (!"minecraft:oak_door".equals(snapshot.id)
+                    || !"false".equals(snapshot.properties.get("open"))
+                    || !snapshot.properties.containsKey("facing")) {
+                throw new AssertionError("snapshot inesperado: " + snapshot.id + " " + snapshot.properties);
+            }
+
+            if (!bridge.setBlockState(absoluta.getX(), absoluta.getY(), absoluta.getZ(),
+                    java.util.Map.of("open", "true", "facing", "south"))) {
+                throw new AssertionError("set_block_state deveria alterar a porta");
+            }
+
+            BlockState updated = level.getBlockState(absoluta);
+            if (!updated.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.OPEN)
+                    || updated.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)
+                    != net.minecraft.core.Direction.SOUTH) {
+                throw new AssertionError("estado escrito nao chegou ao mundo: " + updated);
+            }
+        } finally {
+            bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
+    /** A whitelist de Game Rules tem o mesmo nome e a mesma semântica nos dois loaders. */
+    @GameTest(template = EMPTY)
+    public static void bridgeLeEEscreveGameRulePermitida(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentLevel(level);
+        String original = bridge.gameRule("do_weather_cycle");
+        try {
+            bridge.setGameRule("do_weather_cycle", "false");
+            if (!"false".equals(bridge.gameRule("do_weather_cycle"))) {
+                throw new AssertionError("a Game Rule deveria ter sido alterada");
+            }
+        } finally {
+            bridge.setGameRule("do_weather_cycle", original);
+            bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
+    /** O setter de dificuldade aceita o valor atual sem alterar o mundo global do GameTest. */
+    @GameTest(template = EMPTY)
+    public static void bridgeLeEEscreveDificuldade(GameTestHelper helper) {
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        String original = bridge.difficulty();
+        try {
+            bridge.setDifficulty(original);
+            if (!original.equals(bridge.difficulty())) {
+                throw new AssertionError("a dificuldade deveria permanecer " + original);
+            }
+        } finally {
+            bridge.setDifficulty(original);
+        }
+        helper.succeed();
+    }
+
     /** O item do bloco existe: sem ele o bloco só aparece por comando. */
     @GameTest(template = EMPTY)
     public static void itemDoBlocoExiste(GameTestHelper helper) {

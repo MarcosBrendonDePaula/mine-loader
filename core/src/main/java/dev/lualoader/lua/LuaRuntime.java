@@ -1393,6 +1393,40 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(bridge.worldName());
             }
         });
+        serverApi.set("game_rule", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "world.read");
+                return LuaValue.valueOf(bridge.gameRule(requireRuleName(value)));
+            }
+        });
+        serverApi.set("set_game_rule", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue name, LuaValue value) {
+                requirePermission(mod.manifest(), "world.write");
+                bridge.setGameRule(requireRuleName(name), requireRuleValue(value));
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("difficulty", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "world.read");
+                return LuaValue.valueOf(bridge.difficulty());
+            }
+        });
+        serverApi.set("set_difficulty", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "world.write");
+                String difficulty = value.tojstring().toLowerCase(java.util.Locale.ROOT);
+                if (!Set.of("peaceful", "easy", "normal", "hard").contains(difficulty)) {
+                    throw new LuaError("dificuldade deve ser peaceful, easy, normal ou hard");
+                }
+                bridge.setDifficulty(difficulty);
+                return LuaValue.NIL;
+            }
+        });
         serverApi.set("items", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -2128,6 +2162,46 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(bridge.getBlock(x, y, z));
             }
         });
+        serverApi.set("block_state", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("block_state exige x, y e z");
+                var snapshot = bridge.blockState(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)));
+                LuaTable result = new LuaTable();
+                result.set("id", LuaValue.valueOf(snapshot.id));
+                LuaTable properties = new LuaTable();
+                for (var property : snapshot.properties.entrySet()) {
+                    properties.set(property.getKey(), LuaValue.valueOf(property.getValue()));
+                }
+                result.set("properties", properties);
+                return result;
+            }
+        });
+        serverApi.set("set_block_state", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4 || !args.arg(4).istable()) {
+                    throw new LuaError("set_block_state exige x, y, z e uma tabela de propriedades");
+                }
+                LuaTable properties = args.arg(4).checktable();
+                Map<String, String> values = new LinkedHashMap<>();
+                for (LuaValue key : properties.keys()) {
+                    if (!key.isstring() || !properties.get(key).isstring()) {
+                        throw new LuaError("propriedades de bloco precisam mapear texto para texto");
+                    }
+                    values.put(key.tojstring(), properties.get(key).tojstring());
+                }
+                return LuaValue.valueOf(bridge.setBlockState(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)), values));
+            }
+        });
         serverApi.set("set_block", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -2342,6 +2416,24 @@ public final class LuaRuntime {
             }
         });
         return api;
+    }
+
+    private static String requireRuleName(LuaValue value) {
+        if (value == null || !value.isstring()) {
+            throw new LuaError("nome de regra precisa ser texto");
+        }
+        String name = value.tojstring().toLowerCase(java.util.Locale.ROOT);
+        if (!name.matches("[a-z0-9_]{1,64}")) {
+            throw new LuaError("nome de regra invalido: " + name);
+        }
+        return name;
+    }
+
+    private static String requireRuleValue(LuaValue value) {
+        if (value == null || value.isnil() || value.istable() || value.isfunction()) {
+            throw new LuaError("valor de regra precisa ser texto, numero ou booleano");
+        }
+        return value.tojstring();
     }
 
     private static String requireDataKey(LuaValue value) {

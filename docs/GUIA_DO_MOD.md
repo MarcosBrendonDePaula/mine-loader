@@ -80,6 +80,54 @@ ctx.server.schedule_block(x, y, z, 10)    -- de 1 a 24000 tiques
 `break_block` nao e o mesmo que escrever ar: respeita a tabela de loot e derrama o inventario do
 bloco, que e o que "quebrar" significa para quem joga.
 
+### Ler e alterar o estado real de um bloco
+
+`get_block` devolve apenas o identificador. Quando a lógica precisa saber se uma porta está aberta,
+para que lado uma escada aponta ou se um bloco está alagado, use `block_state`. O retorno é uma tabela
+com `id` e `properties`; todos os valores das propriedades são texto.
+
+```lua
+local estado = ctx.server.block_state(x, y, z)
+if estado.id == "minecraft:oak_door" and estado.properties.open == "false" then
+    ctx.server.set_block_state(x, y, z, { open = "true" })
+end
+```
+
+`set_block_state` faz uma alteração parcial e segura. Ele só aceita propriedades que o bloco já possui
+e valores válidos para elas; não troca o bloco nem cria propriedades. As duas operações exigem,
+respectivamente, `world.read` e `world.write`.
+
+### Game Rules e dificuldade
+
+Game Rules são configurações do mundo, por isso o loader expõe uma whitelist comum em vez de aceitar
+chaves arbitrárias. A leitura devolve sempre texto: `"true"`, `"false"` ou um inteiro convertido para
+texto. A escrita aceita booleano, número ou texto simples no Lua, mas o bridge confirma o tipo real.
+
+```lua
+local ciclo_clima = ctx.server.game_rule("do_weather_cycle")
+if ciclo_clima == "true" then
+    ctx.server.set_game_rule("do_weather_cycle", false)
+end
+
+local dificuldade = ctx.server.difficulty()
+if dificuldade == "peaceful" then
+    ctx.server.set_difficulty("normal")
+end
+```
+
+A whitelist inclui regras de clima, spawning, drops, dano, raids, sono, mensagens e ticks, além de
+`spawn_radius`, `max_entity_cramming`, `players_sleeping_percentage`, `snow_accumulation_height` e
+`spawn_chunk_radius`. Consulte `API_ESTAVEL.md` para a lista completa. Os valores aceitos para
+dificuldade são apenas `peaceful`, `easy`, `normal` e `hard`; um mundo com dificuldade bloqueada recusa
+a alteração. `world.write` deve ser tratado como permissão administrativa para estas operações.
+
+### Mapa, mundo físico e waypoints
+
+O que o loader chama de mundo físico já inclui bloco, estado, bioma, luz, altura, clima e redstone.
+`player.looking_at()` resolve a mira e o teleporte resolve a posição, mas **waypoints ainda não
+existem**. Uma futura capability de mapa será própria do MineLoader e não exigirá JourneyMap, Xaero ou
+outro mod de cartografia.
+
 ## Entidades ja existentes
 
 ```lua
@@ -333,10 +381,10 @@ declarar a permissão dela é erro em tempo de execução.
 | `player.inventory` | Dar e remover itens |
 | `player.move` | Teleporte |
 | `player.menu` | Abrir, atualizar e fechar janelas |
-| `world.read` | Ler blocos e dados, tocar som, emitir partículas |
-| `world.write` | Alterar blocos, preencher, posicionar estrutura, gravar dados, agendar tique |
+| `world.read` | Ler blocos, estado, regras, dificuldade, bioma, luz, hora, clima e redstone; tocar som e emitir partículas |
+| `world.write` | Alterar blocos/estado, regras, dificuldade, preencher, posicionar estrutura, gravar dados e agendar tique |
 | `world.containers` | Ler, inserir e extrair do inventário de um bloco |
-| `server.read` | Jogadores conectados, hora do dia, dimensão, mods carregados |
+| `server.read` | Jogadores conectados, hora do dia, dimensão, regras, dificuldade e mods carregados |
 | `server.command.register` | Registrar comandos |
 | `server.install` | Instalar e desinstalar mods por link — veja `INSTALACAO.md` |
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |

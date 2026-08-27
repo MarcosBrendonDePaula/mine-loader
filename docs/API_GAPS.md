@@ -9,8 +9,8 @@ na mesma mudança que o implementa.
 | Área | Operações |
 |---|---|
 | Log | `mod.log.info`, `mod.log.warn` |
-| Servidor | `broadcast`, `players`, `time_of_day`, `set_time_of_day`, `weather`, `set_weather`, `world_name`, `mods` |
-| Mundo | `get_block`, `set_block`, `break_block`, `fill`, `top_y`, `place_structure` |
+| Servidor | `broadcast`, `players`, `time_of_day`, `set_time_of_day`, `weather`, `set_weather`, `world_name`, `mods`, `difficulty`, `set_difficulty` |
+| Mundo | `get_block`, `block_state`, `set_block_state`, `set_block`, `break_block`, `fill`, `top_y`, `place_structure`, `game_rule`, `set_game_rule`, `redstone_signal` |
 | Bloco declarativo | `set_block_variant`, `set_block_property`, `set_block_luminance` |
 | Dados por bloco | `get_block_data`, `set_block_data` |
 | Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
@@ -26,7 +26,7 @@ na mesma mudança que o implementa.
 | Entidades | `spawn_entity`, `entities_near`, `entity_info`, `remove_entity`, `damage_entity`, `heal_entity`, `apply_to_entity`, `teleport_entity`, `push_entity` |
 | Bestiário do loader | `declared_entities`, `entity_definition` |
 | Fase de registro | `register.entity`, `register.declared` |
-| Leitura de mundo | `biome_at`, `light_at` |
+| Leitura de mundo | `biome_at`, `light_at`, `block_state`, `game_rule` |
 | Registro do jogo | `items`, `blocks`, `entity_types`, `recipes_for`, `recipes_using`, `drops_of`, `dropped_by` |
 | Inventário por slot | `insert_into` e `extract_from` aceitam um slot opcional |
 | Processos do mod | `mod.process`, `processes` |
@@ -60,26 +60,37 @@ mais surpreendem quem esbarra nelas.
 | `spawn_entity`, `damage_entity`, `heal_entity` | mover uma entidade |
 | `mod.after`, que dispara uma vez | repetir a cada N tiques, e cancelar |
 | `play_sound_to`, direcionado a um jogador | partícula direcionada |
-| `get_block`, que devolve o identificador | ler o estado do bloco |
 
-### Estado de bloco
+### Estado de bloco — fechado
 
-`get_block` responde qual bloco está ali, e nada mais. Se a porta está aberta, para onde a escada
-aponta, se o bloco está alagado ou energizado — nada disso é legível nem escrevível.
+`get_block` continua respondendo somente o identificador, mas `block_state` agora devolve um snapshot
+com `{id, properties}`. O Lua pode ler `facing`, `open`, `waterlogged`, `powered` e `axis` quando a
+propriedade existe no bloco real. `set_block_state` altera um subconjunto dessas propriedades e rejeita
+nomes ou valores inválidos; ele não troca o bloco nem cria propriedades.
 
-É a raiz de duas lacunas já registradas: `placement.facing` não aplicado, e a estrutura `.nbt`
-perdendo a orientação de escadas e troncos. Fechar aqui resolve as duas.
+A implementação existe nos quatro bridges e os GameTests exercitam uma porta vanilla, incluindo
+leitura e escrita de `open` e `facing`. A orientação declarada em `placement` e a orientação de blocos
+numa estrutura `.nbt` continuam sendo assuntos separados: esta API não corrige automaticamente a
+colocação de estruturas existentes.
 
-`state.properties` deixou de ser uma diferença entre plataformas — as duas registram os estados
-declarados —, mas continua meio caminho: o bloco **tem** os estados, e o Lua não os lê nem escreve.
-Hoje só `set_block_variant` alcança a aparência, e é o vocabulário do loader, não o do jogo.
+### Regras e dificuldade — fechadas
+
+`game_rule` e `set_game_rule` já existem nos quatro runtimes. O contrato usa uma whitelist comum de
+regras booleanas e inteiras, documentada em `API_ESTAVEL.md`; nomes desconhecidos, tipos errados e
+valores inteiros fora do limite seguro são recusados. A escrita usa `world.write`, porque uma Game Rule
+muda o mundo inteiro e não apenas o mod que a chamou.
+
+`difficulty` e `set_difficulty` também já existem. Os únicos valores são `peaceful`, `easy`, `normal` e
+`hard`; a bridge recusa uma dificuldade bloqueada em vez de contornar a configuração. Não há uma API
+para regras customizadas nem para alterar a dificuldade de apenas um jogador.
 
 ### O jogador no mundo
 
-**Direção do olhar.** Sem ela não há mira, seleção à distância, nem "o bloco que estou olhando" —
-provavelmente a lacuna mais limitante da API hoje.
+**Direção do olhar — fechada.** `ctx.player.looking_at(distância)` devolve o primeiro bloco atingido, a
+face e a posição, com alcance limitado. O retorno é `nil` quando a linha de visão não encontra bloco.
 
-**Postura**: agachado, correndo, voando. Um mod que reage a como o jogador se move não tem o que ler.
+**Postura** continua pendente: agachado, correndo, voando e nadando ainda não têm um snapshot estável
+no contrato. Também faltam velocidade e vetor de movimento.
 
 ### Efeitos de mundo
 
@@ -212,10 +223,13 @@ acontece quando alguém olha.
 `entity_damaged`, `entity_died`, `entity_tamed`), e valem para qualquer criatura do mundo, não só
 para as declaradas pelo loader. `entity_damaged` é cancelável.
 
-O que ainda falta é **ataque como evento próprio** — hoje se descobre pelo `source_uuid` de quem
-apanhou, o que responde "quem bateu" mas não avisa quando um golpe erra.
+O que ainda falta é **ataque como evento próprio** — hoje se descobre pelo `source_uuid` de quem apanhou,
+o que responde "quem bateu" mas não avisa quando um golpe erra.
 
-**Redstone e comparador.** Um bloco declarado não emite nem lê sinal.
+**Redstone e comparador — leitura fechada.** `ctx.server.redstone_signal(x, y, z)` lê a potência
+recebida de `0` a `15` nos quatro bridges. Emissão dinâmica de sinal por bloco declarativo ainda não é
+um contrato separado.
+
 
 **Receita customizada.** Dá para declarar receita de bancada e fornalha do jogo, não um tipo novo de
 processamento com regras próprias.
@@ -264,8 +278,8 @@ iguais: é ali que a próxima plataforma encontra a lista de trabalho.
 | `player.inventory` | contar, dar, tirar, listar, limpar |
 | `player.move` | teleporte |
 | `player.menu` | abrir e atualizar janela |
-| `world.read` | ler bloco, hora, clima, altura do terreno |
-| `world.write` | escrever bloco, quebrar, preencher, hora, clima, agendar tique numa posição |
+| `world.read` | ler bloco, estado, Game Rules, dificuldade, hora, clima, altura, bioma, luz e redstone |
+| `world.write` | escrever bloco/estado, regras, dificuldade, quebrar, preencher, hora, clima, agendar tique e estrutura |
 | `world.containers` | inventário de bloco |
 | `entity.read` | listar por raio, dados de uma entidade |
 | `entity.spawn` | criar entidade |

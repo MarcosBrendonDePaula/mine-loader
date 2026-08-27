@@ -98,6 +98,51 @@ class PlatformBridgeTest {
             calls.add("redstone:" + x + "," + y + "," + z);
             return 13;
         }
+
+        java.util.Map<String, String> stateProperties = new java.util.LinkedHashMap<>(
+                java.util.Map.of("facing", "north", "open", "false"));
+        final java.util.Map<String, String> rules = new java.util.LinkedHashMap<>(
+                java.util.Map.of("do_weather_cycle", "true", "random_tick_speed", "3"));
+        String currentDifficulty = "normal";
+
+        @Override
+        public BlockStateSnapshot blockState(int x, int y, int z) {
+            calls.add("state:" + x + "," + y + "," + z);
+            return new BlockStateSnapshot("minecraft:oak_door", stateProperties);
+        }
+
+        @Override
+        public boolean setBlockState(int x, int y, int z, java.util.Map<String, String> properties) {
+            stateProperties.putAll(properties);
+            calls.add("set_state:" + x + "," + y + "," + z + "=" + properties);
+            return true;
+        }
+
+        @Override
+        public String gameRule(String name) {
+            calls.add("rule:" + name);
+            if (!rules.containsKey(name)) throw new BridgeException("regra desconhecida: " + name);
+            return rules.get(name);
+        }
+
+        @Override
+        public void setGameRule(String name, String value) {
+            calls.add("set_rule:" + name + "=" + value);
+            if (!rules.containsKey(name)) throw new BridgeException("regra desconhecida: " + name);
+            rules.put(name, value);
+        }
+
+        @Override
+        public String difficulty() {
+            calls.add("difficulty");
+            return currentDifficulty;
+        }
+
+        @Override
+        public void setDifficulty(String difficulty) {
+            calls.add("set_difficulty:" + difficulty);
+            currentDifficulty = difficulty;
+        }
     }
 
     /** Jogador de teste: a base cobre o contrato, e aqui ficam apenas os apelidos usados. */
@@ -164,6 +209,87 @@ class PlatformBridgeTest {
         runtime.triggerAll("server_started", null);
 
         assertEquals(List.of("redstone:1,2,3", "broadcast:power=13"), bridge.calls);
+    }
+
+    @Test
+    void worldControlsCrossTheNeutralContract(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"world.read\", \"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    local state = ctx.server.block_state(1, 2, 3)
+                    ctx.server.broadcast(state.id .. "/" .. state.properties.facing)
+                    ctx.server.set_block_state(1, 2, 3, {facing = "south"})
+                    ctx.server.broadcast("weather=" .. ctx.server.game_rule("do_weather_cycle"))
+                    ctx.server.set_game_rule("do_weather_cycle", false)
+                    ctx.server.broadcast("difficulty=" .. ctx.server.difficulty())
+                    ctx.server.set_difficulty("hard")
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of(
+                "state:1,2,3",
+                "broadcast:minecraft:oak_door/north",
+                "set_state:1,2,3={facing=south}",
+                "rule:do_weather_cycle",
+                "broadcast:weather=true",
+                "set_rule:do_weather_cycle=false",
+                "difficulty",
+                "broadcast:difficulty=normal",
+                "set_difficulty:hard"
+        ), bridge.calls);
+        assertEquals("south", bridge.stateProperties.get("facing"));
+        assertEquals("false", bridge.rules.get("do_weather_cycle"));
+        assertEquals("hard", bridge.currentDifficulty);
+    }
+
+    @Test
+    void worldControlWritesNeedWorldWrite(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"world.read\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.set_block_state(1, 2, 3, {facing = "south"})
+                end)
+                """));
+        runtime.triggerAll("server_started", null);
+
+        assertTrue(bridge.calls.isEmpty(), "escrever estado sem world.write deve ser barrado");
+    }
+
+    @Test
+    void worldControlInputsAreValidatedBeforePlatformMutation(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\", \"world.read\", \"world.write\"", """
+                mod.on("server_started", function(ctx)
+                    local bad_rule_name = pcall(function()
+                        ctx.server.game_rule("do-weather-cycle")
+                    end)
+                    local bad_properties = pcall(function()
+                        ctx.server.set_block_state(1, 2, 3, {facing = {}})
+                    end)
+                    local bad_difficulty = pcall(function()
+                        ctx.server.set_difficulty("adventure")
+                    end)
+                    ctx.server.broadcast(tostring(bad_rule_name) .. ":" ..
+                        tostring(bad_properties) .. ":" .. tostring(bad_difficulty))
+                end)
+                """));
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("broadcast:false:false:false"), bridge.calls);
+        assertEquals("north", bridge.stateProperties.get("facing"));
+        assertEquals("true", bridge.rules.get("do_weather_cycle"));
+        assertEquals("normal", bridge.currentDifficulty);
     }
 
     @Test
