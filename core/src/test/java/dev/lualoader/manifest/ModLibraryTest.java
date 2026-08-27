@@ -15,6 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Um mod usado como biblioteca por outro: ordem de carga, exportação e permissões. */
@@ -66,6 +67,14 @@ class ModLibraryTest {
 
     private List<ModLoader.LoadedMod> discover(Path root, RuntimeContract contract) throws IOException {
         return new ModLoader(LoggerFactory.getLogger("test"), null, contract).discover(root);
+    }
+
+    /** Lê manifestos sem aplicar o resolver estático, para testar a resolução dinâmica do LuaRuntime. */
+    private List<ModLoader.LoadedMod> catalog(Path root) throws IOException {
+        return new ModLoader(LoggerFactory.getLogger("test")).catalog(root).stream()
+                .filter(entry -> entry.manifest() != null)
+                .map(entry -> new ModLoader.LoadedMod(entry.directory(), entry.manifest()))
+                .toList();
     }
 
     @Test
@@ -178,6 +187,56 @@ class ModLibraryTest {
         runtime.triggerAll("server_started", null);
 
         assertEquals(List.of("broadcast:[ bem-vindo ]"), bridge.calls);
+    }
+
+    @Test
+    void requireLoadsDependencyOnDemand(@TempDir Path root) throws IOException {
+        writeMod(root, "ui_lib", "", "", "return { titulo = function() return \"dinamico\" end }\n");
+        writeMod(root, "app_mod", "\"chat.send\"", "\"ui_lib\": \"1.0.0\"", """
+                local ui = mod.require("ui_lib")
+                mod.on("server_started", function(ctx)
+                    ctx.server.broadcast(ui.titulo())
+                end)
+                """);
+
+        List<ModLoader.LoadedMod> available = catalog(root);
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.registerAvailableMods(available);
+
+        ModLoader.LoadedMod app = available.stream()
+                .filter(mod -> mod.manifest().id.equals("app_mod"))
+                .findFirst()
+                .orElseThrow();
+        runtime.load(app);
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("broadcast:dinamico"), bridge.calls);
+    }
+
+    @Test
+    void dynamicRequireRejectsThreeNodeCircularDependency(@TempDir Path root) throws IOException {
+        writeMod(root, "mod_a", "", "\"mod_b\": \"1.0.0\"",
+                "local b = mod.require(\"mod_b\")\nreturn { b = b }\n");
+        writeMod(root, "mod_b", "", "\"mod_c\": \"1.0.0\"",
+                "local c = mod.require(\"mod_c\")\nreturn { c = c }\n");
+        writeMod(root, "mod_c", "", "\"mod_a\": \"1.0.0\"",
+                "local a = mod.require(\"mod_a\")\nreturn { a = a }\n");
+
+        List<ModLoader.LoadedMod> available = catalog(root);
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.registerAvailableMods(available);
+        ModLoader.LoadedMod first = available.stream()
+                .filter(mod -> mod.manifest().id.equals("mod_a"))
+                .findFirst()
+                .orElseThrow();
+
+        IOException error = assertThrows(IOException.class, () -> runtime.load(first));
+        assertTrue(error.getMessage().contains("dependencia circular dinamica"),
+                "a mensagem deve identificar o ciclo: " + error.getMessage());
+        assertTrue(error.getMessage().contains("mod_a -> mod_b -> mod_c -> mod_a"),
+                "a mensagem deve trazer a cadeia: " + error.getMessage());
     }
 
     @Test

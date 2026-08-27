@@ -87,6 +87,7 @@ public final class LuaLoaderMod implements ModInitializer {
             if (dependencies.changedAnything()) {
                 loadedMods = manifestLoader.discover(modsDirectory);
             }
+            luaRuntime.registerAvailableMods(loadedMods);
             // A fase de registro vem antes de montar o pacote, e nao depois: o que um script
             // declara entra no manifesto em memoria, e a partir dali precisa passar pelo montador
             // como qualquer outra especie. Montar antes deixava o ovo gerado sem icone -- defeito

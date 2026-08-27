@@ -652,8 +652,27 @@ Não confunda com `mod.require`, que serve para usar **outro mod** como bibliote
 local ui = mod.require("ui_lib")
 ```
 
-A dependência carrega antes de quem a consome. Dentro de uma biblioteca, use `mod.server` em vez de
-`ctx.server`: assim ela age com as próprias permissões, e não com as de quem a chamou.
+A dependência normalmente carrega antes de quem a consome. Se o mod for carregado isoladamente, o
+runtime usa o catálogo descoberto e resolve a biblioteca sob demanda na primeira chamada a
+`mod.require()`. A exportação fica em cache para chamadas seguintes.
+
+Se `ui_lib` depender de outro mod, a resolução é recursiva:
+
+```text
+meu_mod -> ui_lib -> base_lib
+```
+
+Uma dependência que volte a um mod ainda em resolução é recusada com a cadeia no erro:
+
+```text
+mod_a -> mod_b -> mod_c -> mod_a
+```
+
+Isso vale mesmo quando os manifestos escapam da ordem normal de arranque. A biblioteca precisa continuar
+declarada em `dependencies`; `mod.require()` não instala código nem procura ficheiros fora do catálogo.
+
+Dentro de uma biblioteca, use `mod.server` em vez de `ctx.server`: assim ela age com as próprias
+permissões, e não com as de quem a chamou.
 
 ## Limites que o loader impõe
 

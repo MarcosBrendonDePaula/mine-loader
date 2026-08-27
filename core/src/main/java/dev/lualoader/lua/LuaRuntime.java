@@ -2,6 +2,7 @@ package dev.lualoader.lua;
 
 import dev.lualoader.manifest.LoaderEvents;
 import dev.lualoader.manifest.ManifestImports;
+import dev.lualoader.manifest.ModDependencies;
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.platform.BlockEventData;
@@ -33,7 +34,9 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +82,12 @@ public final class LuaRuntime {
 
     private final Logger logger;
     private final Map<String, LoadedScript> scripts = new LinkedHashMap<>();
+
+    /** Mods descobertos pelo bootstrap, disponíveis para resolução sob demanda. */
+    private final Map<String, ModLoader.LoadedMod> availableMods = new LinkedHashMap<>();
+
+    /** Cadeia activa de entrypoints a serem compilados por require(); vive na thread do servidor. */
+    private final Deque<String> resolvingMods = new ArrayDeque<>();
 
     /**
      * Estado compartilhado por mod, exposto como {@code mod.state} e {@code ctx.state}.
@@ -206,7 +215,9 @@ public final class LuaRuntime {
 
         String modId = modDirectory.getFileName().toString();
         try {
-            for (ModLoader.LoadedMod found : new ModLoader(logger).discover(root)) {
+            List<ModLoader.LoadedMod> discovered = new ModLoader(logger).discover(root);
+            registerAvailableMods(discovered);
+            for (ModLoader.LoadedMod found : discovered) {
                 if (!found.manifest().id.equals(modId)) continue;
 
                 // Reinstalar por cima de um mod ja carregado troca o script no lugar, e o antigo
@@ -242,10 +253,96 @@ public final class LuaRuntime {
         this.bridge = bridge == null ? GameBridge.DETACHED : bridge;
     }
 
+    /**
+     * Regista os mods descobertos pelo bootstrap para que {@code mod.require()} possa carregá-los sob
+     * demanda. A lista é substituída a cada descoberta, de modo que instalação e recarga vejam o
+     * mesmo catálogo que o loader viu no disco.
+     */
+    public void registerAvailableMods(List<ModLoader.LoadedMod> mods) {
+        availableMods.clear();
+        if (mods == null) return;
+        for (ModLoader.LoadedMod mod : mods) {
+            if (mod == null || mod.manifest() == null || mod.manifest().id == null) continue;
+            availableMods.put(mod.manifest().id, mod);
+        }
+    }
+
     public void load(ModLoader.LoadedMod mod) throws IOException {
-        LoadedScript script = compile(mod);
-        scripts.put(mod.manifest().id, script);
-        logger.info("Script Lua carregado: {}", mod.manifest().id);
+        if (mod == null || mod.manifest() == null || mod.manifest().id == null) {
+            throw new IOException("mod invalido para carga Lua");
+        }
+        availableMods.put(mod.manifest().id, mod);
+        compileAndInstall(mod, true);
+    }
+
+    /** Compila e instala um mod, mantendo a cadeia activa para detectar ciclos dinâmicos. */
+    private void compileAndInstall(ModLoader.LoadedMod mod, boolean replaceExisting)
+            throws IOException {
+        String id = mod.manifest().id;
+        if (resolvingMods.contains(id)) {
+            throw new IOException("dependencia circular dinamica: " + resolutionPath(id));
+        }
+        if (!replaceExisting && scripts.containsKey(id)) return;
+
+        resolvingMods.addLast(id);
+        try {
+            LoadedScript script = compile(mod);
+            scripts.put(id, script);
+            logger.info("Script Lua carregado: {}", id);
+        } finally {
+            if (!resolvingMods.isEmpty() && id.equals(resolvingMods.peekLast())) {
+                resolvingMods.removeLast();
+            } else {
+                resolvingMods.remove(id);
+            }
+        }
+    }
+
+    /** Resolve uma dependency declarada, compilando-a apenas quando ainda não está carregada. */
+    private LoadedScript resolveDependency(ModLoader.LoadedMod requester, String dependencyId)
+            throws IOException {
+        if (requester.manifest().dependencies == null
+                || !requester.manifest().dependencies.containsKey(dependencyId)) {
+            throw new IOException("mod " + dependencyId
+                    + " precisa estar declarado em dependencies para ser usado");
+        }
+
+        if (resolvingMods.contains(dependencyId)) {
+            throw new IOException("dependencia circular dinamica: " + resolutionPath(dependencyId));
+        }
+
+        ModLoader.LoadedMod dependency = availableMods.get(dependencyId);
+        LoadedScript loaded = scripts.get(dependencyId);
+        if (dependency == null && loaded == null) {
+            throw new IOException("mod " + dependencyId
+                    + " nao esta disponivel para resolucao dinamica");
+        }
+
+        ModManifest dependencyManifest = dependency != null
+                ? dependency.manifest()
+                : loaded.mod().manifest();
+        String minimum = requester.manifest().dependencies.get(dependencyId);
+        if (!ModDependencies.satisfies(dependencyManifest.version, minimum)) {
+            throw new IOException("mod " + requester.manifest().id + " exige " + dependencyId
+                    + " na versao " + minimum + ", mas ha " + dependencyManifest.version);
+        }
+
+        if (loaded == null) {
+            compileAndInstall(dependency, false);
+            loaded = scripts.get(dependencyId);
+        }
+        if (loaded == null) {
+            throw new IOException("mod " + dependencyId + " nao foi carregado");
+        }
+        return loaded;
+    }
+
+    private String resolutionPath(String repeated) {
+        List<String> chain = new ArrayList<>(resolvingMods);
+        int start = chain.indexOf(repeated);
+        if (start > 0) chain = new ArrayList<>(chain.subList(start, chain.size()));
+        chain.add(repeated);
+        return String.join(" -> ", chain);
     }
 
     /**
@@ -559,7 +656,7 @@ public final class LuaRuntime {
             return;
         }
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             LuaFunction callback = script.callbacks().get(event);
             if (callback == null) continue;
 
@@ -603,7 +700,7 @@ public final class LuaRuntime {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             LuaFunction callback = script.callbacks().get(event);
             if (callback == null) continue;
             try {
@@ -690,7 +787,7 @@ public final class LuaRuntime {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             // Assim como nos blocos, o evento pertence ao mod que declarou o item.
             if (!ownsId(script.mod(), item.itemId())) continue;
 
@@ -753,7 +850,7 @@ public final class LuaRuntime {
     private boolean trigger(String event, PlayerHandle player, BlockEventData block) {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             // Um evento de bloco pertence ao mod que declarou o bloco. Sem esta checagem,
             // qualquer mod receberia interacoes com o conteudo de todos os outros.
             if (block != null && !ownsBlock(script.mod(), block)) continue;
@@ -950,19 +1047,15 @@ public final class LuaRuntime {
             @Override
             public LuaValue call(LuaValue value) {
                 String dependencyId = value.tojstring();
-                if (mod.manifest().dependencies == null
-                        || !mod.manifest().dependencies.containsKey(dependencyId)) {
-                    throw new LuaError("mod " + dependencyId
-                            + " precisa estar declarado em dependencies para ser usado");
+                try {
+                    LoadedScript dependency = resolveDependency(mod, dependencyId);
+                    if (dependency.exports() == null) {
+                        throw new IOException("mod " + dependencyId + " nao exporta nada");
+                    }
+                    return dependency.exports();
+                } catch (IOException error) {
+                    throw new LuaError(error.getMessage());
                 }
-                LoadedScript dependency = scripts.get(dependencyId);
-                if (dependency == null) {
-                    throw new LuaError("mod " + dependencyId + " ainda nao foi carregado");
-                }
-                if (dependency.exports() == null) {
-                    throw new LuaError("mod " + dependencyId + " nao exporta nada");
-                }
-                return dependency.exports();
             }
         });
 
@@ -1723,7 +1816,7 @@ public final class LuaRuntime {
 
                 LuaTable list = new LuaTable();
                 int index = 1;
-                for (LoadedScript script : scripts.values()) {
+                for (LoadedScript script : List.copyOf(scripts.values())) {
                     ModManifest manifest = script.mod().manifest();
 
                     LuaTable entry = new LuaTable();

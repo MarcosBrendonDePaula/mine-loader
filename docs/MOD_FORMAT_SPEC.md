@@ -1334,7 +1334,19 @@ local ui = mod.require("ui_lib")
 ```
 
 `mod.require` so alcanca mods declarados em `dependencies`. Isso mantem visivel no manifesto de quem
-depende de quem, em vez de a dependencia aparecer escondida no meio do codigo.
+depende de quem, em vez de a dependencia aparecer escondida no meio do codigo. O runtime resolve a
+biblioteca a partir do catalogo de mods descobertos e, se ela ainda nao foi compilada, carrega o seu
+entrypoint naquele momento. A biblioteca fica em cache e chamadas seguintes devolvem a mesma tabela de
+exportacoes.
+
+```lua
+-- Mesmo que ui_lib ainda nao tenha sido carregada pelo loop principal:
+local ui = mod.require("ui_lib")
+```
+
+A resolucao dinamica so procura mods que o bootstrap ja descobriu; ela nao procura arquivos fora da
+pasta de mods nem instala codigo automaticamente. O id ainda precisa estar declarado em
+`dependencies`, e a versao minima continua sendo conferida antes da carga.
 
 ### Ordem de carga
 
@@ -1346,7 +1358,8 @@ nada, com uma falha dificil de diagnosticar.
 |---|---|
 | Dependencia ausente | O mod dependente nao carrega; os demais continuam. |
 | Versao menor que a exigida | O mod dependente nao carrega. |
-| Dependencia circular | Nenhum dos mods do ciclo carrega. |
+| Dependencia circular estatica | Nenhum dos mods do ciclo entra na ordem final. |
+| Dependencia circular dinamica | `mod.require` falha com a cadeia, sem recursao infinita ou scripts parciais. |
 
 A versao e comparada no formato `maior.menor.correcao`, e o valor declarado e a versao minima
 aceita.

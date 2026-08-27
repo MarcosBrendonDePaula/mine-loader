@@ -118,6 +118,19 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
 
 A lista canónica de domínios e capabilities vive em `RuntimeContract` no core. Um bridge pode mudar a implementação interna, mas não pode publicar um nome diferente para a mesma operação nem declarar uma versão maior sem alterar a semântica do contrato.
 
+## Bibliotecas e require dinâmico
+
+`mod.require("outro_mod")` só resolve ids declarados em `dependencies`. O bootstrap regista o catálogo de mods descobertos e o runtime pode compilar a biblioteca no momento da primeira chamada, caso ela ainda não tenha sido carregada pelo loop principal. Depois disso, a tabela exportada fica em cache e chamadas seguintes devolvem a mesma API.
+
+```lua
+local ui = mod.require("ui_lib")
+local titulo = ui.formatar("olá")
+```
+
+A resolução sob demanda não procura ficheiros arbitrários nem instala código. Ela só usa mods já descobertos pelo loader e verifica a versão mínima declarada. Se a cadeia tentar voltar a um mod que ainda está a ser compilado, o runtime falha com a cadeia completa, por exemplo `mod_a -> mod_b -> mod_c -> mod_a`, em vez de recursar infinitamente ou deixar scripts parciais no mapa carregado.
+
+Os ciclos são também recusados pelo resolver estático antes da execução quando aparecem directamente nos manifestos. A protecção em `mod.require` cobre ainda carga individual, recarga e qualquer caminho dinâmico que não tenha passado pela ordem normal de arranque.
+
 ## Regras de estabilidade
 
 A API pública deve evoluir por adição, não por renomeação silenciosa. Uma função existente não pode mudar o formato do retorno numa versão do Minecraft. Quando uma plataforma não consegue oferecer a capability, o bridge deve recusar com `BridgeException` nomeando a operação, ou aplicar um fallback documentado; nunca deve retornar dados inventados.

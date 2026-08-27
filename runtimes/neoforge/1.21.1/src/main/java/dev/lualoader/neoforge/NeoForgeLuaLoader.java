@@ -338,6 +338,7 @@ public class NeoForgeLuaLoader {
         runtime = new LuaRuntime(LOGGER, cache, state);
         runtime.attach(bridge);
         runtime.attachInstaller(modInstaller, installPolicy);
+        runtime.registerAvailableMods(loadedMods);
 
         // Os mods ja foram descobertos no construtor, quando o conteudo precisou ser registrado.
         // Redescobrir aqui leria o disco de novo e poderia divergir do que esta no jogo.
