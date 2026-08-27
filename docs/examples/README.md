@@ -23,14 +23,16 @@ satisfeitos pelo runtime.
 ## `requires.capabilities`
 
 Uma capability é uma operação menor dentro de um domínio. `capability_consumer` precisa apenas de
-leitura de estado de bloco, leitura de redstone e leitura de mira do jogador.
+leitura de estado de bloco, leitura de redstone e leitura de mira do jogador. Um mod com hotkey pode
+exigir `client.input.keybind` sem pedir o domínio inteiro de UI.
 
 ```json
 "requires": {
   "capabilities": {
     "world.block_state.read": "1.0.0",
     "world.redstone.read": "1.0.0",
-    "player.looking_at.read": "1.0.0"
+    "player.looking_at.read": "1.0.0",
+    "client.input.keybind": "1.0.0"
   }
 }
 ```
@@ -76,5 +78,6 @@ satisfazer a mesma versão de domínio.
 ## Catálogo actual
 
 O perfil comum actual entrega todos estes domínios na versão `1.0.0`: `core`, `world`, `player`,
-`entity`, `inventory`, `registry`, `events`, `scheduler`, `ui` e `resources`. O catálogo detalhado de
+`entity`, `inventory`, `registry`, `events`, `scheduler`, `ui`, `client` e `resources`.
+ O catálogo detalhado de
 capabilities está em `docs/API_ESTAVEL.md` e no `RuntimeContract` do core.

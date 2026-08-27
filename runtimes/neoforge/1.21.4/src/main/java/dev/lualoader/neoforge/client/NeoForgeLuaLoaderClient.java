@@ -26,6 +26,7 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
     /** Chamado só no cliente, pela inicialização do mod. */
     public static void install(IEventBus modBus) {
         NeoForgeScreenNetwork.setClientSink(new NeoForgeLuaLoaderClient());
+        KeybindClient.install();
 
         NeoForge.EVENT_BUS.addListener((RenderGuiEvent.Post event) ->
                 NeoForgeHud.render(event.getGuiGraphics()));
@@ -46,8 +47,10 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
         });
 
         // As entidades desenhadas apontam para o mundo em que foram criadas; sair dele as invalida.
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) ->
-                NeoForgeScreenRenderer.forgetEntities());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
+            KeybindClient.clear();
+            NeoForgeScreenRenderer.forgetEntities();
+        });
     }
 
     private static int lastWidth;
@@ -130,5 +133,10 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
     @Override
     public void clearOverlay(String overlayId) {
         NeoForgeGameScreenOverlay.clear(overlayId);
+    }
+
+    @Override
+    public void setKeybinds(int version, String definitions) {
+        KeybindClient.set(version, definitions);
     }
 }

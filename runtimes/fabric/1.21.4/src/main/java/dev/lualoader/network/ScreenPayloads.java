@@ -168,6 +168,38 @@ public final class ScreenPayloads {
         }
     }
 
+    /** Catálogo de hotkeys que o servidor publicou para este cliente. */
+    public record Keybinds(int version, String definitions) implements CustomPayload {
+        public static final CustomPayload.Id<Keybinds> ID =
+                new CustomPayload.Id<>(channel(dev.lualoader.input.KeybindProtocol.CHANNEL_SET));
+
+        public static final PacketCodec<RegistryByteBuf, Keybinds> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, Keybinds::version,
+                PacketCodecs.STRING, Keybinds::definitions,
+                Keybinds::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    /** Evento cliente -> servidor: uma hotkey qualificada foi pressionada. */
+    public record KeybindEvent(int version, String qualifiedId) implements CustomPayload {
+        public static final CustomPayload.Id<KeybindEvent> ID =
+                new CustomPayload.Id<>(channel(dev.lualoader.input.KeybindProtocol.CHANNEL_EVENT));
+
+        public static final PacketCodec<RegistryByteBuf, KeybindEvent> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, KeybindEvent::version,
+                PacketCodecs.STRING, KeybindEvent::qualifiedId,
+                KeybindEvent::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
     /** Evento vindo do cliente: o que o jogador fez em qual elemento. */
     public record ScreenEvent(int version, String screenId, String elementId,
                               String action, String value) implements CustomPayload {

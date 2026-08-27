@@ -346,6 +346,21 @@ mod.command("minimap_demo", function(ctx)
     ctx.player.send_message("Uso: /mod minimap_demo on|off|zoom <1..4>")
 end)
 
+mod.keybind("toggle", function(ctx)
+    if ctx.player == nil then
+        return
+    end
+
+    if SESSOES[ctx.player.uuid] ~= nil then
+        desligar(ctx)
+        ctx.player.send_message("Minimap desligado (M).")
+    elseif ligar(ctx) then
+        ctx.player.send_message("Minimap ligado (M).")
+    else
+        ctx.player.send_message("Este cliente não suporta o HUD do loader.")
+    end
+end)
+
 return {
     on_player_joined = on_player_joined
 }

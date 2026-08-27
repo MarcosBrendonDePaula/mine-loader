@@ -184,6 +184,12 @@ public final class LuaLoaderMod implements ModInitializer {
                 currentServer.getCommandManager().sendCommandTree(player);
             }
         });
+        luaRuntime.onKeybindsChanged(() -> {
+            if (currentServer == null) return;
+            for (var player : currentServer.getPlayerManager().getPlayerList()) {
+                dev.lualoader.network.ScreenNetwork.sendKeybinds(player);
+            }
+        });
         // O que a especie declara como padrao vale ao nascer, e nao ao registrar. Vem por evento
         // porque o tipo e construido pelo jogo, sem passar pelo loader.
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register(
@@ -206,8 +212,10 @@ public final class LuaLoaderMod implements ModInitializer {
             gameBridge.setServer(null);
             currentServer = null;
         });
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player)));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            dev.lualoader.network.ScreenNetwork.sendKeybinds(handler.player);
+            luaRuntime.triggerAll("player_joined", new FabricPlayerHandle(handler.player));
+        });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 luaRuntime.triggerAll("player_left", new FabricPlayerHandle(handler.player)));
         ServerTickEvents.END_SERVER_TICK.register(server -> {

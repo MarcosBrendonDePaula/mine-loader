@@ -180,6 +180,42 @@ public final class NeoForgeScreenPayloads {
         }
     }
 
+    /** Catálogo de hotkeys que o servidor publicou para este cliente. */
+    public record Keybinds(int version, String definitions)
+            implements CustomPacketPayload {
+        public static final Type<Keybinds> TYPE =
+                new Type<>(channel(dev.lualoader.input.KeybindProtocol.CHANNEL_SET));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, Keybinds> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, Keybinds::version,
+                        ByteBufCodecs.STRING_UTF8, Keybinds::definitions,
+                        Keybinds::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** Evento cliente -> servidor: uma hotkey qualificada foi pressionada. */
+    public record KeybindEvent(int version, String qualifiedId)
+            implements CustomPacketPayload {
+        public static final Type<KeybindEvent> TYPE =
+                new Type<>(channel(dev.lualoader.input.KeybindProtocol.CHANNEL_EVENT));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, KeybindEvent> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, KeybindEvent::version,
+                        ByteBufCodecs.STRING_UTF8, KeybindEvent::qualifiedId,
+                        KeybindEvent::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Evento vindo do cliente: o que o jogador fez em qual elemento. */
     public record ScreenEvent(int version, String screenId, String elementId,
                               String action, String value) implements CustomPacketPayload {

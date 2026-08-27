@@ -725,11 +725,13 @@ tela deixaram de ser algo que so se ve no jogo.
 | Painel com bisel, sem textura | pronto |
 | Texto sem sombra | pronto |
 | Tamanho da tela informado ao mod | pronto |
+| Hotkeys declarativas globais (`client.input.keybind`) | pronto; ver [HOTKEYS.md](HOTKEYS.md) |
 
 O que continua fora: abas; arrastar; barra de rolagem visivel, com alca arrastavel -- hoje a
 rolagem so responde a roda; campo de texto dentro de uma sobreposicao; leitura ou escrita nos slots
 da tela sobreposta; recorte de textura em `image`, que hoje assume a folha inteira do tamanho do elemento; e
-tecla como acao, que impede um atalho ao estilo `R` e `U` do JEI.
+captura de teclas dentro de campos ou widgets de uma tela declarada. Hotkeys globais fora de telas já
+existem como capability separada; ver [HOTKEYS.md](HOTKEYS.md).
 
 ## Ordem de construção
 

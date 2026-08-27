@@ -1,5 +1,6 @@
 package dev.lualoader.neoforge.network;
 
+import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.neoforge.NeoForgeLuaLoader;
 import dev.lualoader.neoforge.NeoForgePlayerHandle;
@@ -44,6 +45,8 @@ public final class NeoForgeScreenNetwork {
         void setOverlay(int version, String overlayId, String description);
 
         void clearOverlay(String overlayId);
+
+        void setKeybinds(int version, String definitions);
     }
 
     private static volatile ClientSink client;
@@ -97,6 +100,11 @@ public final class NeoForgeScreenNetwork {
                         () -> {
                             if (client != null) client.clearOverlay(payload.overlayId());
                         }));
+        registrar.playToClient(NeoForgeScreenPayloads.Keybinds.TYPE,
+                NeoForgeScreenPayloads.Keybinds.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.setKeybinds(payload.version(), payload.definitions());
+                        }));
 
         registrar.playToServer(NeoForgeScreenPayloads.ScreenEvent.TYPE,
                 NeoForgeScreenPayloads.ScreenEvent.CODEC,
@@ -114,6 +122,19 @@ public final class NeoForgeScreenNetwork {
                 NeoForgeScreenPayloads.ClientEvent.CODEC,
                 (payload, context) -> context.enqueueWork(
                         () -> handleClientEvent(payload, (ServerPlayer) context.player())));
+
+        registrar.playToServer(NeoForgeScreenPayloads.KeybindEvent.TYPE,
+                NeoForgeScreenPayloads.KeybindEvent.CODEC,
+                (payload, context) -> context.enqueueWork(
+                        () -> handleKeybind(payload, (ServerPlayer) context.player())));
+    }
+
+    private static void handleKeybind(NeoForgeScreenPayloads.KeybindEvent payload,
+                                       ServerPlayer player) {
+        if (payload.version() != KeybindProtocol.VERSION) return;
+        LuaRuntime runtime = NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null) return;
+        runtime.triggerKeybind(payload.qualifiedId(), new NeoForgePlayerHandle(player));
     }
 
     private static void handleClientEvent(NeoForgeScreenPayloads.ClientEvent payload,
@@ -170,6 +191,15 @@ public final class NeoForgeScreenNetwork {
     /** Envia uma carga para um jogador. */
     public static void send(ServerPlayer player, CustomPacketPayload payload) {
         PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    /** Publica no jogador o catálogo de bindings do runtime actual. */
+    public static void sendKeybinds(ServerPlayer player) {
+        LuaRuntime runtime = NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null || player == null
+                || !player.connection.hasChannel(NeoForgeScreenPayloads.Keybinds.TYPE)) return;
+        send(player, new NeoForgeScreenPayloads.Keybinds(
+                KeybindProtocol.VERSION, KeybindProtocol.encode(runtime.keybindDefinitions())));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

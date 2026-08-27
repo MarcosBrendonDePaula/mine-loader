@@ -26,6 +26,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 | [EVENTS.md](EVENTS.md) | Eventos globais e por objecto, contexto, cancelamento e prioridades. |
 | [DYNAMIC_BLOCKS.md](DYNAMIC_BLOCKS.md) | Blocos declarativos e propriedades alteráveis em runtime. |
 | [UI_SPEC.md](UI_SPEC.md) | Modelo de menus, telas, HUD e protocolo servidor-cliente. |
+| [HOTKEYS.md](HOTKEYS.md) | Hotkeys declarativas, manifesto, callback Lua e segurança do input client-side. |
 | [UI_HTML_DESIGN.md](UI_HTML_DESIGN.md) | Estudo da futura camada de interface por HTML/CSS; não é contrato implementado. |
 | [CONTROLES_MUNDO.md](CONTROLES_MUNDO.md) | Estado de bloco, Game Rules, dificuldade, hora, clima, mapa, dimensões e prioridades de mundo. |
 | [examples/README.md](examples/README.md) | Manifestos que demonstram capabilities, domínios e bibliotecas entre mods. |

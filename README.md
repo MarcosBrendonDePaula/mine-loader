@@ -177,19 +177,19 @@ Os exemplos documentais de capabilities, domínios e bibliotecas entre mods fica
 
 ### Testar o `minimap_demo`
 
-O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D de 9×9 células no HUD, classifica o bloco abaixo de cada célula por cor, marca o centro do jogador e mostra coordenadas e dimensão. A fotografia é actualizada sob comando porque o contrato actual ainda não tem stream client-side de posição e terreno.
+O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D no HUD, classifica a superfície por cor, marca o centro do jogador e mostra coordenadas e dimensão. O exemplo actualiza o cache e o HUD automaticamente pelo agendador do servidor; a tecla `M` alterna o minimap sem executar código Lua no cliente.
 
 ```bash
 ./gradlew :runtimes:fabric:1.21.1:linkModsLua
 ./gradlew :runtimes:fabric:1.21.1:runClient
 ```
 
-Dentro do jogo, use:
+Dentro do jogo, use `M` para ligar/desligar o minimap. Os comandos continuam disponíveis:
 
 ```text
 /mod minimap_demo on
-/mod minimap_demo refresh
 /mod minimap_demo off
+/mod minimap_demo zoom 2
 ```
 
 O mesmo exemplo pode ser testado nos outros runtimes trocando o caminho por `fabric:1.21.4`, `neoforge:1.21.1` ou `neoforge:1.21.4`. O cliente precisa do protocolo de telas/HUD do MineLoader; num cliente sem esse protocolo, o exemplo informa a limitação pelo chat.

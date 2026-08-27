@@ -53,6 +53,10 @@ public class LuaLoaderClient implements ClientModInitializer {
                 (payload, context) -> context.client().execute(
                         () -> GameScreenOverlay.clear(payload.overlayId())));
 
+        ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.Keybinds.ID,
+                (payload, context) -> context.client().execute(
+                        () -> KeybindClient.set(payload.version(), payload.definitions())));
+
         // Antes do HUD: uma especie sem desenhista e invisivel, e o aviso precisa sair cedo o
         // bastante para nao se perder no meio do log de carga.
         EntityRenderers.register();
@@ -62,6 +66,7 @@ public class LuaLoaderClient implements ClientModInitializer {
         ObjModels.register();
 
         addModsButton();
+        KeybindClient.install();
 
         HudOverlay.register();
         GameScreenOverlay.register();

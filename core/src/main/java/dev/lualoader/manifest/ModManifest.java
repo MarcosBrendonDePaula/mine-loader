@@ -20,6 +20,19 @@ public final class ModManifest {
     public List<String> authors = new ArrayList<>();
     public List<String> permissions = new ArrayList<>();
     public Map<String, String> events = new LinkedHashMap<>();
+    /** Atalhos client-side declarados como dados; o callback continua a ser registado no Lua servidor. */
+    public List<KeybindDefinition> keybinds = new ArrayList<>();
+
+    public static final class KeybindDefinition {
+        /** Id curto usado por {@code mod.keybind}; o id qualificado inclui o mod. */
+        public String id;
+        /** Chave portável, por exemplo {@code key.keyboard.m}. */
+        public String key;
+        /** Categoria lógica, preservada para futuros menus de controles. */
+        public String category = "keybinds";
+        /** Subconjunto fechado: ctrl, shift e alt. */
+        public List<String> modifiers = new ArrayList<>();
+    }
     /**
      * Scripts da fase de registro, no formato {@code evento -> arquivo .lua}.
      *

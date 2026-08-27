@@ -27,6 +27,7 @@ public final class RuntimeContract {
         domains.put("events", "1.0.0");
         domains.put("scheduler", "1.0.0");
         domains.put("ui", "1.0.0");
+        domains.put("client", "1.0.0");
         domains.put("resources", "1.0.0");
         STANDARD_DOMAINS = Map.copyOf(domains);
 
@@ -58,6 +59,7 @@ public final class RuntimeContract {
         capabilities.put("scheduler.block", "1.0.0");
         capabilities.put("ui.menu", "1.0.0");
         capabilities.put("ui.screen", "1.0.0");
+        capabilities.put("client.input.keybind", "1.0.0");
         capabilities.put("resources.pack", "1.0.0");
         STANDARD_CAPABILITIES = Map.copyOf(capabilities);
     }

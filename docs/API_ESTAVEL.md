@@ -22,8 +22,11 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.server.weather()` | `world.read` | `clear`, `rain` ou `thunder` | quatro runtimes |
 | `ctx.server.set_weather(kind, duration)` | `world.write` | Altera o clima por uma duração em ticks | quatro runtimes |
 | `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
+| `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
 
 A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
+
+Hotkeys usam o contrato `client.input.keybind` `1.0.0`. A tecla e os modificadores são dados declarados no `mod.json`; o cliente detecta a transição e envia apenas o id qualificado, enquanto a função associada continua a executar no servidor. O formato completo está em [HOTKEYS.md](HOTKEYS.md).
 
 ## Estado de bloco
 
@@ -150,7 +153,8 @@ O Lua recebe tabelas e escalares simples. Ele não recebe objetos Java, referên
 
 “Mapa” pode significar três coisas diferentes. A consulta física do mundo já inclui bloco, estado, bioma, luz, altura, clima e redstone. Navegação inclui posição, raycast, teleporte e dimensão. Cartografia inclui waypoints e marcadores próprios.
 
-O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa. Uma futura API de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
+O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa.
+ Uma futura API de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
 
 Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige definir céu, bioma, geração, altura, respawn e acesso. Não é correto prometer `teleport_dimension` ou dimensão declarativa completa antes de existir um schema fechado e GameTests para mundos novos.
 

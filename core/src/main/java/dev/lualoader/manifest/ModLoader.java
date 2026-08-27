@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.JsonParseException;
+import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.platform.EntityDefinition;
 import dev.lualoader.platform.EntitySpec;
 import org.slf4j.Logger;
@@ -377,6 +378,7 @@ public final class ModLoader {
         if (manifest.permissions != null) {
             Set<String> knownPermissions = Set.of(
                     "chat.send", "player.read", "player.inventory", "player.move", "player.menu",
+                    "client.input.register",
                     // player.modify e separada de read e de inventory de proposito: escrever vida,
                     // fome, experiencia ou modo de jogo muda as regras sob os pes de quem joga, e
                     // um mod que so quer contar itens nao deveria carregar esse poder junto.
@@ -400,6 +402,7 @@ public final class ModLoader {
                 require(EVENTS.contains(event), "evento desconhecido: " + event);
             }
         }
+        validateKeybinds(manifest);
 
         validateDependencies(manifest);
         validateRequirements(manifest);
@@ -580,6 +583,34 @@ public final class ModLoader {
                             "ingrediente precisa do formato mod:item em " + recipe.id);
                 }
             }
+        }
+    }
+
+    private void validateKeybinds(ModManifest manifest) {
+        if (manifest.keybinds == null || manifest.keybinds.isEmpty()) return;
+
+        require(manifest.permissions != null
+                        && manifest.permissions.contains("client.input.register"),
+                "keybinds exigem a permissao client.input.register");
+        require(runtimeContract.satisfiesCapability("client.input.keybind", "1.0.0"),
+                "o runtime nao entrega a capability client.input.keybind 1.0.0");
+
+        Set<String> ids = new HashSet<>();
+        for (ModManifest.KeybindDefinition binding : manifest.keybinds) {
+            require(binding != null, "keybind invalida");
+            require(binding.id != null && binding.id.matches("^[a-z][a-z0-9_-]{0,31}$"),
+                    "id de keybind invalido: " + binding.id);
+            require(ids.add(binding.id), "keybind duplicada: " + binding.id);
+            require(binding.key != null, "keybind " + binding.id + " nao declara key");
+            try {
+                KeybindProtocol.validateKey(binding.key);
+                KeybindProtocol.normalizeModifiers(binding.modifiers);
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("keybind " + binding.id + ": " + error.getMessage(), error);
+            }
+            String category = binding.category == null ? "keybinds" : binding.category;
+            require(category.matches("^[a-z][a-z0-9_.-]{0,63}$"),
+                    "categoria de keybind invalida: " + category);
         }
     }
 

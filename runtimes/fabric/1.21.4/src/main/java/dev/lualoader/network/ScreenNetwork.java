@@ -1,6 +1,7 @@
 package dev.lualoader.network;
 
 import dev.lualoader.LuaLoaderMod;
+import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.minecraft.FabricPlayerHandle;
 import dev.lualoader.ui.ScreenProtocol;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -32,12 +33,16 @@ public final class ScreenNetwork {
                 ScreenPayloads.SetOverlay.ID, ScreenPayloads.SetOverlay.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 ScreenPayloads.ClearOverlay.ID, ScreenPayloads.ClearOverlay.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ScreenPayloads.Keybinds.ID, ScreenPayloads.Keybinds.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ScreenEvent.ID, ScreenPayloads.ScreenEvent.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ClientInfo.ID, ScreenPayloads.ClientInfo.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ClientEvent.ID, ScreenPayloads.ClientEvent.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                ScreenPayloads.KeybindEvent.ID, ScreenPayloads.KeybindEvent.CODEC);
     }
 
     /** Passa a receber os eventos que o cliente envia. */
@@ -47,6 +52,9 @@ public final class ScreenNetwork {
                     // A carga chega na thread de rede; tocar o jogo exige a thread do servidor.
                     context.server().execute(() -> handleEvent(payload, context.player()));
                 });
+        ServerPlayNetworking.registerGlobalReceiver(ScreenPayloads.KeybindEvent.ID,
+                (payload, context) -> context.server().execute(
+                        () -> handleKeybind(payload, context.player())));
     }
 
     /** Guarda o tamanho de tela informado, para o mod poder montar uma tela que caiba. */
@@ -97,6 +105,14 @@ public final class ScreenNetwork {
                         context.server().execute(() -> handleClientEvent(payload, context.player())));
     }
 
+    private static void handleKeybind(ScreenPayloads.KeybindEvent payload,
+                                       ServerPlayerEntity player) {
+        if (payload.version() != KeybindProtocol.VERSION) return;
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null) return;
+        runtime.triggerKeybind(payload.qualifiedId(), new FabricPlayerHandle(player));
+    }
+
     private static void handleClientEvent(ScreenPayloads.ClientEvent payload,
                                           ServerPlayerEntity player) {
         if (payload.version() != ScreenProtocol.VERSION) return;
@@ -108,6 +124,15 @@ public final class ScreenNetwork {
         // aqui vem da maquina de quem joga, e nao vale mais que um pedido.
         runtime.triggerClientEvent(payload.event(), payload.target(),
                 new FabricPlayerHandle(player));
+    }
+
+    /** Publica no jogador o catálogo de bindings do runtime actual. */
+    public static void sendKeybinds(ServerPlayerEntity player) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null || player == null
+                || !ServerPlayNetworking.canSend(player, ScreenPayloads.Keybinds.ID)) return;
+        ServerPlayNetworking.send(player, new ScreenPayloads.Keybinds(
+                KeybindProtocol.VERSION, KeybindProtocol.encode(runtime.keybindDefinitions())));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

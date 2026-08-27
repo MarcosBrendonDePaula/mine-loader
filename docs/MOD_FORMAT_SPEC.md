@@ -33,7 +33,10 @@ O loader não executará arquivos que escapem da raiz do pacote. Separadores alt
   "description": "Um mod de exemplo.",
   "authors": ["Autor"],
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "world.write"],
+  "permissions": ["chat.send", "world.write", "client.input.register"],
+  "keybinds": [
+    { "id": "toggle_map", "key": "key.keyboard.m", "category": "map" }
+  ],
   "events": {
     "server_started": "on_server_started",
     "tick": "on_tick"
@@ -87,7 +90,8 @@ Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 podem satisfazer
 ```
 
 Um **domínio** agrupa uma área da API, como `world`, `player`, `entity`, `inventory`, `registry`,
-`events`, `scheduler`, `ui` ou `resources`. Uma **capability** identifica uma operação menor e mais
+`events`, `scheduler`, `ui`, `client` ou `resources`.
+ Uma **capability** identifica uma operação menor e mais
 precisa, como `world.block_state.read` ou `world.game_rule.write`. Todos os requisitos declarados são
 obrigatórios: o mod só é descoberto para execução quando todos são satisfeitos.
 
@@ -118,6 +122,18 @@ carga e permite `mod.require`. `requires` apenas negocia o perfil do runtime e n
 O loader não oferece OR nesta primeira versão. Se um mod puder funcionar com dois caminhos alternativos,
 precisa declarar a capability comum ou esperar uma futura extensão do schema; inventar duas formas com
 semântica implícita tornaria o diagnóstico ambíguo.
+
+### 2.3 Hotkeys declarativas
+
+`keybinds` é uma lista opcional de teclas globais que o cliente pode detectar durante a partida. Cada
+entrada exige `id`, `key` no formato `key.keyboard.<nome>` e, opcionalmente, `category` e
+`modifiers`. A lista de modificadores é fechada: `ctrl`, `shift` e `alt`. O mod precisa declarar a
+permissão `client.input.register` e ligar cada entrada a um callback com `mod.keybind(id, callback)`.
+
+A função continua a executar no servidor, com `ctx.player` e `ctx.keybind`; o cliente recebe apenas a
+definição serializada e devolve o id qualificado quando a tecla passa de solta para pressionada. Não
+existe um `side: client`: hotkeys são input client-side com lógica server-side, não uma forma de
+executar Lua no cliente. O contrato e os limites estão em [HOTKEYS.md](HOTKEYS.md).
 
 Os exemplos completos estão em [`docs/examples/`](examples/), incluindo um consumidor de capabilities,
 um consumidor de domínio e um mod que combina `dependencies` com `requires`.

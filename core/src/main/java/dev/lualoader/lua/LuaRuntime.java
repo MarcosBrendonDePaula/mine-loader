@@ -1,5 +1,6 @@
 package dev.lualoader.lua;
 
+import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.manifest.LoaderEvents;
 import dev.lualoader.manifest.ManifestImports;
 import dev.lualoader.manifest.ModDependencies;
@@ -123,6 +124,9 @@ public final class LuaRuntime {
      */
     private final Map<String, RegisteredCommand> commands = new LinkedHashMap<>();
 
+    /** Keybinds registrados por mod, indexados pelo id qualificado mod:id. */
+    private final Map<String, RegisteredKeybind> keybinds = new LinkedHashMap<>();
+
     /**
      * Callbacks de janela, por identificador de menu.
      *
@@ -187,6 +191,9 @@ public final class LuaRuntime {
      */
     private Runnable commandRefresh;
 
+    /** Como o adaptador republica o catálogo de hotkeys quando um mod entra ou recarrega. */
+    private Runnable keybindRefresh;
+
     /** Liga o instalador do bootstrap. Sem ele, a API de instalacao recusa. */
     public void attachInstaller(dev.lualoader.install.ModInstaller installer,
                                 dev.lualoader.install.InstallPolicy policy) {
@@ -197,6 +204,11 @@ public final class LuaRuntime {
     /** Como a plataforma republica os comandos quando um mod entra fora da inicializacao. */
     public void onCommandsChanged(Runnable refresh) {
         this.commandRefresh = refresh;
+    }
+
+    /** Como a plataforma republica as hotkeys declaradas aos clientes online. */
+    public void onKeybindsChanged(Runnable refresh) {
+        this.keybindRefresh = refresh;
     }
 
     /**
@@ -225,6 +237,7 @@ public final class LuaRuntime {
                 if (scripts.containsKey(modId)) {
                     scheduled.removeIf(task -> task.modId().equals(modId));
                     commands.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
+                    keybinds.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
                     menus.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
                     screens.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
                     processes.entrySet().removeIf(e -> e.getValue().modId().equals(modId));
@@ -232,6 +245,7 @@ public final class LuaRuntime {
 
                 load(found);
                 if (commandRefresh != null) commandRefresh.run();
+                if (keybindRefresh != null) keybindRefresh.run();
                 return true;
             }
             logger.error("Mod {} instalado mas nao encontrado na pasta de mods", modId);
@@ -472,6 +486,48 @@ public final class LuaRuntime {
         }
     }
 
+    /** Definições de hotkey que têm callback e podem ser publicadas ao cliente. */
+    public List<KeybindProtocol.Binding> keybindDefinitions() {
+        return keybinds.values().stream().map(RegisteredKeybind::binding).toList();
+    }
+
+    /** Entrega ao mod o evento de uma hotkey já validada pelo catálogo publicado. */
+    public boolean triggerKeybind(String qualifiedId, PlayerHandle player) {
+        RegisteredKeybind binding = keybinds.get(qualifiedId);
+        if (binding == null) return false;
+
+        LoadedScript script = scripts.get(binding.modId());
+        if (script == null) return false;
+
+        try {
+            script.budget().start();
+            LuaTable context = context(script.mod(), player, null);
+            LuaTable api = new LuaTable();
+            api.set("id", LuaValue.valueOf(binding.binding().id()));
+            api.set("key", LuaValue.valueOf(binding.binding().key()));
+            api.set("category", LuaValue.valueOf(binding.binding().category()));
+            api.set("action", LuaValue.valueOf("pressed"));
+            api.set("mod", LuaValue.valueOf(binding.binding().modId()));
+            api.set("modifiers", toLuaList(binding.binding().modifiers()));
+            context.set("keybind", api);
+            binding.callback().call(context);
+        } catch (LuaError error) {
+            logger.error("Erro Lua na hotkey {} do mod {}: {}", binding.binding().id(),
+                    binding.modId(), error.getMessage());
+            reportToPlayer(player, script.mod(), "keybind", error.getMessage());
+        } catch (BridgeException error) {
+            logger.error("Erro de plataforma na hotkey {} do mod {}: {}", binding.binding().id(),
+                    binding.modId(), error.getMessage());
+            reportToPlayer(player, script.mod(), "keybind", error.getMessage());
+        } catch (RuntimeException error) {
+            logger.error("Erro Java na hotkey {} do mod {}", binding.binding().id(),
+                    binding.modId(), error);
+        } finally {
+            script.budget().stop();
+        }
+        return true;
+    }
+
     /** Nomes de comando registrados pelos mods. */
     public java.util.Set<String> commandNames() {
         return java.util.Set.copyOf(commands.keySet());
@@ -611,6 +667,7 @@ public final class LuaRuntime {
             }
         }
         commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        keybinds.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
@@ -620,6 +677,7 @@ public final class LuaRuntime {
 
         logger.info("Script Lua recarregado: {}{}", modId,
                 discarded == 0 ? "" : " (" + discarded + " tarefa(s) pendente(s) descartada(s))");
+        if (keybindRefresh != null) keybindRefresh.run();
         return true;
     }
 
@@ -1025,6 +1083,45 @@ public final class LuaRuntime {
                 }
                 commands.put(name, new RegisteredCommand(mod.manifest().id, (LuaFunction) args.arg(2)));
                 return LuaValue.NIL;
+            }
+        });
+
+        modApi.set("keybind", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "client.input.register");
+                if (args.narg() < 2) throw new LuaError("keybind exige id e uma funcao");
+
+                String name = args.arg(1).tojstring();
+                if (!name.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de keybind invalido: " + name);
+                }
+                if (!args.arg(2).isfunction()) throw new LuaError("keybind exige uma funcao");
+
+                ModManifest.KeybindDefinition definition = null;
+                if (mod.manifest().keybinds != null) {
+                    for (ModManifest.KeybindDefinition candidate : mod.manifest().keybinds) {
+                        if (candidate != null && name.equals(candidate.id)) {
+                            definition = candidate;
+                            break;
+                        }
+                    }
+                }
+                if (definition == null) {
+                    throw new LuaError("keybind " + name + " nao foi declarada no manifesto");
+                }
+
+                String category = definition.category == null ? "keybinds" : definition.category;
+                KeybindProtocol.Binding binding = new KeybindProtocol.Binding(
+                        mod.manifest().id, name, definition.key, category, definition.modifiers);
+                String qualified = binding.qualifiedId();
+                RegisteredKeybind existing = keybinds.get(qualified);
+                if (existing != null && !existing.modId().equals(mod.manifest().id)) {
+                    throw new LuaError("keybind " + name + " ja registrada pelo mod " + existing.modId());
+                }
+                keybinds.put(qualified,
+                        new RegisteredKeybind(mod.manifest().id, binding, (LuaFunction) args.arg(2)));
+                return LuaValue.valueOf(qualified);
             }
         });
 
@@ -3700,6 +3797,11 @@ public final class LuaRuntime {
 
     /** Comando registrado por um mod. */
     private record RegisteredCommand(String modId, LuaFunction callback) {
+    }
+
+    /** Hotkey declarada no manifesto e ligada a um callback Lua do mesmo mod. */
+    private record RegisteredKeybind(String modId, KeybindProtocol.Binding binding,
+                                     LuaFunction callback) {
     }
 
     /**

@@ -374,6 +374,12 @@ public class NeoForgeLuaLoader {
                 currentServer.getCommands().sendCommands(player);
             }
         });
+        runtime.onKeybindsChanged(() -> {
+            if (currentServer == null) return;
+            for (var player : currentServer.getPlayerList().getPlayers()) {
+                dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendKeybinds(player);
+            }
+        });
 
         // O loader esta pronto quando os scripts carregaram e os comandos existem. No Fabric este
         // evento sai da inicializacao do mod; aqui o runtime so nasce com o servidor, entao o
@@ -401,6 +407,7 @@ public class NeoForgeLuaLoader {
             net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (runtime == null) return;
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendKeybinds(player);
         runtime.triggerAll("player_joined", new NeoForgePlayerHandle(player));
     }
 
