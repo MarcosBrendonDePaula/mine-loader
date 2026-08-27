@@ -52,6 +52,10 @@ export default function GettingStarted() {
           <p className="doc-lead">Instale o Java 21 e tenha um editor de texto. Só isso para criar o primeiro mod.</p>
           <div className="doc-copy"><p>O repositório já traz o Gradle Wrapper. Não instale Gradle, Fabric API ou NeoForge separadamente para seguir este começo.</p><p>Use o servidor de desenvolvimento primeiro: ele carrega o MineLoader e lê os mods da pasta <code>run/mods-lua/</code>.</p></div>
         </div>
+        <div className="first-run-map" aria-label="Fluxo da primeira execução">
+          <div className="first-run-map-head"><span>MAPA // PRIMEIRA EXECUÇÃO</span><i /><span>01 → 02 → 03</span></div>
+          <div className="first-run-map-grid"><div><span>01</span><strong>REPOSITÓRIO</strong><p>Java 21 + Gradle Wrapper</p></div><div><span>02</span><strong>PASTA DO MOD</strong><p><code>run/mods-lua/meu_mod</code></p></div><div><span>03</span><strong>PROVA</strong><p>Uma linha no log</p></div></div>
+        </div>
         <DocCode language="terminal">{startServer}</DocCode>
         <DocCallout title="Primeira inicialização demora mais" tone="proof">Na primeira vez, o Gradle baixa dependências e prepara o runtime. Espere o servidor terminar de iniciar antes de criar o pacote abaixo. No Windows, use o comando equivalente mostrado no bloco.</DocCallout>
       </section>

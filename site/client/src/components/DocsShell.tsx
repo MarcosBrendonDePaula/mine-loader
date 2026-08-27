@@ -66,6 +66,7 @@ export function DocsShell({ index, eyebrow, title, summary, children }: DocsShel
       <div className="docs-frame">
         <aside id="docs-navigation" className={`docs-sidebar ${mobileNavOpen ? "is-open" : ""}`} aria-label="Navegação da documentação">
           <div className="sidebar-intro"><span>DOCUMENTAÇÃO</span><strong>Contrato<br />versão 1</strong></div>
+          <div className="sidebar-scroll-status"><span>↓</span> NAVEGAÇÃO ROLÁVEL</div>
           <nav>
             {documentationRoutes.map((route) => {
               const active = location === route.href;

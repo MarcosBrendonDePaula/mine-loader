@@ -72,3 +72,5 @@ Um monograma `M` construído por três blocos isométricos encaixados, com um ca
 - Cada tutorial usa uma prova visual específica dentro da linguagem de blueprint: bloco em vista isométrica, matriz de registry, grade de container ou fluxo de dados Lua.
 - A marca MineLoader aparece como assinatura construída no trilho documental, combinando o símbolo isométrico e o “O” aberto/estruturado.
 - Painéis de código são sempre contrabalançados por faixas de capability, coordenadas, validação ou diagramas de material próximos.
+- Em páginas longas, cada seção recebe uma pista de prancha técnica — etiqueta de seção, régua, marcador de validação ou mapa — para que a documentação não vire uma sequência de terminais iguais.
+- A marca MineLoader deve conservar escala legível no topo e no trilho documental; o monograma isométrico e o `O` aberto são elementos de navegação, não um detalhe decorativo.

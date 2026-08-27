@@ -15,3 +15,5 @@ Todo guia de início precisa responder, na ordem: **o que preciso ter**, **qual 
 ## Aplicação nesta revisão
 
 O percurso foi reordenado para começar com a primeira mensagem em log, seguir por bloco ou item, depois por código Lua e por fim por UI. Os quatro tutoriais JSON passaram a carregar uma seção `beginner` obrigatória, com pré-requisito, arquivos, resultado esperado e continuação. A barra lateral ganhou rolagem própria no desktop e altura limitada com rolagem no menu mobile.
+
+A validação no GitHub Pages confirmou os novos títulos, passos e links da primeira experiência. O comando de Windows foi ajustado na fonte para construir a barra invertida explicitamente; a verificação de conteúdo renderizado deve ser repetida depois da propagação do cache de Pages.
