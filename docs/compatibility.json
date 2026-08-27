@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "title": "Compatibilidade por runtime",
+  "updated_at": "2026-08-27",
+  "source": "docs/COMPATIBILIDADE.md",
+  "contract": {
+    "name": "MineLoader",
+    "format_version": 1,
+    "principle": "O mod declarativo depende do contrato do loader, não das classes internas do Minecraft."
+  },
+  "runtimes": [
+    {
+      "id": "fabric-1.21.1",
+      "platform": "Fabric",
+      "minecraft": "1.21.1",
+      "maturity": "baseline",
+      "tests": { "passed": 26, "total": 26 }
+    },
+    {
+      "id": "fabric-1.21.4",
+      "platform": "Fabric",
+      "minecraft": "1.21.4",
+      "maturity": "experimental",
+      "tests": { "passed": 26, "total": 26 }
+    },
+    {
+      "id": "neoforge-1.21.1",
+      "platform": "NeoForge",
+      "minecraft": "1.21.1",
+      "maturity": "baseline",
+      "tests": { "passed": 26, "total": 26 }
+    },
+    {
+      "id": "neoforge-1.21.4",
+      "platform": "NeoForge",
+      "minecraft": "1.21.4",
+      "maturity": "experimental",
+      "tests": { "passed": 26, "total": 26 }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "core.declarative",
+      "label": "Core e API declarativa comum",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "core + runtime" },
+        "fabric-1.21.4": { "status": "supported", "evidence": "core + runtime" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "core + runtime" },
+        "neoforge-1.21.4": { "status": "supported", "evidence": "core + runtime" }
+      }
+    },
+    {
+      "id": "registry.content",
+      "label": "Registro de blocos, itens, receitas, loot e tags",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "bridge + testes" },
+        "fabric-1.21.4": { "status": "supported", "evidence": "bridge + testes" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "bridge + testes" },
+        "neoforge-1.21.4": { "status": "supported", "evidence": "bridge + testes" }
+      }
+    },
+    {
+      "id": "registry.item.food",
+      "label": "Comida, efeitos pós-consumo e combustível declarativos",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "contrato + GameTest" },
+        "fabric-1.21.4": { "status": "supported", "evidence": "contrato + GameTest" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "contrato + GameTest" },
+        "neoforge-1.21.4": { "status": "supported", "evidence": "contrato + GameTest" }
+      }
+    },
+    {
+      "id": "events.action.authorization",
+      "label": "Autorização global: quebra, colocação e uso",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "core + bridge + GameTest" },
+        "fabric-1.21.4": { "status": "supported", "evidence": "core + bridge + GameTest" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "core + bridge + GameTest" },
+        "neoforge-1.21.4": { "status": "supported", "evidence": "core + bridge + GameTest" }
+      }
+    },
+    {
+      "id": "commands.schema",
+      "label": "Comandos tipados e autocomplete",
+      "entries": {
+        "fabric-1.21.1": { "status": "manual_verification", "evidence": "árvore Brigadier; visual manual" },
+        "fabric-1.21.4": { "status": "manual_verification", "evidence": "árvore Brigadier; visual manual" },
+        "neoforge-1.21.1": { "status": "manual_verification", "evidence": "árvore Brigadier; visual manual" },
+        "neoforge-1.21.4": { "status": "manual_verification", "evidence": "árvore Brigadier; visual manual" }
+      }
+    },
+    {
+      "id": "client.camera.virtual",
+      "label": "Câmera virtual e textura aérea",
+      "entries": {
+        "fabric-1.21.1": { "status": "manual_verification", "evidence": "bridge compilado; visual manual pendente" },
+        "fabric-1.21.4": { "status": "manual_verification", "evidence": "bridge compilado; visual manual pendente" },
+        "neoforge-1.21.1": { "status": "manual_verification", "evidence": "bridge compilado; visual manual pendente" },
+        "neoforge-1.21.4": { "status": "manual_verification", "evidence": "bridge compilado; visual manual pendente" }
+      }
+    },
+    {
+      "id": "render.block.obj",
+      "label": "Modelo OBJ de bloco",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "bridge" },
+        "fabric-1.21.4": { "status": "blocked", "evidence": "desativado explicitamente" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "bridge" },
+        "neoforge-1.21.4": { "status": "blocked", "evidence": "desativado explicitamente" }
+      }
+    },
+    {
+      "id": "render.entity.custom",
+      "label": "Modelo e skin customizados de entidade",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "renderer do bridge" },
+        "fabric-1.21.4": { "status": "degraded", "evidence": "renderer vanilla" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "renderer do bridge" },
+        "neoforge-1.21.4": { "status": "degraded", "evidence": "renderer vanilla" }
+      }
+    },
+    {
+      "id": "world.particles",
+      "label": "Emissão de partículas",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "bridge" },
+        "fabric-1.21.4": { "status": "supported", "evidence": "bridge" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "bridge" },
+        "neoforge-1.21.4": { "status": "blocked", "evidence": "pendente; bridge recusa" }
+      }
+    },
+    {
+      "id": "data.recipes",
+      "label": "Receitas de datapack sem warnings",
+      "entries": {
+        "fabric-1.21.1": { "status": "supported", "evidence": "dados gerados" },
+        "fabric-1.21.4": { "status": "blocked", "evidence": "revisão de formato pendente" },
+        "neoforge-1.21.1": { "status": "supported", "evidence": "dados gerados" },
+        "neoforge-1.21.4": { "status": "blocked", "evidence": "revisão de formato pendente" }
+      }
+    }
+  ],
+  "verification": {
+    "command": "./gradlew checkAllRuntimes",
+    "scope": "Os GameTests validam integração server-side; não validam pixels, FPS, animação visual ou UX completa no cliente."
+  },
+  "status_definitions": {
+    "supported": "Capability compilada e exercitada pelo runtime.",
+    "manual_verification": "Contrato e bridge existem, mas ainda dependem de validação visual ou de experiência manual.",
+    "degraded": "Há uma tradução parcial declarada pelo bridge.",
+    "blocked": "O bridge recusa ou desativa a capability explicitamente."
+  }
+}

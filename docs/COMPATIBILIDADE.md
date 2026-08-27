@@ -2,6 +2,8 @@
 
 A promessa do MineLoader é que o mod declarativo dependa do contrato do loader, não das classes internas do Minecraft. Esta matriz mostra onde essa promessa foi realmente verificada. **“Sim” significa que a capability compilou e foi exercitada pelo runtime; “degradado” significa que existe uma tradução parcial declarada; “não” significa que o bridge recusa ou desativa a capability.**
 
+A fonte legível por máquinas para sites, painéis e ferramentas é [`compatibility.json`](compatibility.json). Ela é atualizada na mesma mudança que esta matriz humana; clientes podem consultar a versão publicada na branch `main` sem depender de scraping Markdown.
+
 ## Matriz plataforma × versão × capability
 
 | Capability | Fabric 1.21.1 | Fabric 1.21.4 | NeoForge 1.21.1 | NeoForge 1.21.4 |
@@ -64,7 +66,7 @@ Isso não significa que toda API visual esteja pronta. Na 1.21.4 o sistema de re
 
 ## Critério para promover 1.21.4 a compatível
 
-A versão 1.21.4 deve continuar marcada como **experimental** até que OBJ, renderização declarada de entidades, formato de receitas e as capabilities degradadas sejam validados. O mínimo já alcançado é significativo, mas não é paridade completa: compilação dos quatro runtimes e 25/25 GameTests em cada combinação provam que o core e as partes de servidor atravessam a versão; não provam que o cliente desenha tudo igual.
+A versão 1.21.4 deve continuar marcada como **experimental** até que OBJ, renderização declarada de entidades, formato de receitas e as capabilities degradadas sejam validados. O mínimo já alcançado é significativo, mas não é paridade completa: compilação dos quatro runtimes e 26/26 GameTests em cada combinação provam que o core e as partes de servidor atravessam a versão; não provam que o cliente desenha tudo igual.
 
 ## Plataformas ainda não cobertas
 
