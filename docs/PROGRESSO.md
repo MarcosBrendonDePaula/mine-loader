@@ -506,7 +506,7 @@ uma. Este documento é o mapa; elas são o roteiro.
 ```bash
 ./gradlew compileAllRuntimes       # core + os quatro bridges
 ./gradlew testAllRuntimes             # testes JUnit
-./gradlew gameTestAllRuntimes         # 18 testes em cada runtime
+./gradlew gameTestAllRuntimes         # 22 testes em cada runtime
 ./gradlew checkAllRuntimes            # verificação completa
 
 tools/servidor-dirigivel.sh iniciar   # servidor sem cliente

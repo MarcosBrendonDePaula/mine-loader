@@ -70,13 +70,42 @@ public final class StateStore {
 
     /** Grava o estado do mod. Uma gravação parcial nunca substitui o arquivo bom. */
     public void save(String modId, LuaTable state) {
+        saveFile(modId, null, state);
+    }
+
+    /** Lê um estado secundário, separado do estado principal do mod. */
+    public LuaTable loadScoped(String modId, String scope) {
+        LuaTable table = new LuaTable();
+        if (directory == null) return table;
+
+        Path file = fileFor(modId, scope);
+        if (!Files.isRegularFile(file)) return table;
+
+        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            JsonElement parsed = JsonParser.parseReader(reader);
+            if (parsed.isJsonObject()) {
+                fillTable(table, parsed.getAsJsonObject());
+                logger.info("Estado {} restaurado para {}", scope, modId);
+            }
+        } catch (IOException | RuntimeException error) {
+            logger.error("Falha ao ler o estado {} de {}: {}", scope, modId, error.getMessage());
+        }
+        return table;
+    }
+
+    /** Grava um estado secundário, usando a mesma troca atômica do estado principal. */
+    public void saveScoped(String modId, String scope, LuaTable state) {
+        saveFile(modId, scope, state);
+    }
+
+    private void saveFile(String modId, String scope, LuaTable state) {
         if (directory == null || state == null) return;
 
         try {
             Files.createDirectories(directory);
-            JsonObject json = toJsonObject(modId, state, 0);
+            JsonObject json = toJsonObject(modId + (scope == null ? "" : "." + scope), state, 0);
 
-            Path file = fileFor(modId);
+            Path file = fileFor(modId, scope);
             Path temporary = Files.createTempFile(directory, "state-", ".tmp");
             try {
                 Files.writeString(temporary, gson.toJson(json), StandardCharsets.UTF_8);
@@ -86,7 +115,8 @@ public final class StateStore {
                 Files.deleteIfExists(temporary);
             }
         } catch (IOException | RuntimeException error) {
-            logger.error("Falha ao gravar o estado de {}: {}", modId, error.getMessage());
+            logger.error("Falha ao gravar o estado{} de {}: {}",
+                    scope == null ? "" : " " + scope, modId, error.getMessage());
         }
     }
 
@@ -109,8 +139,18 @@ public final class StateStore {
     }
 
     private Path fileFor(String modId) {
-        // O id do mod já é validado como [a-z0-9_-], então não escapa do diretório.
-        return directory.resolve(modId + ".json");
+        return fileFor(modId, null);
+    }
+
+    private Path fileFor(String modId, String scope) {
+        // O id do mod é validado pelo manifesto; o escopo interno também é fechado.
+        if (!modId.matches("[a-z0-9_-]+")) {
+            throw new IllegalArgumentException("chave de estado invalida");
+        }
+        if (scope != null && !scope.matches("[a-z0-9_-]+")) {
+            throw new IllegalArgumentException("escopo de estado invalido");
+        }
+        return directory.resolve(modId + (scope == null ? "" : "." + scope) + ".json");
     }
 
     private JsonObject toJsonObject(String modId, LuaTable table, int depth) {

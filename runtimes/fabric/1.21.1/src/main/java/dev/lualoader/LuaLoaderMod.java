@@ -3,6 +3,7 @@ package dev.lualoader;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.manifest.ManifestDiagnostics;
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.manifest.RuntimeContract;
 import dev.lualoader.minecraft.BlockInteractionEvents;
 import dev.lualoader.minecraft.BlockRegistrar;
 import dev.lualoader.minecraft.ContentRegistrar;
@@ -58,7 +59,8 @@ public final class LuaLoaderMod implements ModInitializer {
         modsDirectory = gameDirectory.resolve("mods-lua");
         Path generatedPack = gameDirectory.resolve("lua-loader/generated-pack");
         Path resourceCache = gameDirectory.resolve("lua-loader/cache");
-        ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"));
+        ModLoader manifestLoader = new ModLoader(LOGGER, resourceCache.resolve("imports"),
+                RuntimeContract.forRuntime("fabric", "1.21.1"));
         blockRegistrar = new BlockRegistrar(LOGGER);
         contentRegistrar = new ContentRegistrar(LOGGER);
         entityRegistrar = new EntityRegistrar(LOGGER);
@@ -85,6 +87,7 @@ public final class LuaLoaderMod implements ModInitializer {
             if (dependencies.changedAnything()) {
                 loadedMods = manifestLoader.discover(modsDirectory);
             }
+            luaRuntime.registerAvailableMods(loadedMods);
             // A fase de registro vem antes de montar o pacote, e nao depois: o que um script
             // declara entra no manifesto em memoria, e a partir dali precisa passar pelo montador
             // como qualquer outra especie. Montar antes deixava o ovo gerado sem icone -- defeito

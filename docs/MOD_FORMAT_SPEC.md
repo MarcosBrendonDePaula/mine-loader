@@ -67,6 +67,61 @@ o ignorado dá silêncio.
 padrão é deduzir porque a resposta já está no manifesto, e pedi-la de novo só criaria a chance de as
 duas discordarem.
 
+### 2.2 Requisitos do contrato do runtime
+
+`requires` declara o contrato mínimo que o runtime precisa entregar para este mod. Ele não declara uma
+versão de Minecraft e não instala outra bridge. As versões são do contrato do MineLoader, por isso
+Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 podem satisfazer o mesmo requisito.
+
+```json
+"requires": {
+  "domains": {
+    "world": "1.0.0",
+    "player": "1.0.0"
+  },
+  "capabilities": {
+    "world.block_state.read": "1.0.0",
+    "world.redstone.read": "1.0.0"
+  }
+}
+```
+
+Um **domínio** agrupa uma área da API, como `world`, `player`, `entity`, `inventory`, `registry`,
+`events`, `scheduler`, `ui` ou `resources`. Uma **capability** identifica uma operação menor e mais
+precisa, como `world.block_state.read` ou `world.game_rule.write`. Todos os requisitos declarados são
+obrigatórios: o mod só é descoberto para execução quando todos são satisfeitos.
+
+O nome do domínio usa `^[a-z][a-z0-9_-]{0,31}$`; o nome da capability usa segmentos separados por ponto,
+como `world.block_state.read`. A versão usa `maior.menor.correcao`, com eventual sufixo de pré-lançamento.
+Uma versão entregue maior ou igual à mínima satisfaz o requisito. O loader recusa nomes desconhecidos,
+versões inválidas e capabilities ausentes antes de registrar conteúdo ou executar Lua.
+
+`requires` é diferente de `dependencies`. `dependencies` aponta para outros mods, controla a ordem de
+carga e permite `mod.require`. `requires` apenas negocia o perfil do runtime e não carrega código.
+
+```json
+{
+  "dependencies": {
+    "biblioteca_ui": "2.0.0"
+  },
+  "requires": {
+    "domains": {
+      "world": "1.0.0"
+    },
+    "capabilities": {
+      "ui.menu": "1.0.0"
+    }
+  }
+}
+```
+
+O loader não oferece OR nesta primeira versão. Se um mod puder funcionar com dois caminhos alternativos,
+precisa declarar a capability comum ou esperar uma futura extensão do schema; inventar duas formas com
+semântica implícita tornaria o diagnóstico ambíguo.
+
+Os exemplos completos estão em [`docs/examples/`](examples/), incluindo um consumidor de capabilities,
+um consumidor de domínio e um mod que combina `dependencies` com `requires`.
+
 ## 3. Blocos
 
 A declaração de bloco é composta por identidade, material, configurações, estados, renderização, item, drops, tags e comportamento.
@@ -1279,7 +1334,19 @@ local ui = mod.require("ui_lib")
 ```
 
 `mod.require` so alcanca mods declarados em `dependencies`. Isso mantem visivel no manifesto de quem
-depende de quem, em vez de a dependencia aparecer escondida no meio do codigo.
+depende de quem, em vez de a dependencia aparecer escondida no meio do codigo. O runtime resolve a
+biblioteca a partir do catalogo de mods descobertos e, se ela ainda nao foi compilada, carrega o seu
+entrypoint naquele momento. A biblioteca fica em cache e chamadas seguintes devolvem a mesma tabela de
+exportacoes.
+
+```lua
+-- Mesmo que ui_lib ainda nao tenha sido carregada pelo loop principal:
+local ui = mod.require("ui_lib")
+```
+
+A resolucao dinamica so procura mods que o bootstrap ja descobriu; ela nao procura arquivos fora da
+pasta de mods nem instala codigo automaticamente. O id ainda precisa estar declarado em
+`dependencies`, e a versao minima continua sendo conferida antes da carga.
 
 ### Ordem de carga
 
@@ -1291,7 +1358,8 @@ nada, com uma falha dificil de diagnosticar.
 |---|---|
 | Dependencia ausente | O mod dependente nao carrega; os demais continuam. |
 | Versao menor que a exigida | O mod dependente nao carrega. |
-| Dependencia circular | Nenhum dos mods do ciclo carrega. |
+| Dependencia circular estatica | Nenhum dos mods do ciclo entra na ordem final. |
+| Dependencia circular dinamica | `mod.require` falha com a cadeia, sem recursao infinita ou scripts parciais. |
 
 A versao e comparada no formato `maior.menor.correcao`, e o valor declarado e a versao minima
 aceita.

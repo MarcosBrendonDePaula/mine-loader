@@ -59,6 +59,39 @@ arquivo `.lua`, uma URL `https` ou o nome de uma função exportada pelo `main.l
 
 O `entrypoint` é opcional: um mod pode ter apenas manifesto e scripts por peça.
 
+## Exigir capabilities e domínios do runtime
+
+Use `requires` quando o mod precisa de uma parte específica do contrato do MineLoader. A versão é do
+contrato, não do Minecraft; por isso o mesmo manifesto pode funcionar nos bridges Fabric e NeoForge.
+
+```json
+{
+  "schema": 1,
+  "id": "meu_mod",
+  "name": "Meu Mod",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "world.read"],
+  "requires": {
+    "domains": {
+      "world": "1.0.0"
+    },
+    "capabilities": {
+      "world.block_state.read": "1.0.0",
+      "player.looking_at.read": "1.0.0"
+    }
+  }
+}
+```
+
+`domains` são grupos amplos, como `world`, `player` e `entity`. `capabilities` são operações precisas,
+como `world.block_state.read`. Todos os requisitos declarados são obrigatórios. Se o runtime não
+satisfizer um deles, o mod é recusado antes de registar conteúdo ou executar Lua.
+
+Não confunda com `dependencies`: `dependencies` aponta para outro mod, controla a ordem de carga e
+permite `mod.require`; `requires` apenas verifica o contrato já oferecido pelo runtime. Há exemplos
+completos em [`docs/examples/README.md`](examples/README.md).
+
 ## Tempo, clima e mundo
 
 ```lua
@@ -79,6 +112,54 @@ ctx.server.schedule_block(x, y, z, 10)    -- de 1 a 24000 tiques
 
 `break_block` nao e o mesmo que escrever ar: respeita a tabela de loot e derrama o inventario do
 bloco, que e o que "quebrar" significa para quem joga.
+
+### Ler e alterar o estado real de um bloco
+
+`get_block` devolve apenas o identificador. Quando a lógica precisa saber se uma porta está aberta,
+para que lado uma escada aponta ou se um bloco está alagado, use `block_state`. O retorno é uma tabela
+com `id` e `properties`; todos os valores das propriedades são texto.
+
+```lua
+local estado = ctx.server.block_state(x, y, z)
+if estado.id == "minecraft:oak_door" and estado.properties.open == "false" then
+    ctx.server.set_block_state(x, y, z, { open = "true" })
+end
+```
+
+`set_block_state` faz uma alteração parcial e segura. Ele só aceita propriedades que o bloco já possui
+e valores válidos para elas; não troca o bloco nem cria propriedades. As duas operações exigem,
+respectivamente, `world.read` e `world.write`.
+
+### Game Rules e dificuldade
+
+Game Rules são configurações do mundo, por isso o loader expõe uma whitelist comum em vez de aceitar
+chaves arbitrárias. A leitura devolve sempre texto: `"true"`, `"false"` ou um inteiro convertido para
+texto. A escrita aceita booleano, número ou texto simples no Lua, mas o bridge confirma o tipo real.
+
+```lua
+local ciclo_clima = ctx.server.game_rule("do_weather_cycle")
+if ciclo_clima == "true" then
+    ctx.server.set_game_rule("do_weather_cycle", false)
+end
+
+local dificuldade = ctx.server.difficulty()
+if dificuldade == "peaceful" then
+    ctx.server.set_difficulty("normal")
+end
+```
+
+A whitelist inclui regras de clima, spawning, drops, dano, raids, sono, mensagens e ticks, além de
+`spawn_radius`, `max_entity_cramming`, `players_sleeping_percentage`, `snow_accumulation_height` e
+`spawn_chunk_radius`. Consulte `API_ESTAVEL.md` para a lista completa. Os valores aceitos para
+dificuldade são apenas `peaceful`, `easy`, `normal` e `hard`; um mundo com dificuldade bloqueada recusa
+a alteração. `world.write` deve ser tratado como permissão administrativa para estas operações.
+
+### Mapa, mundo físico e waypoints
+
+O que o loader chama de mundo físico já inclui bloco, estado, bioma, luz, altura, clima e redstone.
+`player.looking_at()` resolve a mira e o teleporte resolve a posição, mas **waypoints ainda não
+existem**. Uma futura capability de mapa será própria do MineLoader e não exigirá JourneyMap, Xaero ou
+outro mod de cartografia.
 
 ## Entidades ja existentes
 
@@ -333,10 +414,10 @@ declarar a permissão dela é erro em tempo de execução.
 | `player.inventory` | Dar e remover itens |
 | `player.move` | Teleporte |
 | `player.menu` | Abrir, atualizar e fechar janelas |
-| `world.read` | Ler blocos e dados, tocar som, emitir partículas |
-| `world.write` | Alterar blocos, preencher, posicionar estrutura, gravar dados, agendar tique |
+| `world.read` | Ler blocos, estado, regras, dificuldade, bioma, luz, hora, clima e redstone; tocar som e emitir partículas |
+| `world.write` | Alterar blocos/estado, regras, dificuldade, preencher, posicionar estrutura, gravar dados e agendar tique |
 | `world.containers` | Ler, inserir e extrair do inventário de um bloco |
-| `server.read` | Jogadores conectados, hora do dia, dimensão, mods carregados |
+| `server.read` | Jogadores conectados, hora do dia, dimensão, regras, dificuldade e mods carregados |
 | `server.command.register` | Registrar comandos |
 | `server.install` | Instalar e desinstalar mods por link — veja `INSTALACAO.md` |
 | `entity.read` / `entity.spawn` / `entity.modify` | Entidades |
@@ -571,8 +652,27 @@ Não confunda com `mod.require`, que serve para usar **outro mod** como bibliote
 local ui = mod.require("ui_lib")
 ```
 
-A dependência carrega antes de quem a consome. Dentro de uma biblioteca, use `mod.server` em vez de
-`ctx.server`: assim ela age com as próprias permissões, e não com as de quem a chamou.
+A dependência normalmente carrega antes de quem a consome. Se o mod for carregado isoladamente, o
+runtime usa o catálogo descoberto e resolve a biblioteca sob demanda na primeira chamada a
+`mod.require()`. A exportação fica em cache para chamadas seguintes.
+
+Se `ui_lib` depender de outro mod, a resolução é recursiva:
+
+```text
+meu_mod -> ui_lib -> base_lib
+```
+
+Uma dependência que volte a um mod ainda em resolução é recusada com a cadeia no erro:
+
+```text
+mod_a -> mod_b -> mod_c -> mod_a
+```
+
+Isso vale mesmo quando os manifestos escapam da ordem normal de arranque. A biblioteca precisa continuar
+declarada em `dependencies`; `mod.require()` não instala código nem procura ficheiros fora do catálogo.
+
+Dentro de uma biblioteca, use `mod.server` em vez de `ctx.server`: assim ela age com as próprias
+permissões, e não com as de quem a chamou.
 
 ## Limites que o loader impõe
 

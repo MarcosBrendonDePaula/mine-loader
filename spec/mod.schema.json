@@ -9,8 +9,7 @@
     "schema",
     "id",
     "name",
-    "version",
-    "entrypoint"
+    "version"
   ],
   "properties": {
     "schema": {
@@ -54,9 +53,20 @@
         "enum": [
           "chat.send",
           "player.read",
+          "player.inventory",
+          "player.move",
+          "player.menu",
+          "player.modify",
           "server.read",
           "server.command.register",
-          "world.write"
+          "world.read",
+          "world.write",
+          "world.containers",
+          "entity.read",
+          "entity.spawn",
+          "entity.modify",
+          "entity.register",
+          "server.install"
         ]
       }
     },
@@ -119,6 +129,9 @@
       "propertyNames": {
         "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"
       }
+    },
+    "requires": {
+      "$ref": "#/$defs/requires"
     },
     "remote_base": {
       "type": "string",
@@ -449,7 +462,8 @@
           "enum": [
             "none",
             "horizontal",
-            "all"
+            "all",
+            "player"
           ]
         },
         "waterloggable": {
@@ -756,6 +770,33 @@
           "type": "string",
           "pattern": "^[0-9a-fA-F]{64}$",
           "description": "Obrigatorio quando $import e uma URL. Fixa o conteudo aceito."
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Contrato minimo do runtime: dominios e capabilities do MineLoader.",
+      "properties": {
+        "domains": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$"
+          }
         }
       }
     },

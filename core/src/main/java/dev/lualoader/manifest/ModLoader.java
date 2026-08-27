@@ -25,6 +25,10 @@ import java.util.regex.Pattern;
 public final class ModLoader {
     private static final Pattern MOD_ID = Pattern.compile("^[a-z0-9][a-z0-9_-]{1,63}$");
     private static final Pattern LUA_FILE = Pattern.compile("^[^/\\\\][^:]*\\.lua$");
+    private static final Pattern DOMAIN_ID = Pattern.compile("^[a-z][a-z0-9_-]{0,31}$");
+    private static final Pattern CAPABILITY_ID = Pattern.compile("^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$");
+    private static final Pattern CONTRACT_VERSION = Pattern.compile(
+            "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$");
     private static final Set<String> RARITIES = Set.of("common", "uncommon", "rare", "epic");
 
     /**
@@ -57,12 +61,13 @@ public final class ModLoader {
             .create();
     private final Logger logger;
     private final Path importCache;
+    private final RuntimeContract runtimeContract;
     /** Base remota do manifesto em validacao, usada para aceitar scripts que nao estao no disco. */
     private String manifestRemoteBase;
 
     /** Loader apenas local: imports remotos serao recusados. Usado em validacao offline e testes. */
     public ModLoader(Logger logger) {
-        this(logger, null);
+        this(logger, null, RuntimeContract.standard());
     }
 
     /**
@@ -70,8 +75,19 @@ public final class ModLoader {
      *                    {@code null} desabilita import remoto
      */
     public ModLoader(Logger logger, Path importCache) {
+        this(logger, importCache, RuntimeContract.standard());
+    }
+
+    /**
+     * Cria um loader contra o contrato efectivamente exposto por um runtime.
+     *
+     * <p>O perfil pertence ao bridge, mas é um DTO do core: assim a validação não precisa conhecer
+     * classes de Fabric, NeoForge ou Minecraft.
+     */
+    public ModLoader(Logger logger, Path importCache, RuntimeContract runtimeContract) {
         this.logger = logger;
         this.importCache = importCache;
+        this.runtimeContract = java.util.Objects.requireNonNull(runtimeContract, "runtimeContract");
     }
 
     /**
@@ -386,6 +402,7 @@ public final class ModLoader {
         }
 
         validateDependencies(manifest);
+        validateRequirements(manifest);
         validateRegistration(manifest, directory);
         validateItems(manifest);
         validateEntities(manifest);
@@ -573,6 +590,44 @@ public final class ModLoader {
                     "id de dependencia invalido: " + entry.getKey());
             require(!entry.getKey().equals(manifest.id), "um mod nao pode depender de si mesmo");
         }
+    }
+
+    /** Confere que o manifesto exige somente o contrato que este runtime entrega. */
+    private void validateRequirements(ModManifest manifest) {
+        require(manifest.requires != null, "requires deve ser um objeto");
+        require(manifest.requires.domains != null, "requires.domains deve ser um objeto");
+        require(manifest.requires.capabilities != null, "requires.capabilities deve ser um objeto");
+
+        if (manifest.requires.domains != null) {
+            for (Map.Entry<String, String> entry : manifest.requires.domains.entrySet()) {
+                String id = entry.getKey();
+                String minimum = entry.getValue();
+                require(id != null && DOMAIN_ID.matcher(id).matches(),
+                        "id de dominio invalido: " + id);
+                requireValidContractVersion(minimum, "dominio " + id);
+                require(runtimeContract.satisfiesDomain(id, minimum),
+                        "runtime " + runtimeContract.runtimeId() + " nao satisfaz o dominio "
+                                + id + " na versao " + minimum);
+            }
+        }
+
+        if (manifest.requires.capabilities != null) {
+            for (Map.Entry<String, String> entry : manifest.requires.capabilities.entrySet()) {
+                String id = entry.getKey();
+                String minimum = entry.getValue();
+                require(id != null && CAPABILITY_ID.matcher(id).matches(),
+                        "id de capability invalido: " + id);
+                requireValidContractVersion(minimum, "capability " + id);
+                require(runtimeContract.satisfiesCapability(id, minimum),
+                        "runtime " + runtimeContract.runtimeId() + " nao satisfaz a capability "
+                                + id + " na versao " + minimum);
+            }
+        }
+    }
+
+    private void requireValidContractVersion(String version, String subject) {
+        require(version != null && CONTRACT_VERSION.matcher(version.trim()).matches(),
+                "versao de contrato invalida para " + subject + ": " + version);
     }
 
     /**

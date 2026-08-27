@@ -32,11 +32,11 @@ Também é possível executar uma combinação isolada, por exemplo:
 ./gradlew :runtimes:neoforge:1.21.4:runGameTestServer
 ```
 
-Os GameTests usam a mesma pasta `examples/` do repositório. Cada tarefa sincroniza uma cópia limpa para o seu diretório de jogo antes de iniciar. O resultado esperado é `All 18 required tests passed :)`; o processo deve ser considerado falho se o log mostrar que os mods foram carregados como zero, mesmo que a tarefa Gradle não propague esse estado.
+Os GameTests usam a mesma pasta `examples/` do repositório. Cada tarefa sincroniza uma cópia limpa para o seu diretório de jogo antes de iniciar. O resultado esperado é `All 22 required tests passed :)`; o processo deve ser considerado falho se o log mostrar que os mods foram carregados como zero, mesmo que a tarefa Gradle não propague esse estado.
 
 ## O que a prova cobre
 
-Os 18 GameTests de cada runtime verificam registro de blocos e entidades, propriedades declaradas, inventário de bloco, persistência NBT, automação, eventos, fila de ticks, tags, ovos de criação e herança entre mods. Na matriz atual, Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 executaram os 18 testes obrigatórios com sucesso. O core também possui a sua suíte JUnit independente.
+Os 22 GameTests de cada runtime verificam registro de blocos e entidades, propriedades declaradas, inventário de bloco, persistência NBT, automação, eventos, fila de ticks, leitura de redstone, estado de bloco, Game Rules, dificuldade, tags, ovos de criação e herança entre mods. Na matriz atual, Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 executaram os 22 testes obrigatórios com sucesso. O core também possui a sua suíte JUnit independente.
 
 Isso prova uma coisa importante para a tese do projeto: os mesmos exemplos declarativos e o mesmo core chegam ao Minecraft por quatro bridges diferentes. Não prova que toda capability visual ou todo detalhe de datapack é idêntico; esses itens ficam discriminados em `COMPATIBILIDADE.md`.
 

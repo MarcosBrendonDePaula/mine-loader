@@ -2,6 +2,7 @@ package dev.lualoader.neoforge;
 
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.manifest.RuntimeContract;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.fml.common.Mod;
@@ -157,12 +158,12 @@ public class NeoForgeLuaLoader {
                 return;
             }
 
-            loadedMods = List.copyOf(new ModLoader(LOGGER).discover(modsDirectory));
+            loadedMods = List.copyOf(new ModLoader(LOGGER, null, RuntimeContract.forRuntime("neoforge", "1.21.1")).discover(modsDirectory));
 
             var dependencies = new dev.lualoader.install.DependencyInstaller(
                     LOGGER, modInstaller, installPolicy).resolve(loadedMods);
             if (dependencies.changedAnything()) {
-                loadedMods = List.copyOf(new ModLoader(LOGGER).discover(modsDirectory));
+                loadedMods = List.copyOf(new ModLoader(LOGGER, null, RuntimeContract.forRuntime("neoforge", "1.21.1")).discover(modsDirectory));
             }
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {
@@ -337,6 +338,7 @@ public class NeoForgeLuaLoader {
         runtime = new LuaRuntime(LOGGER, cache, state);
         runtime.attach(bridge);
         runtime.attachInstaller(modInstaller, installPolicy);
+        runtime.registerAvailableMods(loadedMods);
 
         // Os mods ja foram descobertos no construtor, quando o conteudo precisou ser registrado.
         // Redescobrir aqui leria o disco de novo e poderia divergir do que esta no jogo.

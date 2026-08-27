@@ -33,6 +33,97 @@ public class BlockInteractionGameTest implements FabricGameTest {
     }
 
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeReadsRedstoneSignalInLoadedWorld(TestContext context) {
+        var world = context.getWorld();
+        BlockPos source = context.getAbsolutePos(new BlockPos(1, 1, 1));
+        BlockPos target = context.getAbsolutePos(new BlockPos(2, 1, 1));
+        world.setBlockState(source, net.minecraft.block.Blocks.REDSTONE_BLOCK.getDefaultState(), 3);
+
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(world);
+        try {
+            int signal = bridge.redstoneSignal(target.getX(), target.getY(), target.getZ());
+            if (signal != 15) {
+                throw new AssertionError("o bloco deveria receber sinal 15, recebeu " + signal);
+            }
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeReadsAndWritesBlockStateInLoadedWorld(TestContext context) {
+        var world = context.getWorld();
+        BlockPos relative = new BlockPos(1, 1, 1);
+        BlockPos absolute = context.getAbsolutePos(relative);
+        world.setBlockState(absolute, net.minecraft.block.Blocks.OAK_DOOR.getDefaultState(), 3);
+
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(world);
+        try {
+            var snapshot = bridge.blockState(absolute.getX(), absolute.getY(), absolute.getZ());
+            if (!"minecraft:oak_door".equals(snapshot.id)
+                    || !"false".equals(snapshot.properties.get("open"))
+                    || !snapshot.properties.containsKey("facing")) {
+                throw new AssertionError("snapshot inesperado: " + snapshot.id + " " + snapshot.properties);
+            }
+
+            if (!bridge.setBlockState(absolute.getX(), absolute.getY(), absolute.getZ(),
+                    java.util.Map.of("open", "true", "facing", "south"))) {
+                throw new AssertionError("set_block_state deveria alterar a porta");
+            }
+
+            BlockState updated = world.getBlockState(absolute);
+            if (!updated.get(net.minecraft.state.property.Properties.OPEN)
+                    || updated.get(net.minecraft.state.property.Properties.HORIZONTAL_FACING)
+                    != net.minecraft.util.math.Direction.SOUTH) {
+                throw new AssertionError("estado escrito nao chegou ao mundo: " + updated);
+            }
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeReadsAndWritesWhitelistedGameRule(TestContext context) {
+        var world = context.getWorld();
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(world);
+        String original = bridge.gameRule("do_weather_cycle");
+        try {
+            bridge.setGameRule("do_weather_cycle", "false");
+            if (!"false".equals(bridge.gameRule("do_weather_cycle"))) {
+                throw new AssertionError("a Game Rule deveria ter sido alterada");
+            }
+        } finally {
+            bridge.setGameRule("do_weather_cycle", original);
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeReadsAndWritesDifficulty(TestContext context) {
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        String original = bridge.difficulty();
+        try {
+            bridge.setDifficulty(original);
+            if (!original.equals(bridge.difficulty())) {
+                throw new AssertionError("a dificuldade deveria permanecer " + original);
+            }
+        } finally {
+            bridge.setDifficulty(original);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void bridgeAppliesVariantInLoadedWorld(TestContext context) {
         Block block = LuaLoaderMod.blockRegistrar().get(RUBY_BLOCK);
         if (!(block instanceof DeclarativeBlock declarativeBlock)) {

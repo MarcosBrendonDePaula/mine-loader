@@ -7,6 +7,7 @@
 - [Especificação geral do projeto](docs/SPECIFICATION.md)
 - [Guia de criação de mod](docs/GUIA_DO_MOD.md)
 - [Formato de mods e manifesto JSON](docs/MOD_FORMAT_SPEC.md)
+- [Exemplos de requirements de capabilities e domínios](docs/examples/README.md)
 - [Blocos dinâmicos e Lua](docs/DYNAMIC_BLOCKS.md)
 - [Especificação de segurança](docs/SECURITY_SPEC.md)
 - [Catálogo de eventos](docs/EVENTS.md)
@@ -14,6 +15,7 @@
 - [Estudo: interface por HTML e CSS](docs/UI_HTML_DESIGN.md)
 - [Compatibilidade por runtime e versão](docs/COMPATIBILIDADE.md)
 - [Runtimes, versões e matriz de testes](docs/RUNTIMES.md)
+- [API estável para mods declarativos](docs/API_ESTAVEL.md)
 - [O que falta para um modder construir](docs/API_GAPS.md)
 - [Checklist de recursos e progressão](docs/CHECKLIST_MODLOADER.md)
 - [Instalar mods por link](docs/INSTALACAO.md)
@@ -23,7 +25,7 @@
 
 Protótipo de um modloader declarativo para Minecraft Java. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ. A branch de prova mantém bridges Fabric e NeoForge para Minecraft 1.21.1 e 1.21.4 no mesmo projeto.
 
-O núcleo não conhece plataforma: existem adaptadores **Fabric** e **NeoForge**, separados por versão em `runtimes/<plataforma>/<versão>`. Os mesmos manifestos e scripts Lua são carregados pelos quatro runtimes. A 1.21.1 é a baseline; a 1.21.4 já passa compilação e GameTests, mas continua experimental nas capabilities visuais e em alguns formatos de recurso. A matriz honesta está em [`docs/COMPATIBILIDADE.md`](docs/COMPATIBILIDADE.md).
+O núcleo não conhece plataforma: existem adaptadores **Fabric** e **NeoForge**, separados por versão em `runtimes/<plataforma>/<versão>`. Os mesmos manifestos e scripts Lua são carregados pelos quatro runtimes. O manifesto pode exigir capabilities e versões de domínios do contrato, sem mencionar a versão do Minecraft; veja [`docs/examples/README.md`](docs/examples/README.md). A 1.21.1 é a baseline; a 1.21.4 já passa compilação e GameTests, mas continua experimental nas capabilities visuais e em alguns formatos de recurso. A matriz honesta está em [`docs/COMPATIBILIDADE.md`](docs/COMPATIBILIDADE.md).
 
 Isso não é afirmação de quem escreveu o adaptador: os GameTests rodam nas quatro combinações no CI, e o mod `autoteste` exercita as APIs contra o jogo de verdade com o mesmo script em cada plataforma — uma divergência reporta FALHOU onde outra reporta OK.
 
@@ -38,7 +40,7 @@ Linux/macOS:
 ```bash
 ./gradlew compileAllRuntimes   # core + Fabric/NeoForge 1.21.1 e 1.21.4
 ./gradlew testAllRuntimes      # suíte JUnit do core e tarefas test dos runtimes
-./gradlew gameTestAllRuntimes  # 18 GameTests em cada combinação
+./gradlew gameTestAllRuntimes  # 22 GameTests em cada combinação
 ./gradlew checkAllRuntimes     # verificação completa, incluindo GameTests
 ```
 
@@ -196,7 +198,7 @@ end
 return { on_tick = on_tick }
 ```
 
-A API inicial expõe `ctx.log.info`, `ctx.log.warn`, `ctx.server.broadcast`, `ctx.server.set_block_variant`, `ctx.server.set_block_property`, `ctx.player.name`, `ctx.player.uuid` e `ctx.player.send_message`, sempre respeitando as permissões do manifesto.
+A API inicial e a expansão atual expõem `ctx.log.info`, `ctx.log.warn`, `ctx.server.broadcast`, `ctx.server.set_block_variant`, `ctx.server.set_block_property`, `ctx.server.redstone_signal`, `ctx.server.block_state`, `ctx.server.set_block_state`, `ctx.server.game_rule`, `ctx.server.set_game_rule`, `ctx.server.difficulty`, `ctx.server.set_difficulty`, hora, clima, `ctx.player.name`, `ctx.player.uuid`, `ctx.player.send_message` e `ctx.player.data`, sempre respeitando as permissões do manifesto. A especificação completa, os limites e as próximas prioridades estão em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md).
 
 ## Comandos
 
@@ -223,8 +225,7 @@ O sistema de IA será adicionado sobre este contrato: a IA produzirá um pacote 
 ./gradlew checkAllRuntimes
 ```
 
-Os GameTests rodam nas quatro combinações e o CI executa a matriz em todo push. Cada runtime
-carrega os mesmos exemplos e precisa mostrar `All 18 required tests passed :)`. A compilação client
+Os GameTests rodam nas quatro combinações e o CI executa a matriz em todo push. Cada runtime carrega os mesmos exemplos e precisa mostrar `All 22 required tests passed :)`. A compilação client
 não substitui esses testes, e os GameTests não substituem uma inspeção visual; as limitações estão
 separadas na matriz.
 

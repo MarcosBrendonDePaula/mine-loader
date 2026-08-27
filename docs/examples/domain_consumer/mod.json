@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "domain_consumer",
+  "name": "Domain Consumer",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "world.read",
+    "world.write"
+  ],
+  "requires": {
+    "domains": {
+      "world": "1.0.0",
+      "player": "1.0.0"
+    }
+  },
+  "events": {
+    "player_joined": "on_player_joined"
+  }
+}

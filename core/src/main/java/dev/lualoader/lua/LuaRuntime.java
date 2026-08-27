@@ -2,6 +2,7 @@ package dev.lualoader.lua;
 
 import dev.lualoader.manifest.LoaderEvents;
 import dev.lualoader.manifest.ManifestImports;
+import dev.lualoader.manifest.ModDependencies;
 import dev.lualoader.manifest.ModLoader;
 import dev.lualoader.manifest.ModManifest;
 import dev.lualoader.platform.BlockEventData;
@@ -33,7 +34,9 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +83,12 @@ public final class LuaRuntime {
     private final Logger logger;
     private final Map<String, LoadedScript> scripts = new LinkedHashMap<>();
 
+    /** Mods descobertos pelo bootstrap, disponíveis para resolução sob demanda. */
+    private final Map<String, ModLoader.LoadedMod> availableMods = new LinkedHashMap<>();
+
+    /** Cadeia activa de entrypoints a serem compilados por require(); vive na thread do servidor. */
+    private final Deque<String> resolvingMods = new ArrayDeque<>();
+
     /**
      * Estado compartilhado por mod, exposto como {@code mod.state} e {@code ctx.state}.
      *
@@ -88,6 +97,15 @@ public final class LuaRuntime {
      * tabela.
      */
     private final Map<String, LuaTable> states = new LinkedHashMap<>();
+
+    /**
+     * Dados persistentes por jogador, separados por mod.
+     *
+     * <p>A chave externa é o UUID e o conteúdo é uma tabela Lua limitada aos tipos serializáveis pelo
+     * {@link StateStore}. O UUID não é exposto como nome de arquivo ao script; ele só organiza o
+     * estado internamente e permite que o mesmo jogador conserve progresso entre sessões.
+     */
+    private final Map<String, Map<String, LuaTable>> playerStates = new LinkedHashMap<>();
 
     /**
      * Tarefas agendadas por {@code mod.after}, ordenadas por tick de disparo.
@@ -197,7 +215,9 @@ public final class LuaRuntime {
 
         String modId = modDirectory.getFileName().toString();
         try {
-            for (ModLoader.LoadedMod found : new ModLoader(logger).discover(root)) {
+            List<ModLoader.LoadedMod> discovered = new ModLoader(logger).discover(root);
+            registerAvailableMods(discovered);
+            for (ModLoader.LoadedMod found : discovered) {
                 if (!found.manifest().id.equals(modId)) continue;
 
                 // Reinstalar por cima de um mod ja carregado troca o script no lugar, e o antigo
@@ -233,10 +253,96 @@ public final class LuaRuntime {
         this.bridge = bridge == null ? GameBridge.DETACHED : bridge;
     }
 
+    /**
+     * Regista os mods descobertos pelo bootstrap para que {@code mod.require()} possa carregá-los sob
+     * demanda. A lista é substituída a cada descoberta, de modo que instalação e recarga vejam o
+     * mesmo catálogo que o loader viu no disco.
+     */
+    public void registerAvailableMods(List<ModLoader.LoadedMod> mods) {
+        availableMods.clear();
+        if (mods == null) return;
+        for (ModLoader.LoadedMod mod : mods) {
+            if (mod == null || mod.manifest() == null || mod.manifest().id == null) continue;
+            availableMods.put(mod.manifest().id, mod);
+        }
+    }
+
     public void load(ModLoader.LoadedMod mod) throws IOException {
-        LoadedScript script = compile(mod);
-        scripts.put(mod.manifest().id, script);
-        logger.info("Script Lua carregado: {}", mod.manifest().id);
+        if (mod == null || mod.manifest() == null || mod.manifest().id == null) {
+            throw new IOException("mod invalido para carga Lua");
+        }
+        availableMods.put(mod.manifest().id, mod);
+        compileAndInstall(mod, true);
+    }
+
+    /** Compila e instala um mod, mantendo a cadeia activa para detectar ciclos dinâmicos. */
+    private void compileAndInstall(ModLoader.LoadedMod mod, boolean replaceExisting)
+            throws IOException {
+        String id = mod.manifest().id;
+        if (resolvingMods.contains(id)) {
+            throw new IOException("dependencia circular dinamica: " + resolutionPath(id));
+        }
+        if (!replaceExisting && scripts.containsKey(id)) return;
+
+        resolvingMods.addLast(id);
+        try {
+            LoadedScript script = compile(mod);
+            scripts.put(id, script);
+            logger.info("Script Lua carregado: {}", id);
+        } finally {
+            if (!resolvingMods.isEmpty() && id.equals(resolvingMods.peekLast())) {
+                resolvingMods.removeLast();
+            } else {
+                resolvingMods.remove(id);
+            }
+        }
+    }
+
+    /** Resolve uma dependency declarada, compilando-a apenas quando ainda não está carregada. */
+    private LoadedScript resolveDependency(ModLoader.LoadedMod requester, String dependencyId)
+            throws IOException {
+        if (requester.manifest().dependencies == null
+                || !requester.manifest().dependencies.containsKey(dependencyId)) {
+            throw new IOException("mod " + dependencyId
+                    + " precisa estar declarado em dependencies para ser usado");
+        }
+
+        if (resolvingMods.contains(dependencyId)) {
+            throw new IOException("dependencia circular dinamica: " + resolutionPath(dependencyId));
+        }
+
+        ModLoader.LoadedMod dependency = availableMods.get(dependencyId);
+        LoadedScript loaded = scripts.get(dependencyId);
+        if (dependency == null && loaded == null) {
+            throw new IOException("mod " + dependencyId
+                    + " nao esta disponivel para resolucao dinamica");
+        }
+
+        ModManifest dependencyManifest = dependency != null
+                ? dependency.manifest()
+                : loaded.mod().manifest();
+        String minimum = requester.manifest().dependencies.get(dependencyId);
+        if (!ModDependencies.satisfies(dependencyManifest.version, minimum)) {
+            throw new IOException("mod " + requester.manifest().id + " exige " + dependencyId
+                    + " na versao " + minimum + ", mas ha " + dependencyManifest.version);
+        }
+
+        if (loaded == null) {
+            compileAndInstall(dependency, false);
+            loaded = scripts.get(dependencyId);
+        }
+        if (loaded == null) {
+            throw new IOException("mod " + dependencyId + " nao foi carregado");
+        }
+        return loaded;
+    }
+
+    private String resolutionPath(String repeated) {
+        List<String> chain = new ArrayList<>(resolvingMods);
+        int start = chain.indexOf(repeated);
+        if (start > 0) chain = new ArrayList<>(chain.subList(start, chain.size()));
+        chain.add(repeated);
+        return String.join(" -> ", chain);
     }
 
     /**
@@ -425,6 +531,13 @@ public final class LuaRuntime {
         for (Map.Entry<String, LuaTable> entry : states.entrySet()) {
             stateStore.save(entry.getKey(), entry.getValue());
         }
+        for (Map.Entry<String, Map<String, LuaTable>> entry : playerStates.entrySet()) {
+            LuaTable allPlayers = new LuaTable();
+            for (Map.Entry<String, LuaTable> player : entry.getValue().entrySet()) {
+                allPlayers.set(player.getKey(), player.getValue());
+            }
+            stateStore.saveScoped(entry.getKey(), "players", allPlayers);
+        }
         logger.info("Estado de {} mod(s) gravado", states.size());
     }
 
@@ -432,6 +545,15 @@ public final class LuaRuntime {
     public void saveState(String modId) {
         LuaTable state = states.get(modId);
         if (state != null) stateStore.save(modId, state);
+
+        Map<String, LuaTable> byPlayer = playerStates.get(modId);
+        if (byPlayer != null) {
+            LuaTable allPlayers = new LuaTable();
+            for (Map.Entry<String, LuaTable> player : byPlayer.entrySet()) {
+                allPlayers.set(player.getKey(), player.getValue());
+            }
+            stateStore.saveScoped(modId, "players", allPlayers);
+        }
     }
 
     /**
@@ -467,6 +589,7 @@ public final class LuaRuntime {
     /** Descarta o estado acumulado por um mod. Usado quando o mod e removido, nao em recarga. */
     public void forgetState(String modId) {
         states.remove(modId);
+        playerStates.remove(modId);
     }
 
     public boolean reload(String modId) throws IOException {
@@ -533,7 +656,7 @@ public final class LuaRuntime {
             return;
         }
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             LuaFunction callback = script.callbacks().get(event);
             if (callback == null) continue;
 
@@ -577,7 +700,7 @@ public final class LuaRuntime {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             LuaFunction callback = script.callbacks().get(event);
             if (callback == null) continue;
             try {
@@ -664,7 +787,7 @@ public final class LuaRuntime {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
 
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             // Assim como nos blocos, o evento pertence ao mod que declarou o item.
             if (!ownsId(script.mod(), item.itemId())) continue;
 
@@ -727,7 +850,7 @@ public final class LuaRuntime {
     private boolean trigger(String event, PlayerHandle player, BlockEventData block) {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
-        for (LoadedScript script : scripts.values()) {
+        for (LoadedScript script : List.copyOf(scripts.values())) {
             // Um evento de bloco pertence ao mod que declarou o bloco. Sem esta checagem,
             // qualquer mod receberia interacoes com o conteudo de todos os outros.
             if (block != null && !ownsBlock(script.mod(), block)) continue;
@@ -924,19 +1047,15 @@ public final class LuaRuntime {
             @Override
             public LuaValue call(LuaValue value) {
                 String dependencyId = value.tojstring();
-                if (mod.manifest().dependencies == null
-                        || !mod.manifest().dependencies.containsKey(dependencyId)) {
-                    throw new LuaError("mod " + dependencyId
-                            + " precisa estar declarado em dependencies para ser usado");
+                try {
+                    LoadedScript dependency = resolveDependency(mod, dependencyId);
+                    if (dependency.exports() == null) {
+                        throw new IOException("mod " + dependencyId + " nao exporta nada");
+                    }
+                    return dependency.exports();
+                } catch (IOException error) {
+                    throw new LuaError(error.getMessage());
                 }
-                LoadedScript dependency = scripts.get(dependencyId);
-                if (dependency == null) {
-                    throw new LuaError("mod " + dependencyId + " ainda nao foi carregado");
-                }
-                if (dependency.exports() == null) {
-                    throw new LuaError("mod " + dependencyId + " nao exporta nada");
-                }
-                return dependency.exports();
             }
         });
 
@@ -1367,6 +1486,40 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(bridge.worldName());
             }
         });
+        serverApi.set("game_rule", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "world.read");
+                return LuaValue.valueOf(bridge.gameRule(requireRuleName(value)));
+            }
+        });
+        serverApi.set("set_game_rule", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue name, LuaValue value) {
+                requirePermission(mod.manifest(), "world.write");
+                bridge.setGameRule(requireRuleName(name), requireRuleValue(value));
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("difficulty", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "world.read");
+                return LuaValue.valueOf(bridge.difficulty());
+            }
+        });
+        serverApi.set("set_difficulty", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "world.write");
+                String difficulty = value.tojstring().toLowerCase(java.util.Locale.ROOT);
+                if (!Set.of("peaceful", "easy", "normal", "hard").contains(difficulty)) {
+                    throw new LuaError("dificuldade deve ser peaceful, easy, normal ou hard");
+                }
+                bridge.setDifficulty(difficulty);
+                return LuaValue.NIL;
+            }
+        });
         serverApi.set("items", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -1663,7 +1816,7 @@ public final class LuaRuntime {
 
                 LuaTable list = new LuaTable();
                 int index = 1;
-                for (LoadedScript script : scripts.values()) {
+                for (LoadedScript script : List.copyOf(scripts.values())) {
                     ModManifest manifest = script.mod().manifest();
 
                     LuaTable entry = new LuaTable();
@@ -2102,6 +2255,46 @@ public final class LuaRuntime {
                 return LuaValue.valueOf(bridge.getBlock(x, y, z));
             }
         });
+        serverApi.set("block_state", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) throw new LuaError("block_state exige x, y e z");
+                var snapshot = bridge.blockState(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)));
+                LuaTable result = new LuaTable();
+                result.set("id", LuaValue.valueOf(snapshot.id));
+                LuaTable properties = new LuaTable();
+                for (var property : snapshot.properties.entrySet()) {
+                    properties.set(property.getKey(), LuaValue.valueOf(property.getValue()));
+                }
+                result.set("properties", properties);
+                return result;
+            }
+        });
+        serverApi.set("set_block_state", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.write");
+                if (args.narg() < 4 || !args.arg(4).istable()) {
+                    throw new LuaError("set_block_state exige x, y, z e uma tabela de propriedades");
+                }
+                LuaTable properties = args.arg(4).checktable();
+                Map<String, String> values = new LinkedHashMap<>();
+                for (LuaValue key : properties.keys()) {
+                    if (!key.isstring() || !properties.get(key).isstring()) {
+                        throw new LuaError("propriedades de bloco precisam mapear texto para texto");
+                    }
+                    values.put(key.tojstring(), properties.get(key).tojstring());
+                }
+                return LuaValue.valueOf(bridge.setBlockState(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3)), values));
+            }
+        });
         serverApi.set("set_block", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -2113,6 +2306,19 @@ public final class LuaRuntime {
                 int z = requireCoordinate(args.arg(4));
                 bridge.setBlock(id, x, y, z);
                 return LuaValue.NIL;
+            }
+        });
+        serverApi.set("redstone_signal", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.read");
+                if (args.narg() < 3) {
+                    throw new LuaError("redstone_signal exige x, y e z");
+                }
+                return LuaValue.valueOf(bridge.redstoneSignal(
+                        requireCoordinate(args.arg(1)),
+                        requireCoordinate(args.arg(2)),
+                        requireCoordinate(args.arg(3))));
             }
         });
         serverApi.set("schedule_block", new VarArgFunction() {
@@ -2249,10 +2455,111 @@ public final class LuaRuntime {
      */
     private static final String[] SIDE_NAMES = {"down", "up", "north", "south", "west", "east"};
 
+    private LuaTable playerDataFor(ModLoader.LoadedMod mod, PlayerHandle player) {
+        Map<String, LuaTable> byPlayer = playerStates.computeIfAbsent(mod.manifest().id, id -> {
+            Map<String, LuaTable> loaded = new LinkedHashMap<>();
+            LuaTable stored = stateStore.loadScoped(id, "players");
+            for (LuaValue key : stored.keys()) {
+                LuaValue value = stored.get(key);
+                if (value.istable()) loaded.put(key.tojstring(), (LuaTable) value);
+            }
+            return loaded;
+        });
+        return byPlayer.computeIfAbsent(player.uuid(), ignored -> new LuaTable());
+    }
+
+    private LuaTable playerDataApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
+        LuaTable data = playerDataFor(mod, player);
+        LuaTable api = new LuaTable();
+        api.set("get", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.read");
+                String key = requireDataKey(args.arg(1));
+                LuaValue value = data.get(key);
+                if (value.isnil() && args.narg() >= 2) return args.arg(2);
+                return value;
+            }
+        });
+        api.set("has", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.read");
+                return LuaValue.valueOf(!data.get(requireDataKey(value)).isnil());
+            }
+        });
+        api.set("set", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue keyValue, LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                String key = requireDataKey(keyValue);
+                ensurePersistable(value, 0);
+                data.set(key, value);
+                return value;
+            }
+        });
+        api.set("remove", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.modify");
+                String key = requireDataKey(value);
+                LuaValue previous = data.get(key);
+                data.set(key, LuaValue.NIL);
+                return LuaValue.valueOf(!previous.isnil());
+            }
+        });
+        return api;
+    }
+
+    private static String requireRuleName(LuaValue value) {
+        if (value == null || !value.isstring()) {
+            throw new LuaError("nome de regra precisa ser texto");
+        }
+        String name = value.tojstring().toLowerCase(java.util.Locale.ROOT);
+        if (!name.matches("[a-z0-9_]{1,64}")) {
+            throw new LuaError("nome de regra invalido: " + name);
+        }
+        return name;
+    }
+
+    private static String requireRuleValue(LuaValue value) {
+        if (value == null || value.isnil() || value.istable() || value.isfunction()) {
+            throw new LuaError("valor de regra precisa ser texto, numero ou booleano");
+        }
+        return value.tojstring();
+    }
+
+    private static String requireDataKey(LuaValue value) {
+        if (value == null || !value.isstring()) {
+            throw new LuaError("chave de player.data precisa ser texto");
+        }
+        String key = value.tojstring();
+        if (!key.matches("[A-Za-z0-9_.-]{1,64}")) {
+            throw new LuaError("chave de player.data invalida: " + key);
+        }
+        return key;
+    }
+
+    private static void ensurePersistable(LuaValue value, int depth) {
+        if (value.isnil() || value.isboolean() || value.isnumber() || value.isstring()) return;
+        if (!value.istable()) {
+            throw new LuaError("player.data aceita apenas texto, numero, booleano ou tabela");
+        }
+        if (depth >= 32) throw new LuaError("player.data excede 32 niveis de profundidade");
+        LuaTable table = value.checktable();
+        for (LuaValue key : table.keys()) {
+            if (!key.isstring() && !key.isnumber()) {
+                throw new LuaError("chaves de player.data precisam ser texto ou numero");
+            }
+            ensurePersistable(table.get(key), depth + 1);
+        }
+    }
+
     private LuaTable playerApiFor(ModLoader.LoadedMod mod, PlayerHandle player) {
         LuaTable playerApi = new LuaTable();
         playerApi.set("name", LuaValue.valueOf(player.name()));
         playerApi.set("uuid", LuaValue.valueOf(player.uuid()));
+        playerApi.set("data", playerDataApiFor(mod, player));
 
         playerApi.set("send_message", new OneArgFunction() {
             @Override

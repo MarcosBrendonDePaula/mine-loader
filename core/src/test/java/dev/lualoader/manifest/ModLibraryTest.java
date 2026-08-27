@@ -15,6 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Um mod usado como biblioteca por outro: ordem de carga, exportação e permissões. */
@@ -37,6 +38,12 @@ class ModLibraryTest {
 
     private void writeMod(Path root, String id, String permissions, String dependencies, String lua)
             throws IOException {
+        writeModWithRequirements(root, id, permissions, dependencies, "{}", lua);
+    }
+
+    private void writeModWithRequirements(Path root, String id, String permissions,
+                                          String dependencies, String requirements, String lua)
+            throws IOException {
         Path dir = root.resolve(id);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve("mod.json"), """
@@ -47,14 +54,104 @@ class ModLibraryTest {
                   "version": "1.0.0",
                   "entrypoint": "main.lua",
                   "permissions": [%s],
-                  "dependencies": {%s}
+                  "dependencies": {%s},
+                  "requires": %s
                 }
-                """.formatted(id, id, permissions, dependencies), StandardCharsets.UTF_8);
+                """.formatted(id, id, permissions, dependencies, requirements), StandardCharsets.UTF_8);
         Files.writeString(dir.resolve("main.lua"), lua, StandardCharsets.UTF_8);
     }
 
     private List<ModLoader.LoadedMod> discover(Path root) throws IOException {
         return new ModLoader(LoggerFactory.getLogger("test")).discover(root);
+    }
+
+    private List<ModLoader.LoadedMod> discover(Path root, RuntimeContract contract) throws IOException {
+        return new ModLoader(LoggerFactory.getLogger("test"), null, contract).discover(root);
+    }
+
+    /** Lê manifestos sem aplicar o resolver estático, para testar a resolução dinâmica do LuaRuntime. */
+    private List<ModLoader.LoadedMod> catalog(Path root) throws IOException {
+        return new ModLoader(LoggerFactory.getLogger("test")).catalog(root).stream()
+                .filter(entry -> entry.manifest() != null)
+                .map(entry -> new ModLoader.LoadedMod(entry.directory(), entry.manifest()))
+                .toList();
+    }
+
+    @Test
+    void satisfiedCapabilityAndDomainRequirementsAllowTheMod(@TempDir Path root) throws IOException {
+        writeModWithRequirements(root, "contract_app", "", "",
+                """
+                {
+                  "domains": {"world": "1.0.0", "player": "1.0.0"},
+                  "capabilities": {
+                    "world.block_state.read": "1.0.0",
+                    "player.looking_at.read": "1.0.0"
+                  }
+                }
+                """, "return {}\n");
+
+        assertEquals(List.of("contract_app"),
+                discover(root).stream().map(mod -> mod.manifest().id).toList());
+    }
+
+    @Test
+    void missingCapabilityRejectsOnlyTheDependentMod(@TempDir Path root) throws IOException {
+        writeMod(root, "survivor", "", "", "return {}\n");
+        writeModWithRequirements(root, "contract_app", "", "",
+                "{\"capabilities\": {\"world.not_available.read\": \"1.0.0\"}}",
+                "return {}\n");
+
+        assertEquals(List.of("survivor"),
+                discover(root).stream().map(mod -> mod.manifest().id).toList());
+    }
+
+    @Test
+    void insufficientDomainVersionRejectsTheMod(@TempDir Path root) throws IOException {
+        writeModWithRequirements(root, "contract_app", "", "",
+                "{\"domains\": {\"world\": \"2.0.0\"}}", "return {}\n");
+        RuntimeContract profile = new RuntimeContract("test/limited",
+                java.util.Map.of("world", "1.4.0"), java.util.Map.of());
+
+        assertTrue(discover(root, profile).isEmpty());
+    }
+
+    @Test
+    void malformedRequirementIsRejectedBeforeRuntimeNegotiation(@TempDir Path root) throws IOException {
+        writeModWithRequirements(root, "contract_app", "", "",
+                "{\"capabilities\": {\"world..read\": \"latest\"}}", "return {}\n");
+
+        assertTrue(discover(root).isEmpty());
+    }
+
+    @Test
+    void malformedContractVersionIsRejected(@TempDir Path root) throws IOException {
+        writeModWithRequirements(root, "contract_app", "", "",
+                "{\"domains\": {\"world\": \"latest\"}}", "return {}\n");
+
+        assertTrue(discover(root).isEmpty());
+    }
+
+    @Test
+    void modDependencyAndRuntimeRequirementRemainSeparate(@TempDir Path root) throws IOException {
+        writeMod(root, "library_provider", "", "", "return { value = 7 }\n");
+        writeModWithRequirements(root, "contract_app", "", "\"library_provider\": \"1.0.0\"",
+                "{\"capabilities\": {\"world.block_state.read\": \"1.0.0\"}}",
+                "local lib = mod.require(\"library_provider\")\nreturn lib\n");
+
+        List<ModLoader.LoadedMod> mods = discover(root);
+        assertEquals(List.of("library_provider", "contract_app"),
+                mods.stream().map(mod -> mod.manifest().id).toList());
+    }
+
+    @Test
+    void documentedRequirementExamplesLoadTogether() throws IOException {
+        Path examples = Path.of("..", "docs", "examples");
+        List<String> ids = discover(examples).stream()
+                .map(mod -> mod.manifest().id)
+                .toList();
+
+        assertEquals(List.of("capability_consumer", "domain_consumer",
+                        "library_provider", "full_consumer"), ids);
     }
 
     @Test
@@ -90,6 +187,56 @@ class ModLibraryTest {
         runtime.triggerAll("server_started", null);
 
         assertEquals(List.of("broadcast:[ bem-vindo ]"), bridge.calls);
+    }
+
+    @Test
+    void requireLoadsDependencyOnDemand(@TempDir Path root) throws IOException {
+        writeMod(root, "ui_lib", "", "", "return { titulo = function() return \"dinamico\" end }\n");
+        writeMod(root, "app_mod", "\"chat.send\"", "\"ui_lib\": \"1.0.0\"", """
+                local ui = mod.require("ui_lib")
+                mod.on("server_started", function(ctx)
+                    ctx.server.broadcast(ui.titulo())
+                end)
+                """);
+
+        List<ModLoader.LoadedMod> available = catalog(root);
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.registerAvailableMods(available);
+
+        ModLoader.LoadedMod app = available.stream()
+                .filter(mod -> mod.manifest().id.equals("app_mod"))
+                .findFirst()
+                .orElseThrow();
+        runtime.load(app);
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("broadcast:dinamico"), bridge.calls);
+    }
+
+    @Test
+    void dynamicRequireRejectsThreeNodeCircularDependency(@TempDir Path root) throws IOException {
+        writeMod(root, "mod_a", "", "\"mod_b\": \"1.0.0\"",
+                "local b = mod.require(\"mod_b\")\nreturn { b = b }\n");
+        writeMod(root, "mod_b", "", "\"mod_c\": \"1.0.0\"",
+                "local c = mod.require(\"mod_c\")\nreturn { c = c }\n");
+        writeMod(root, "mod_c", "", "\"mod_a\": \"1.0.0\"",
+                "local a = mod.require(\"mod_a\")\nreturn { a = a }\n");
+
+        List<ModLoader.LoadedMod> available = catalog(root);
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.registerAvailableMods(available);
+        ModLoader.LoadedMod first = available.stream()
+                .filter(mod -> mod.manifest().id.equals("mod_a"))
+                .findFirst()
+                .orElseThrow();
+
+        IOException error = assertThrows(IOException.class, () -> runtime.load(first));
+        assertTrue(error.getMessage().contains("dependencia circular dinamica"),
+                "a mensagem deve identificar o ciclo: " + error.getMessage());
+        assertTrue(error.getMessage().contains("mod_a -> mod_b -> mod_c -> mod_a"),
+                "a mensagem deve trazer a cadeia: " + error.getMessage());
     }
 
     @Test
@@ -186,6 +333,16 @@ class ModLibraryTest {
         writeMod(root, "mod_b", "", "\"mod_a\": \"1.0.0\"", "return {}\n");
 
         assertTrue(discover(root).isEmpty(), "um ciclo nao pode carregar nenhum dos lados");
+    }
+
+    @Test
+    void threeNodeCircularDependencyIsRejected(@TempDir Path root) throws IOException {
+        writeMod(root, "mod_a", "", "\"mod_b\": \"1.0.0\"", "return {}\n");
+        writeMod(root, "mod_b", "", "\"mod_c\": \"1.0.0\"", "return {}\n");
+        writeMod(root, "mod_c", "", "\"mod_a\": \"1.0.0\"", "return {}\n");
+
+        assertTrue(discover(root).isEmpty(),
+                "um ciclo de tres nos nao pode carregar nenhum dos mods");
     }
 
     @Test
