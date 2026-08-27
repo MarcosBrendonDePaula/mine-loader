@@ -3,7 +3,7 @@
   "$id": "https://raw.githubusercontent.com/MarcosBrendonDePaula/mine-loader/main/docs/tutorials/tutorial.schema.json",
   "title": "MineLoader tutorial document",
   "type": "object",
-  "required": ["schema", "kind", "id", "index", "eyebrow", "title", "summary", "updated_at", "sources", "contracts", "outcome", "evidence", "sections"],
+  "required": ["schema", "kind", "id", "index", "eyebrow", "title", "summary", "updated_at", "sources", "contracts", "outcome", "evidence", "beginner", "sections"],
   "properties": {
     "schema": { "const": 1 },
     "kind": { "const": "mine_loader_tutorial" },
@@ -17,6 +17,7 @@
     "contracts": { "type": "object", "required": ["permissions", "capabilities", "limits"] },
     "outcome": { "type": "object", "required": ["icon", "label", "title", "text"] },
     "evidence": { "type": "object", "required": ["kind", "label", "meta"] },
+    "beginner": { "type": "object", "required": ["prerequisites", "files", "success", "next"], "properties": { "prerequisites": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "files": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "success": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "next": { "type": "object", "required": ["href", "label", "text"], "properties": { "href": { "type": "string", "pattern": "^/docs/" }, "label": { "type": "string", "minLength": 1 }, "text": { "type": "string", "minLength": 1 } } } } },
     "sections": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/section" } }
   },
   "$defs": {

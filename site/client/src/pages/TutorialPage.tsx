@@ -3,7 +3,7 @@
  * JSON canónica, para que editar a main atualize a publicação sem novo deploy.
  */
 import { Blocks, Box, Code2, PanelsTopLeft, RefreshCw } from "lucide-react";
-import { useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 import { DocCallout, DocCode, DocsShell, DocTable } from "@/components/DocsShell";
 import { TutorialEvidence } from "@/components/TutorialEvidence";
 import { TutorialSourceState } from "@/components/TutorialSourceState";
@@ -31,6 +31,15 @@ export default function TutorialPage() {
       <div className="doc-section-label"><span>{data.index}.1</span> Resultado</div>
       <div className="tutorial-outcome"><Icon size={32} /><div><strong>{data.outcome.title}</strong><p>{data.outcome.text}</p></div><span>{data.outcome.label}</span></div>
       <TutorialEvidence evidence={data.evidence} />
+    </section>
+    <section className="tutorial-onboarding" aria-label="Comece por aqui">
+      <div className="tutorial-onboarding-head"><span>{data.index}.0</span><div><strong>Antes de copiar o exemplo</strong><p>Faça esta pequena preparação. Ela evita editar o arquivo certo e testar no lugar errado.</p></div></div>
+      <div className="tutorial-onboarding-grid">
+        <article><span>1. VOCÊ JÁ TEM</span>{data.beginner.prerequisites.map((item) => <p key={item}>{item}</p>)}</article>
+        <article><span>2. VOCÊ VAI CRIAR</span>{data.beginner.files.map((file) => <code key={file}>{file}</code>)}</article>
+        <article><span>3. DEU CERTO QUANDO</span>{data.beginner.success.map((item) => <p key={item}>{item}</p>)}</article>
+      </div>
+      <Link className="tutorial-next-step" href={data.beginner.next.href}><span>DEPOIS DISSO</span><strong>{data.beginner.next.label}</strong><p>{data.beginner.next.text}</p></Link>
     </section>
     <ContractStrip document={data} />
     {data.sections.map((section) => <section className="doc-section" key={section.id}>

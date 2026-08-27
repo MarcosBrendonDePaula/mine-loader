@@ -5,7 +5,7 @@
   "index": "T2",
   "eyebrow": "Tutorial · Criar um item",
   "title": "Comece pelo item.|Evolua pelo contrato.",
-  "summary": "Itens simples são declarativos. Para comida, efeitos e combustível, o manifesto acrescenta apenas os campos comuns que os quatro bridges conseguem traduzir.",
+  "summary": "Comece com um item simples depois que seu pacote já estiver carregando. Comida, efeitos e combustível só entram quando a versão básica aparecer sem erro.",
   "updated_at": "2026-08-27",
   "sources": ["docs/GUIA_DO_MOD.md", "docs/MOD_FORMAT_SPEC.md", "examples/hello_lua/parts/items/ruby.json", "examples/hello_lua/parts/items/racao.json"],
   "contracts": {
@@ -30,21 +30,27 @@
       ["FUEL", "fuel_burn_time", "registry.item.fuel"]
     ]
   },
+  "beginner": {
+    "prerequisites": ["Conclua Primeiro passos; você precisa ter um mod.json carregando.", "Se estiver adicionando o item a um mod existente, pare o runtime antes de editar o manifesto."],
+    "files": ["run/mods-lua/meu_mod/mod.json"],
+    "success": ["Após reiniciar, o log mantém seu mod ativo e sem erro de schema.", "O item pode ser usado como ingrediente ou encontrado no conteúdo registrado pelo mod."],
+    "next": { "href": "/docs/tutoriais/lua", "label": "Criar código Lua", "text": "Quando já tiver conteúdo declarado, adicione o primeiro comportamento sem mudar sua estrutura de arquivos." }
+  },
   "sections": [
     {
       "id": "T2.1",
-      "title": "Primeiro item",
+      "title": "Primeiro item: copie o mínimo",
       "layout": "code",
       "code": {
         "language": "mod.json",
-        "value": "{\n  \"schema\": 1,\n  \"id\": \"fragmentos\",\n  \"name\": \"Fragmentos Lunares\",\n  \"version\": \"0.1.0\",\n  \"items\": [{\n    \"id\": \"fragmento_lunar\",\n    \"name\": \"Fragmento Lunar\",\n    \"max_stack_size\": 64,\n    \"rarity\": \"rare\",\n    \"fire_resistant\": false,\n    \"texture\": \"@fragmento_lunar\"\n  }]\n}"
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"meu_mod\",\n  \"name\": \"Meu Mod\",\n  \"version\": \"0.1.0\",\n  \"items\": [\n    { \"id\": \"fragmento_lunar\", \"name\": \"Fragmento Lunar\" }\n  ]\n}"
       }
     },
     {
       "id": "T2.2",
       "title": "Transforme-o em comida",
       "layout": "split",
-      "lead": "Comida e combustível podem coexistir no mesmo item. Cada bridge escolhe os componentes da sua versão.",
+      "lead": "Somente depois que o item básico carregar, transforme-o em comida ou combustível. Cada bridge escolhe os componentes da sua versão.",
       "paragraphs": [
         "O campo saturation é um modificador, não o valor final de saturação do jogo. Efeitos são aplicados quando o consumo termina e usam duração em ticks.",
         "Como essa é uma superfície estendida, declare as três capabilities usadas pelo exemplo no mesmo manifesto."

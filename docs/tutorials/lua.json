@@ -5,7 +5,7 @@
   "index": "T4",
   "eyebrow": "Tutorial · Criar código Lua",
   "title": "Escreva regras.|Não persiga mappings.",
-  "summary": "Lua controla comportamento: eventos, comandos, tarefas e menus. Contextos são snapshots com tabelas, IDs e escalares; o core nunca entrega referências Java vivas ao script.",
+  "summary": "Depois que seu manifesto já carregar, crie um único comando Lua. Você vai confirmar que o arquivo executa antes de adicionar eventos, tarefas ou autorização.",
   "updated_at": "2026-08-27",
   "sources": ["docs/GUIA_DO_MOD.md", "docs/API_ESTAVEL.md", "examples/land_claims/main.lua"],
   "contracts": {
@@ -25,15 +25,21 @@
     "meta": "CORE AGNÓSTICO",
     "stages": [["EVENTO", "bridge"], ["CTX", "tabelas"], ["LUA", "regra"], ["RETORNO", "allow/block"]]
   },
+  "beginner": {
+    "prerequisites": ["Conclua Primeiros passos e tenha um mod.json válido dentro de run/mods-lua/meu_mod/.", "Para este primeiro comando, teste dentro do jogo com um jogador; o console não tem ctx.player."],
+    "files": ["run/mods-lua/meu_mod/mod.json", "run/mods-lua/meu_mod/main.lua"],
+    "success": ["Depois de iniciar o runtime, /mod onde responde quando você olha para um bloco.", "Se não estiver olhando para um bloco, a mensagem explica o que fazer em vez de quebrar o script."],
+    "next": { "href": "/docs/progredir", "label": "Como progredir", "text": "Depois da primeira resposta Lua, use o percurso para decidir quando adicionar permissões, capabilities e arquivos auxiliares." }
+  },
   "sections": [
     {
       "id": "T4.2",
       "title": "Escreva a regra",
       "layout": "split",
-      "lead": "O código não precisa descobrir se está em Fabric ou NeoForge. looking_at() devolve a mesma tabela do contrato nas quatro combinações.",
+      "lead": "Crie primeiro um comando que responde ao jogador. O código não precisa descobrir se está em Fabric ou NeoForge.",
       "paragraphs": [
-        "Quando a chamada nasce de um comando, clique ou join, ctx.player representa quem acionou a regra. Fora desse contexto ele pode ser nil, então confira antes de tocar APIs pessoais.",
-        "Use ctx.log para diagnóstico de mod; use mensagens para retorno ao jogador e declare chat.send."
+        "looking_at() devolve a mesma tabela do contrato nas quatro combinações. Quando a chamada nasce de um comando, clique ou join, ctx.player representa quem acionou a regra; fora desse contexto ele pode ser nil.",
+        "Use ctx.log para diagnóstico de mod. Para a primeira prova, envie uma mensagem ao jogador e declare chat.send; não comece por autorização ou uma tarefa recorrente."
       ],
       "code": {
         "language": "mod.json + main.lua",

@@ -51,6 +51,7 @@ export type TutorialDocument = {
   contracts: { permissions: string[]; capabilities: string[]; limits: string[] };
   outcome: { icon: "blocks" | "box" | "panels" | "code"; label: string; title: string; text: string };
   evidence: { kind: TutorialIndexItem["evidence"]; label: string; meta: string; items?: string[]; rows?: string[][]; selected_slot?: number; stages?: string[][] };
+  beginner: { prerequisites: string[]; files: string[]; success: string[]; next: { href: string; label: string; text: string } };
   sections: TutorialSection[];
 };
 
@@ -75,7 +76,7 @@ function isIndex(value: unknown): value is TutorialIndex {
 
 function isDocument(value: unknown, id: string): value is TutorialDocument {
   const data = value as Partial<TutorialDocument> | undefined;
-  return data?.schema === 1 && data.kind === "mine_loader_tutorial" && data.id === id && Array.isArray(data.sections) && !!data.outcome && !!data.evidence;
+  return data?.schema === 1 && data.kind === "mine_loader_tutorial" && data.id === id && Array.isArray(data.sections) && !!data.outcome && !!data.evidence && !!data.beginner;
 }
 
 async function loadIndex(force = false) {

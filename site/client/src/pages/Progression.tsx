@@ -1,8 +1,9 @@
 /**
- * Planta de Mineração: percurso de maturidade do mod organizado como uma linha
- * de fabricação, tornando visível quando adicionar contratos, permissões e testes.
+ * Planta de Mineração: trilha de maturidade após a primeira execução. Ela evita
+ * apresentar capabilities e composição antes de a pessoa ter um mod visível.
  */
-import { ArrowDown, Braces, Cable, Layers3, ShieldCheck, TestTube2 } from "lucide-react";
+import { Braces, Cable, Layers3, PanelsTopLeft, ShieldCheck, TestTube2 } from "lucide-react";
+import { Link } from "wouter";
 import { DocCallout, DocCode, DocsShell, DocTable } from "@/components/DocsShell";
 
 const requirementSample = `{
@@ -17,18 +18,20 @@ const requirementSample = `{
 }`;
 
 const importSample = `-- main.lua
-local ui = mod.import("lib/ui.lua")
+local mensagens = mod.import("lib/mensagens.lua")
 
-mod.on("player_joined", function(ctx)
-  ui.aviso(ctx, "Bem-vindo")
-end)`;
+function on_server_started(ctx)
+  mensagens.aviso(ctx, "Mod carregado")
+end
+
+return { on_server_started = on_server_started }`;
 
 const stages = [
-  { no: "01", title: "Conteúdo", icon: Layers3, text: "Registre um bloco, item ou receita sem depender de lógica dinâmica. O manifesto é suficiente para começar." },
-  { no: "02", title: "Comportamento", icon: Braces, text: "Adicione entrypoint Lua e eventos. Mantenha callbacks curtos, determinísticos e focados na intenção do mod." },
-  { no: "03", title: "Contrato", icon: ShieldCheck, text: "Quando usar uma superfície específica, declare permissions e requires. A carga passa a explicar o que o mod exige." },
-  { no: "04", title: "Composição", icon: Cable, text: "Divida arquivos com mod.import, declare dependencies para bibliotecas de outros mods e recuse ciclos cedo." },
-  { no: "05", title: "Matriz", icon: TestTube2, text: "Teste o conteúdo e valide cada capability nos quatro bridges antes de afirmar que o mod é portátil." },
+  { no: "01", title: "Primeira prova", icon: TestTube2, text: "Você já viu seu mod escrever no log. Mantenha essa versão pequena e funcionando antes de adicionar conteúdo." },
+  { no: "02", title: "Uma mecânica", icon: Layers3, text: "Escolha um único tutorial: bloco ou item. Registre conteúdo pelo manifesto sem misturar lógica nova." },
+  { no: "03", title: "Uma reação", icon: Braces, text: "Quando o conteúdo estiver estável, acrescente um comando ou evento Lua com uma ação fácil de conferir." },
+  { no: "04", title: "Uma interação", icon: PanelsTopLeft, text: "Use menu/UI para uma grade simples. Só depois conecte inventário, compra ou estado persistente." },
+  { no: "05", title: "Contrato", icon: ShieldCheck, text: "Peça permissões e capabilities apenas quando sua próxima chamada realmente precisar delas." },
 ];
 
 export default function Progression() {
@@ -36,60 +39,63 @@ export default function Progression() {
     <DocsShell
       index="02"
       eyebrow="Como progredir"
-      title={<>Cresça o mod sem<br /><em>crescer a dependência.</em></>}
-      summary="A progressão saudável não é expor mais APIs nativas. É adicionar superfícies pequenas, declaradas e verificáveis quando a mecânica realmente precisa delas."
+      title={<>Faça uma coisa.<br /><em>Confirme. Depois cresça.</em></>}
+      summary="Esta página começa depois de Primeiros passos. A regra é simples: cada avanço deve gerar um resultado que você consegue conferir antes de adicionar a próxima camada."
     >
       <section className="doc-section doc-opening">
-        <div className="doc-section-label"><span>02.1</span> Da ideia ao contrato</div>
+        <div className="doc-section-label"><span>02.1</span> Um caminho que não atropela</div>
         <div className="progress-track">
           {stages.map((stage, index) => {
             const Icon = stage.icon;
-            return (
-              <article className="progress-stage" key={stage.no}>
-                <div className="progress-marker"><span>{stage.no}</span><Icon size={20} /></div>
-                <h2>{stage.title}</h2><p>{stage.text}</p>
-                {index < stages.length - 1 && <ArrowDown className="progress-arrow" size={18} />}
-              </article>
-            );
+            return <article className="progress-stage" key={stage.no}><div className="progress-marker"><span>{stage.no}</span><Icon size={20} /></div><h2>{stage.title}</h2><p>{stage.text}</p>{index < stages.length - 1 && <span className="progress-arrow">→</span>}</article>;
           })}
         </div>
+        <DocCallout title="Se ainda não viu a primeira mensagem no log" tone="warning">Volte para <Link href="/docs/primeiros-passos">Primeiros passos</Link>. Capabilities, bibliotecas e menus não ajudam a descobrir por que a pasta ou o manifesto básico ainda não carregou.</DocCallout>
       </section>
 
       <section className="doc-section">
-        <div className="doc-section-label"><span>02.2</span> Peça só o contrato necessário</div>
-        <div className="doc-two-col align-start">
-          <p className="doc-lead">Permissões dizem o que um mod pode fazer. Capabilities dizem o que o runtime precisa saber oferecer.</p>
-          <div className="doc-copy"><p>Os dois conceitos são complementares. Declarar <code>world.block_state.read</code> garante que o contrato existe; declarar <code>world.read</code> autoriza a leitura quando o script executar.</p><p>As versões em <code>requires</code> pertencem ao MineLoader, não ao Minecraft. O mesmo requisito pode ser satisfeito por bridges distintos.</p></div>
+        <div className="doc-section-label"><span>02.2</span> O que fazer agora</div>
+        <div className="first-next-grid">
+          <Link href="/docs/tutoriais/bloco"><span>T1 · MANIFESTO</span><h2>Bloco</h2><p>Para uma peça sólida no mundo. Comece com id e nome; aprofunde material e loot depois.</p></Link>
+          <Link href="/docs/tutoriais/item"><span>T2 · MANIFESTO</span><h2>Item</h2><p>Para ingrediente ou coleção. Deixe comida e combustível para a segunda execução.</p></Link>
+          <Link href="/docs/tutoriais/lua"><span>T4 · COMPORTAMENTO</span><h2>Lua</h2><p>Para comando e regras. Comece por uma resposta simples antes de usar eventos canceláveis.</p></Link>
         </div>
-        <DocCode language="mod.json">{requirementSample}</DocCode>
-        <DocCallout title="Sem fallback silencioso" tone="proof">Se uma capability não é entregue pelo runtime, o loader recusa o pacote antes de registrar conteúdo ou executar Lua. Não há aproximação oculta.</DocCallout>
       </section>
 
       <section className="doc-section">
-        <div className="doc-section-label"><span>02.3</span> Organize antes de duplicar</div>
+        <div className="doc-section-label"><span>02.3</span> Peça contrato somente quando aparecer a necessidade</div>
         <div className="doc-two-col align-start">
-          <p className="doc-lead">Use <code>mod.import</code> para dividir o próprio mod. Use <code>mod.require</code> somente para consumir uma biblioteca de outro mod declarada em <code>dependencies</code>.</p>
-          <div className="doc-copy"><p>Imports permanecem presos à pasta do pacote e executam uma vez. Dependências controlam a ordem de carga e a resolução dinâmica, mantendo uma cadeia de erro legível caso exista ciclo.</p></div>
+          <p className="doc-lead">Permissão é a autorização do seu pacote. Capability é a versão do contrato que o runtime precisa oferecer.</p>
+          <div className="doc-copy"><p>Você não precisa copiar este bloco no primeiro mod. Acrescente-o quando o código for ler mundo, acessar jogador ou usar uma API que o tutorial marca como capability.</p><p>As versões em <code>requires</code> pertencem ao MineLoader, não à versão do Minecraft. O runtime verifica isso antes de abrir o Lua.</p></div>
+        </div>
+        <DocCode language="mod.json — exemplo para quando precisar">{requirementSample}</DocCode>
+        <DocCallout title="Sem fallback silencioso" tone="proof">Quando uma capability não existe, o loader recusa o pacote antes de executar seu código. Isso é melhor que criar um mod que funciona em uma versão e falha sem explicação em outra.</DocCallout>
+      </section>
+
+      <section className="doc-section">
+        <div className="doc-section-label"><span>02.4</span> Divida o arquivo só quando ele pedir</div>
+        <div className="doc-two-col align-start">
+          <p className="doc-lead">Um único <code>main.lua</code> é o lugar certo para aprender. Quando ele ficar difícil de ler, mova uma responsabilidade por vez.</p>
+          <div className="doc-copy"><p>Use <code>mod.import</code> para arquivos do próprio pacote. Use <code>mod.require</code> apenas quando outro mod publicar uma biblioteca e ela estiver declarada em <code>dependencies</code>.</p><p>Comece dividindo textos, tabelas ou funções repetidas. Não crie uma árvore de arquivos antes de existir uma segunda responsabilidade real.</p></div>
         </div>
         <DocCode language="main.lua">{importSample}</DocCode>
         <DocTable>
-          <thead><tr><th>Ferramenta</th><th>Alcance</th><th>Quando usar</th></tr></thead>
+          <thead><tr><th>Quando você precisa…</th><th>Use</th><th>Resultado</th></tr></thead>
           <tbody>
-            <tr><td><code>mod.import("lib/x.lua")</code></td><td>Arquivo do próprio mod</td><td>Extrair UI, regras, tabelas e utilitários internos.</td></tr>
-            <tr><td><code>mod.require("outro_mod")</code></td><td>API pública de outro mod</td><td>Reutilizar uma biblioteca declarada em <code>dependencies</code>.</td></tr>
-            <tr><td><code>$import</code></td><td>Parte do manifesto</td><td>Separar blocos, itens, recursos e dados declarativos.</td></tr>
+            <tr><td>Reaproveitar uma função do seu mod</td><td><code>mod.import("lib/x.lua")</code></td><td>O arquivo permanece preso ao pacote e ciclos são recusados.</td></tr>
+            <tr><td>Consumir uma biblioteca de outro mod</td><td><code>mod.require("outro_mod")</code></td><td>A dependency declara a ordem e a API pública é resolvida sob demanda.</td></tr>
+            <tr><td>Separar blocos, itens ou recursos no manifesto</td><td><code>$import</code></td><td>O JSON fica menor sem perder uma raiz declarativa clara.</td></tr>
           </tbody>
         </DocTable>
       </section>
 
       <section className="doc-section">
-        <div className="doc-section-label"><span>02.4</span> Checklist de maturidade</div>
+        <div className="doc-section-label"><span>02.5</span> Antes de compartilhar</div>
         <div className="maturity-grid">
-          <div><span>DECLARAÇÃO</span><strong>O manifest descreve tudo que deve existir antes da carga.</strong></div>
-          <div><span>FRONTEIRA</span><strong>Lua recebe IDs, tabelas e escalares; nunca objetos da plataforma.</strong></div>
-          <div><span>PRIVILÉGIO</span><strong>Cada operação de impacto declara a permissão correspondente.</strong></div>
-          <div><span>COMPATIBILIDADE</span><strong>Capabilities e domains expõem o requisito verificável do mod.</strong></div>
-          <div><span>VALIDAÇÃO</span><strong>O mod é testado onde será usado, e não apenas em um runtime preferido.</strong></div>
+          <div><span>REPRODUZÍVEL</span><strong>Você consegue iniciar o runtime e ver o mesmo resultado do começo ao fim.</strong></div>
+          <div><span>PEQUENO</span><strong>Cada mudança adiciona uma coisa que você sabe testar: item, bloco, comando ou menu.</strong></div>
+          <div><span>EXPLÍCITO</span><strong>Permissões e capabilities só aparecem quando uma chamada realmente usa aquela superfície.</strong></div>
+          <div><span>REALISTA</span><strong>Teste primeiro na combinação de Minecraft e plataforma onde você pretende jogar ou distribuir.</strong></div>
         </div>
       </section>
     </DocsShell>

@@ -5,7 +5,7 @@
   "index": "T1",
   "eyebrow": "Tutorial · Criar um bloco",
   "title": "Um bloco começa como|uma declaração de mundo.",
-  "summary": "Material, física, forma, render e drop pertencem ao manifesto. Assim o bridge consegue registrá-los no momento correto, antes de o jogo congelar seu registry.",
+  "summary": "Depois de conseguir carregar seu primeiro pacote, registre um bloco simples. Só depois você acrescenta material, textura, loot e comportamento.",
   "updated_at": "2026-08-27",
   "sources": ["docs/GUIA_DO_MOD.md", "docs/MOD_FORMAT_SPEC.md", "examples/hello_lua/parts/blocks/ruby_block.json"],
   "contracts": {
@@ -25,19 +25,25 @@
     "meta": "1 × 1 × 1",
     "items": ["COLLISION: FULL_CUBE", "OUTLINE: FULL_CUBE", "MODEL: CUBE_ALL"]
   },
+  "beginner": {
+    "prerequisites": ["Conclua Primeiro passos e veja um mod carregar pelo menos uma vez.", "Pare o runtime antes de criar conteúdo novo; blocos entram no registry durante a inicialização."],
+    "files": ["run/mods-lua/meu_mod/mod.json"],
+    "success": ["Após reiniciar, o log carrega meu_mod sem erro de manifesto.", "No runtime de jogo, o bloco aparece no conteúdo registrado pelo mod."],
+    "next": { "href": "/docs/tutoriais/item", "label": "Criar um item", "text": "Quando o bloco carregar, acrescente um item simples sem adicionar Lua ainda." }
+  },
   "sections": [
     {
       "id": "T1.2",
       "title": "Declare o bloco mínimo",
       "layout": "split",
-      "lead": "Salve esta raiz como mod.json dentro de uma pasta de mod.",
+      "lead": "Edite o mod.json que já funcionou e comece com apenas id e name no bloco.",
       "paragraphs": [
-        "type: generic é a forma declarativa publicada para começar. Não use type ou base para tentar criar escadas, slabs ou portas: essas famílias ainda não têm um contrato publicado.",
-        "O alias @pedra_lunar aponta para um recurso definido na seção resources do manifesto completo."
+        "O primeiro bloco não precisa de textura, loot ou Lua. Primeiro confirme que o registry aceita a identidade declarada; depois você melhora a peça em passos pequenos.",
+        "type: generic é a forma declarativa publicada para evoluir depois. Não use type ou base para tentar criar escadas, slabs ou portas: essas famílias ainda não têm um contrato publicado."
       ],
       "code": {
         "language": "mod.json",
-        "value": "{\n  \"schema\": 1,\n  \"id\": \"pedra_lunar\",\n  \"name\": \"Pedra Lunar\",\n  \"version\": \"0.1.0\",\n  \"blocks\": [{\n    \"id\": \"pedra_lunar\",\n    \"name\": \"Pedra Lunar\",\n    \"type\": \"generic\",\n    \"material\": {\n      \"map_color\": \"gray\",\n      \"sound\": \"stone\",\n      \"solid\": true,\n      \"opaque\": true\n    },\n    \"settings\": {\n      \"hardness\": 3.0,\n      \"resistance\": 6.0,\n      \"requires_tool\": true\n    },\n    \"shape\": { \"collision\": \"full_cube\" },\n    \"render\": {\n      \"model\": \"cube_all\",\n      \"texture\": \"@pedra_lunar\"\n    },\n    \"item\": { \"register\": true }\n  }]\n}"
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"meu_mod\",\n  \"name\": \"Meu Mod\",\n  \"version\": \"0.1.0\",\n  \"blocks\": [\n    { \"id\": \"pedra_lunar\", \"name\": \"Pedra Lunar\" }\n  ]\n}"
       },
       "callout": {
         "tone": "warning",

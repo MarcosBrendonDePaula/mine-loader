@@ -13,6 +13,8 @@ Os quatro guias que o site público renderiza são documentos de dados, não có
 
 Cada documento usa `schema: 1` e `kind: "mine_loader_tutorial"`. O campo `title` pode conter `|` para marcar a quebra editorial que o site apresenta; isso não altera o texto semântico do título. `evidence.kind` informa a prova visual de cada rota, enquanto `sections` carrega a explicação, código e tabelas.
 
+Todo tutorial também declara `beginner`. Essa seção é obrigatória e responde, antes do primeiro trecho de código, quatro perguntas de quem acabou de chegar: o que precisa ter pronto (`prerequisites`), quais arquivos criar (`files`), qual sinal confirma que deu certo (`success`) e para onde seguir em seguida (`next`). Não remova esses campos para simplificar um documento: eles são o contrato de primeira experiência do site.
+
 ## Atualizar um tutorial
 
 Edite primeiro o documento JSON correspondente e mantenha `sources` apontando para a documentação ou exemplo que sustenta cada afirmação. Quando um contrato de runtime mudar, atualize também a documentação normativa apropriada e, se houver mudança de suporte, `docs/compatibility.json` e `docs/COMPATIBILIDADE.md` na mesma alteração.

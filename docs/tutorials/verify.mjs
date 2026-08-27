@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 
 const root = new URL("./", import.meta.url);
 const index = JSON.parse(await readFile(new URL("index.json", root), "utf8"));
-const requiredDocumentKeys = ["schema", "kind", "id", "index", "eyebrow", "title", "summary", "updated_at", "sources", "contracts", "outcome", "evidence", "sections"];
+const requiredDocumentKeys = ["schema", "kind", "id", "index", "eyebrow", "title", "summary", "updated_at", "sources", "contracts", "outcome", "evidence", "beginner", "sections"];
 const expectedIds = ["bloco", "item", "ui", "lua"];
 const failures = [];
 
@@ -31,6 +31,10 @@ for (const item of index.items ?? []) {
     check(document.schema === 1, `${filename} precisa declarar schema: 1`);
     check(document.kind === "mine_loader_tutorial", `${filename} precisa declarar kind canónico`);
     check(document.id === item.id, `${filename} não corresponde ao id do índice`);
+    check(Array.isArray(document.beginner?.prerequisites) && document.beginner.prerequisites.length > 0, `${filename} precisa declarar pré-requisitos para iniciantes`);
+    check(Array.isArray(document.beginner?.files) && document.beginner.files.length > 0, `${filename} precisa indicar os arquivos a criar`);
+    check(Array.isArray(document.beginner?.success) && document.beginner.success.length > 0, `${filename} precisa indicar o sinal de sucesso`);
+    check(typeof document.beginner?.next?.href === "string" && document.beginner.next.href.startsWith("/docs/"), `${filename} precisa apontar o próximo passo interno`);
     check(Array.isArray(document.sections) && document.sections.length > 0, `${filename} precisa conter seções`);
     for (const section of document.sections ?? []) {
       check(["split", "code", "table"].includes(section.layout), `${filename} possui layout inválido em ${section.id}`);

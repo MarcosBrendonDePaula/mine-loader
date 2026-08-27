@@ -52,3 +52,12 @@
 - [x] Criar gatilhos por alterações no frontend, assets, fonte JSON e workflow.
 - [x] Executar verificação TypeScript, validação dos tutoriais JSON e build em `docs/`.
 - [x] Garantir que o CI falha quando o artefato de Pages estiver desatualizado.
+
+## Percurso inicial e navegação lateral
+
+- [ ] Corrigir a rolagem da navegação lateral em telas baixas e com muitos links.
+- [ ] Revisar primeiros passos e progressão como percurso de quem ainda não conhece mods.
+- [ ] Tornar explícitos instalação, estrutura de arquivos, primeiro teste e próximos passos.
+- [ ] Revisar os tutoriais de bloco, item, UI e Lua como um percurso completo de primeiro mod.
+- [ ] Fazer cada tutorial indicar pré-requisito, arquivos a criar, resultado esperado e continuação sugerida.
+- [ ] Validar o percurso e a navegação em desktop e mobile, publicar e atualizar o CI.

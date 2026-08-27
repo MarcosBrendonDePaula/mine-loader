@@ -1,72 +1,85 @@
 /**
- * Planta de Mineração: guia de entrada progressivo, com cada passo medido e
- * código copiável que parte do menor mod real e leva à lógica Lua.
+ * Planta de Mineração: guia de entrada como uma primeira bancada de trabalho.
+ * A pessoa prepara o runtime, cria dois arquivos, inicia e vê um sinal claro
+ * antes de encontrar contratos ou superfícies mais avançadas.
  */
-import { ArrowDown, Check, FolderTree, Play, ShieldCheck } from "lucide-react";
-import { DocCallout, DocCode, DocsShell, DocTable } from "@/components/DocsShell";
+import { Check, FileCode2, FolderTree, Play, TerminalSquare } from "lucide-react";
+import { Link } from "wouter";
+import { DocCallout, DocCode, DocsShell } from "@/components/DocsShell";
 
-const smallestMod = `{
+const startServer = `# Linux e macOS
+git clone https://github.com/MarcosBrendonDePaula/mine-loader.git
+cd mine-loader
+./gradlew runServer
+
+# Windows PowerShell
+git clone https://github.com/MarcosBrendonDePaula/mine-loader.git
+cd mine-loader
+.\gradlew.bat runServer`;
+
+const firstManifest = `{
   "schema": 1,
   "id": "meu_mod",
-  "name": "Meu Mod",
-  "version": "1.0.0",
-  "blocks": [
-    { "id": "pedra_azul", "name": "Pedra Azul" }
-  ]
+  "name": "Meu primeiro mod",
+  "version": "0.1.0",
+  "entrypoint": "main.lua",
+  "events": {
+    "server_started": "on_server_started"
+  }
 }`;
 
-const entrypoint = `-- main.lua
-mod.on("server_started", function(ctx)
-  ctx.log.info("Meu mod está ativo")
-end)`;
+const firstLua = `function on_server_started(ctx)
+  ctx.log.info("Meu primeiro mod carregou.")
+end
+
+return {
+  on_server_started = on_server_started
+}`;
 
 export default function GettingStarted() {
   return (
     <DocsShell
       index="01"
       eyebrow="Primeiros passos"
-      title={<>Do zero a um bloco<br /><em>sem escrever Java.</em></>}
-      summary="O primeiro mod é uma pasta com um manifesto. Comece pelo conteúdo declarativo, confirme a carga e só então acrescente Lua para comportamento."
+      title={<>Crie seu primeiro mod<br /><em>antes de aprender o resto.</em></>}
+      summary="Você não precisa conhecer Java, Fabric ou NeoForge para começar. Primeiro vamos criar dois arquivos, iniciar o servidor de desenvolvimento e confirmar uma mensagem no log."
     >
       <section className="doc-section doc-opening">
-        <div className="doc-section-label"><span>01.1</span> O menor pacote</div>
-        <div className="doc-two-col">
-          <p className="doc-lead">Um mod é uma pasta dentro de <code>run/mods-lua/</code>. O nome da pasta e o campo <code>id</code> devem representar o mesmo mod.</p>
-          <div className="doc-copy"><p>Para registrar um bloco jogável, você precisa apenas de <code>mod.json</code>. O loader gera a ponte de conteúdo para cada plataforma no momento apropriado de registro.</p><p>Não é necessário criar projeto Java, usar mappings ou instalar uma API diferente para cada runtime.</p></div>
+        <div className="doc-section-label"><span>01.1</span> O que você precisa</div>
+        <div className="doc-two-col align-start">
+          <p className="doc-lead">Instale o Java 21 e tenha um editor de texto. Só isso para criar o primeiro mod.</p>
+          <div className="doc-copy"><p>O repositório já traz o Gradle Wrapper. Não instale Gradle, Fabric API ou NeoForge separadamente para seguir este começo.</p><p>Use o servidor de desenvolvimento primeiro: ele carrega o MineLoader e lê os mods da pasta <code>run/mods-lua/</code>.</p></div>
         </div>
-        <div className="doc-path"><FolderTree size={19} /><code>run/mods-lua/meu_mod/mod.json</code><span>RAIZ DO PACOTE</span></div>
+        <DocCode language="terminal">{startServer}</DocCode>
+        <DocCallout title="Primeira inicialização demora mais" tone="proof">Na primeira vez, o Gradle baixa dependências e prepara o runtime. Espere o servidor terminar de iniciar antes de criar o pacote abaixo. No Windows, use o comando equivalente mostrado no bloco.</DocCallout>
       </section>
 
       <section className="doc-section numbered-steps">
-        <div className="doc-section-label"><span>01.2</span> Sequência recomendada</div>
-        <article className="doc-step"><div className="step-no">01</div><div><h2>Crie o manifesto</h2><p>Salve o arquivo abaixo como <code>run/mods-lua/meu_mod/mod.json</code>. O <code>schema</code> identifica o formato, enquanto <code>id</code>, <code>name</code> e <code>version</code> dão identidade ao pacote.</p></div></article>
-        <DocCode language="mod.json">{smallestMod}</DocCode>
-        <article className="doc-step"><div className="step-no">02</div><div><h2>Inicie o runtime escolhido</h2><p>Inicie um dos runtimes mantidos. No carregamento, o MineLoader descobre os pacotes, valida a estrutura e registra o bloco antes de o jogo congelar o registry.</p></div><Play size={22} /></article>
-        <article className="doc-step"><div className="step-no">03</div><div><h2>Confirme o diagnóstico</h2><p>O log deve identificar o mod carregado. Um id inválido, uma chave desconhecida ou uma estrutura incompatível interrompe apenas o pacote em erro com uma mensagem explícita.</p></div><Check size={22} /></article>
+        <div className="doc-section-label"><span>01.2</span> Crie os dois arquivos</div>
+        <article className="doc-step"><div className="step-no">01</div><div><h2>Crie a pasta do seu mod</h2><p>Dentro da pasta do repositório, crie <code>run/mods-lua/meu_mod/</code>. O nome da pasta e o campo <code>id</code> abaixo devem falar do mesmo mod; use minúsculas, números e sublinhado no id.</p></div><FolderTree size={22} /></article>
+        <article className="doc-step"><div className="step-no">02</div><div><h2>Salve o manifesto</h2><p>Crie <code>run/mods-lua/meu_mod/mod.json</code> e cole o conteúdo abaixo. Ele diz qual arquivo Lua abrir e qual função chamar quando o servidor termina de iniciar.</p></div><FileCode2 size={22} /></article>
+        <DocCode language="run/mods-lua/meu_mod/mod.json">{firstManifest}</DocCode>
+        <article className="doc-step"><div className="step-no">03</div><div><h2>Salve o primeiro código Lua</h2><p>Na mesma pasta, crie <code>main.lua</code>. A função escreve apenas uma linha no log: este é o menor sinal de que o manifesto encontrou e executou o seu código.</p></div><TerminalSquare size={22} /></article>
+        <DocCode language="run/mods-lua/meu_mod/main.lua">{firstLua}</DocCode>
       </section>
 
       <section className="doc-section">
-        <div className="doc-section-label"><span>01.3</span> Acrescentar lógica</div>
+        <div className="doc-section-label"><span>01.3</span> Rode e confira</div>
         <div className="doc-two-col align-start">
-          <p className="doc-lead">Quando o conteúdo existir, declare um <code>entrypoint</code> e coloque a reação em Lua.</p>
-          <div className="doc-copy"><p>O script não recebe um servidor Java, entidades ou stacks. Ele trabalha com o vocabulário seguro do loader e com contextos de dados simples.</p><p>Use Lua para eventos globais, comandos, tarefas, menus e regras de gameplay; use o manifesto para o que precisa estar definido antes do registro.</p></div>
+          <p className="doc-lead">Pare e inicie <code>./gradlew runServer</code> novamente. Agora procure uma linha com <code>Meu primeiro mod carregou.</code>.</p>
+          <div className="doc-copy"><p>Se a linha aparecer, sua pasta, o JSON, o entrypoint e o callback estão conectados. Não pule esta prova: ela torna qualquer problema futuro menor e mais fácil de localizar.</p><p>Se o mod não carregar, leia o erro citado no log. O loader recusa somente o pacote com erro e explica se foi id, chave, tipo de valor ou arquivo ausente.</p></div>
         </div>
-        <DocCode language="main.lua">{entrypoint}</DocCode>
-        <DocCallout title="Separe declaração de comportamento" tone="proof">Um bloco, item ou entidade que precisa existir na carga vai no manifesto. Uma decisão que depende de evento, contexto ou estado do mod vai para Lua.</DocCallout>
+        <DocCallout title="Primeira vitória confirmada" tone="proof">Você acabou de criar um mod que o MineLoader encontrou e executou. Só agora escolha o que ele vai fazer no jogo.</DocCallout>
       </section>
 
-      <section className="doc-section">
-        <div className="doc-section-label"><span>01.4</span> Antes de crescer</div>
-        <DocTable>
-          <thead><tr><th>Você quer…</th><th>Próximo lugar</th><th>Por quê</th></tr></thead>
-          <tbody>
-            <tr><td>Declarar mais conteúdo</td><td><code>mod.json</code></td><td>Itens, blocos, receitas, tags e entidades pertencem ao registro.</td></tr>
-            <tr><td>Agir quando algo acontece</td><td><code>main.lua</code></td><td>Eventos e callbacks são comportamento que pode depender do contexto.</td></tr>
-            <tr><td>Ler ou alterar mundo/jogador</td><td>Permissão + capability</td><td>O contrato torna o alcance do mod explícito antes de executar.</td></tr>
-            <tr><td>Dividir arquivos grandes</td><td><code>$import</code> e <code>mod.import</code></td><td>Manifesto e Lua podem crescer sem perder a raiz declarativa.</td></tr>
-          </tbody>
-        </DocTable>
-        <DocCallout title="O que não fazer" tone="warning">Não tente importar Fabric, NeoForge ou classes do Minecraft a partir do Lua. Esses detalhes pertencem aos bridges e não são parte do contrato do mod.</DocCallout>
+      <section className="doc-section first-next-section">
+        <div className="doc-section-label"><span>01.4</span> Escolha uma primeira mecânica</div>
+        <div className="first-next-grid">
+          <Link href="/docs/tutoriais/bloco"><span>T1 · SEM LUA NOVO</span><h2>Quero colocar um bloco</h2><p>Comece com um bloco de id e nome. Depois adicione física, render e loot.</p></Link>
+          <Link href="/docs/tutoriais/item"><span>T2 · SEM LUA NOVO</span><h2>Quero registrar um item</h2><p>Faça um item básico antes de tentar comida, efeitos ou combustível.</p></Link>
+          <Link href="/docs/tutoriais/lua"><span>T4 · PRÓXIMO CÓDIGO</span><h2>Quero reagir a um comando</h2><p>Crie uma resposta curta para um jogador e entenda contextos Lua.</p></Link>
+        </div>
+        <p className="first-next-note">Menus/UI vêm depois que o <code>main.lua</code> já estiver claro. O tutorial de UI parte desse mesmo pacote e abre uma grade sem mexer no inventário.</p>
       </section>
     </DocsShell>
   );

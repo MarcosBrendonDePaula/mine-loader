@@ -5,7 +5,7 @@
   "index": "T3",
   "eyebrow": "Tutorial · Criar uma UI",
   "title": "Uma UI útil começa|com uma grade de itens.",
-  "summary": "Menus usam a tela de container nativa do Minecraft. Cada slot é uma célula visual e um botão; os cliques voltam ao Lua como dados simples.",
+  "summary": "Este é o primeiro tutorial que usa Lua. Faça-o somente depois de concluir Primeiros passos e crie primeiro um menu que apenas abre e fecha.",
   "updated_at": "2026-08-27",
   "sources": ["docs/GUIA_DO_MOD.md", "examples/loja/mod.json", "examples/loja/main.lua"],
   "contracts": {
@@ -25,19 +25,25 @@
     "meta": "EVENTO: SLOT 1",
     "selected_slot": 1
   },
+  "beginner": {
+    "prerequisites": ["Conclua Primeiros passos e tenha um mod.json com entrypoint apontando para main.lua.", "Use um mundo de desenvolvimento; este guia abre um menu, mas ainda não compra nem remove itens."],
+    "files": ["run/mods-lua/meu_mod/mod.json", "run/mods-lua/meu_mod/main.lua"],
+    "success": ["Depois de reiniciar ou recarregar o runtime, /mod loja abre uma grade de uma linha.", "Ao clicar no ícone Barreira, a grade fecha sem mover itens do inventário."],
+    "next": { "href": "/docs/tutoriais/lua", "label": "Criar código Lua", "text": "Entenda comandos, contextos e permissões antes de tornar os slots ações de gameplay." }
+  },
   "sections": [
     {
       "id": "T3.2",
       "title": "Declare o acesso",
       "layout": "split",
-      "lead": "Abrir ou atualizar uma janela exige player.menu. Registrar o atalho /mod loja exige server.command.register.",
+      "lead": "Comece declarando somente as permissões usadas pelo menu. Abrir ou atualizar a janela exige player.menu; registrar o atalho exige server.command.register.",
       "paragraphs": [
         "Essas permissões pertencem ao pacote, não ao jogador. O callback precisa confirmar ctx.player porque um comando também pode vir do console.",
-        "A compra demonstrada pelo exemplo também lê e altera inventário; por isso declara player.read e player.inventory."
+        "O exemplo abaixo não compra nada. Quando você acrescentar compra, declare player.read e player.inventory; não peça permissões que seu primeiro menu não usa."
       ],
       "code": {
         "language": "mod.json",
-        "value": "{\n  \"schema\": 1,\n  \"id\": \"loja\",\n  \"name\": \"Loja de Exemplo\",\n  \"version\": \"1.0.0\",\n  \"entrypoint\": \"main.lua\",\n  \"permissions\": [\n    \"chat.send\",\n    \"player.read\",\n    \"player.inventory\",\n    \"player.menu\",\n    \"server.command.register\"\n  ]\n}"
+        "value": "{\n  \"schema\": 1,\n  \"id\": \"meu_mod\",\n  \"name\": \"Meu Mod\",\n  \"version\": \"1.0.0\",\n  \"entrypoint\": \"main.lua\",\n  \"permissions\": [\n    \"player.menu\",\n    \"server.command.register\"\n  ]\n}"
       }
     },
     {
@@ -46,7 +52,7 @@
       "layout": "code",
       "code": {
         "language": "main.lua",
-        "value": "local CATALOGO = {\n  { item = \"minecraft:golden_apple\", preco = 4, moeda = \"minecraft:gold_ingot\" }\n}\n\nlocal function desenhar(ctx)\n  return {\n    { item = CATALOGO[1].item, label = \"Comprar por 4\" },\n    { item = \"minecraft:barrier\", label = \"Fechar\" }\n  }\nend\n\nmod.menu(\"balcao\", function(ctx)\n  if ctx.player == nil then return end\n  if ctx.menu.slot == 1 then\n    ctx.player.close_menu()\n    return\n  end\n  ctx.player.update_menu(desenhar(ctx))\nend)\n\nmod.command(\"loja\", function(ctx)\n  if ctx.player == nil then return end\n  ctx.player.open_menu(\"balcao\", \"Loja\", 1, desenhar(ctx))\nend)"
+        "value": "local function desenhar()\n  return {\n    { item = \"minecraft:book\", label = \"Meu primeiro menu\" },\n    { item = \"minecraft:barrier\", label = \"Fechar\" }\n  }\nend\n\nmod.menu(\"balcao\", function(ctx)\n  if ctx.player == nil then return end\n  if ctx.menu.slot == 1 then\n    ctx.player.close_menu()\n  end\nend)\n\nmod.command(\"loja\", function(ctx)\n  if ctx.player == nil then return end\n  ctx.player.open_menu(\"balcao\", \"Meu menu\", 1, desenhar())\nend)"
       },
       "callout": {
         "tone": "warning",

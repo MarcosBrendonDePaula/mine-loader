@@ -16,10 +16,10 @@
     "intro": {
       "label": "T0.1",
       "title": "Ordem sugerida",
-      "lead": "Faça o bloco e o item primeiro. Depois conecte comportamento Lua e, quando precisar de interação, adicione uma UI.",
+      "lead": "Ainda não criou nenhum mod? Comece em Primeiros passos. Depois faça bloco, item, Lua e UI nessa ordem.",
       "paragraphs": [
-        "Não há pré-requisito de Java. O único ponto que muda entre Fabric, NeoForge e versões é o bridge que o mod não precisa tocar.",
-        "Os exemplos mostram uma versão mínima e uma expansão segura. Copie o mínimo, valide a carga e só então acrescente o próximo contrato."
+        "Primeiros passos mostra onde fica o pacote, como iniciar um runtime e o que procurar no log. Faça aquela página antes de abrir qualquer guia daqui.",
+        "Em cada tutorial, copie o mínimo, valide o resultado esperado e só então acrescente o próximo contrato. O bridge muda entre Fabric, NeoForge e versões; os arquivos do seu mod não precisam mudar junto."
       ]
     },
     "callout": {
