@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "full_consumer",
+  "name": "Full Consumer",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "world.read"
+  ],
+  "dependencies": {
+    "library_provider": "2.0.0"
+  },
+  "requires": {
+    "domains": {
+      "world": "1.0.0"
+    },
+    "capabilities": {
+      "world.block_state.read": "1.0.0"
+    }
+  },
+  "events": {
+    "player_joined": "on_player_joined"
+  }
+}

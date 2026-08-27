@@ -7,6 +7,7 @@
 - [Especificação geral do projeto](docs/SPECIFICATION.md)
 - [Guia de criação de mod](docs/GUIA_DO_MOD.md)
 - [Formato de mods e manifesto JSON](docs/MOD_FORMAT_SPEC.md)
+- [Exemplos de requirements de capabilities e domínios](docs/examples/README.md)
 - [Blocos dinâmicos e Lua](docs/DYNAMIC_BLOCKS.md)
 - [Especificação de segurança](docs/SECURITY_SPEC.md)
 - [Catálogo de eventos](docs/EVENTS.md)
@@ -24,7 +25,7 @@
 
 Protótipo de um modloader declarativo para Minecraft Java. O núcleo Java descobre mods em `mods-lua`, lê `mod.json`, registra blocos declarativos, monta um resource pack virtual e executa a lógica do mod em LuaJ. A branch de prova mantém bridges Fabric e NeoForge para Minecraft 1.21.1 e 1.21.4 no mesmo projeto.
 
-O núcleo não conhece plataforma: existem adaptadores **Fabric** e **NeoForge**, separados por versão em `runtimes/<plataforma>/<versão>`. Os mesmos manifestos e scripts Lua são carregados pelos quatro runtimes. A 1.21.1 é a baseline; a 1.21.4 já passa compilação e GameTests, mas continua experimental nas capabilities visuais e em alguns formatos de recurso. A matriz honesta está em [`docs/COMPATIBILIDADE.md`](docs/COMPATIBILIDADE.md).
+O núcleo não conhece plataforma: existem adaptadores **Fabric** e **NeoForge**, separados por versão em `runtimes/<plataforma>/<versão>`. Os mesmos manifestos e scripts Lua são carregados pelos quatro runtimes. O manifesto pode exigir capabilities e versões de domínios do contrato, sem mencionar a versão do Minecraft; veja [`docs/examples/README.md`](docs/examples/README.md). A 1.21.1 é a baseline; a 1.21.4 já passa compilação e GameTests, mas continua experimental nas capabilities visuais e em alguns formatos de recurso. A matriz honesta está em [`docs/COMPATIBILIDADE.md`](docs/COMPATIBILIDADE.md).
 
 Isso não é afirmação de quem escreveu o adaptador: os GameTests rodam nas quatro combinações no CI, e o mod `autoteste` exercita as APIs contra o jogo de verdade com o mesmo script em cada plataforma — uma divergência reporta FALHOU onde outra reporta OK.
 

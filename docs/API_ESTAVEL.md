@@ -87,6 +87,37 @@ mod.on("player_joined", function(ctx)
 end)
 ```
 
+## Dependências de contrato no manifesto
+
+O manifesto usa `requires` para declarar o contrato mínimo do runtime. As versões são do MineLoader, não do Minecraft: as quatro combinações mantidas podem satisfazer `world: 1.0.0` mesmo usando bridges e mappings diferentes.
+
+```json
+{
+  "requires": {
+    "domains": {
+      "world": "1.0.0",
+      "player": "1.0.0"
+    },
+    "capabilities": {
+      "world.block_state.read": "1.0.0",
+      "world.redstone.read": "1.0.0"
+    }
+  }
+}
+```
+
+`domains` agrupa áreas da API; `capabilities` é mais preciso e identifica operações individuais. Todos os requisitos são obrigatórios nesta primeira versão. O loader valida-os antes de registar conteúdo ou executar Lua e recusa o mod se o nome for desconhecido, a versão mínima for superior ou a versão estiver malformada.
+
+`requires` não substitui `dependencies`. `dependencies` aponta para outro mod, controla ordem de carga e autoriza `mod.require`; `requires` apenas negocia o perfil de APIs que o runtime já entrega.
+
+| Campo | Exemplo | Significado |
+|---|---|---|
+| `requires.domains` | `world: 1.0.0` | Exige o contrato inteiro de um domínio |
+| `requires.capabilities` | `world.block_state.read: 1.0.0` | Exige uma operação específica |
+| `dependencies` | `biblioteca_ui: 2.0.0` | Exige código de outro mod |
+
+A lista canónica de domínios e capabilities vive em `RuntimeContract` no core. Um bridge pode mudar a implementação interna, mas não pode publicar um nome diferente para a mesma operação nem declarar uma versão maior sem alterar a semântica do contrato.
+
 ## Regras de estabilidade
 
 A API pública deve evoluir por adição, não por renomeação silenciosa. Uma função existente não pode mudar o formato do retorno numa versão do Minecraft. Quando uma plataforma não consegue oferecer a capability, o bridge deve recusar com `BridgeException` nomeando a operação, ou aplicar um fallback documentado; nunca deve retornar dados inventados.

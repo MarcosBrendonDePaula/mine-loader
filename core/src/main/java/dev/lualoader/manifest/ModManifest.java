@@ -60,6 +60,20 @@ public final class ModManifest {
      */
     public Map<String, String> dependencySources = new LinkedHashMap<>();
 
+    /** Requisitos do contrato do MineLoader, independentes da versão do Minecraft. */
+    public RequiresDefinition requires = new RequiresDefinition();
+
+    /**
+     * Dependências da API do runtime. Diferente de {@link #dependencies}, não ordena mods nem carrega
+     * código: apenas verifica se o bridge entrega o domínio/capability exigido.
+     */
+    public static final class RequiresDefinition {
+        /** Domínio de API -> versão mínima do contrato, por exemplo {@code world -> 1.0.0}. */
+        public Map<String, String> domains = new LinkedHashMap<>();
+        /** Capability -> versão mínima do contrato, por exemplo {@code world.block_state.read -> 1.0.0}. */
+        public Map<String, String> capabilities = new LinkedHashMap<>();
+    }
+
     /**
      * Endereco base para resolver caminhos relativos que nao existam no disco.
      *

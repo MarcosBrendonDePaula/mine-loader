@@ -2,6 +2,7 @@ package dev.lualoader.neoforge;
 
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.manifest.RuntimeContract;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.fml.common.Mod;
@@ -157,12 +158,12 @@ public class NeoForgeLuaLoader {
                 return;
             }
 
-            loadedMods = List.copyOf(new ModLoader(LOGGER).discover(modsDirectory));
+            loadedMods = List.copyOf(new ModLoader(LOGGER, null, RuntimeContract.forRuntime("neoforge", "1.21.1")).discover(modsDirectory));
 
             var dependencies = new dev.lualoader.install.DependencyInstaller(
                     LOGGER, modInstaller, installPolicy).resolve(loadedMods);
             if (dependencies.changedAnything()) {
-                loadedMods = List.copyOf(new ModLoader(LOGGER).discover(modsDirectory));
+                loadedMods = List.copyOf(new ModLoader(LOGGER, null, RuntimeContract.forRuntime("neoforge", "1.21.1")).discover(modsDirectory));
             }
             for (ModLoader.LoadedMod mod : loadedMods) {
                 try {

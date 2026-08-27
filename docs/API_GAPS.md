@@ -35,10 +35,11 @@ na mesma mudança que o implementa.
 | Cliente | `client_screen_opened`, `client_screen_closed`, com `ctx.client.screen` |
 | Estado | `mod.state`, por mod, persistido em disco |
 | Entre mods | `mod.require`, com `dependencies` |
+| Contrato do runtime | `requires.domains` e `requires.capabilities` no manifesto, com versão mínima e recusa explícita |
 | Instalação | `mods`, `install_preview`, `install_confirm`, `uninstall`, `install_allowed`, `install_api_enabled`, `set_install_api`, `is_operator` — veja `INSTALACAO.md` |
 
 Entidade e item aceitam dados declarados na criação — nome, equipamento, efeitos, encantamentos,
-atributos. Veja `GUIA_DO_MOD.md`.
+atributos. Veja `GUIA_DO_MOD.md`. Exemplos de `requires` estão em `docs/examples/README.md`.
 
 ## O que dá para construir hoje
 

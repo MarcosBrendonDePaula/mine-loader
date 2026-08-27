@@ -59,6 +59,39 @@ arquivo `.lua`, uma URL `https` ou o nome de uma função exportada pelo `main.l
 
 O `entrypoint` é opcional: um mod pode ter apenas manifesto e scripts por peça.
 
+## Exigir capabilities e domínios do runtime
+
+Use `requires` quando o mod precisa de uma parte específica do contrato do MineLoader. A versão é do
+contrato, não do Minecraft; por isso o mesmo manifesto pode funcionar nos bridges Fabric e NeoForge.
+
+```json
+{
+  "schema": 1,
+  "id": "meu_mod",
+  "name": "Meu Mod",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "world.read"],
+  "requires": {
+    "domains": {
+      "world": "1.0.0"
+    },
+    "capabilities": {
+      "world.block_state.read": "1.0.0",
+      "player.looking_at.read": "1.0.0"
+    }
+  }
+}
+```
+
+`domains` são grupos amplos, como `world`, `player` e `entity`. `capabilities` são operações precisas,
+como `world.block_state.read`. Todos os requisitos declarados são obrigatórios. Se o runtime não
+satisfizer um deles, o mod é recusado antes de registar conteúdo ou executar Lua.
+
+Não confunda com `dependencies`: `dependencies` aponta para outro mod, controla a ordem de carga e
+permite `mod.require`; `requires` apenas verifica o contrato já oferecido pelo runtime. Há exemplos
+completos em [`docs/examples/README.md`](examples/README.md).
+
 ## Tempo, clima e mundo
 
 ```lua

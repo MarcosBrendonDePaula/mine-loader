@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "capability_consumer",
+  "name": "Capability Consumer",
+  "version": "1.0.0",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "chat.send",
+    "player.read",
+    "world.read"
+  ],
+  "requires": {
+    "capabilities": {
+      "world.block_state.read": "1.0.0",
+      "world.redstone.read": "1.0.0",
+      "player.looking_at.read": "1.0.0"
+    }
+  },
+  "events": {
+    "player_joined": "on_player_joined"
+  }
+}
