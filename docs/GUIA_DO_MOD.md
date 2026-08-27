@@ -78,7 +78,10 @@ contrato, não do Minecraft; por isso o mesmo manifesto pode funcionar nos bridg
     },
     "capabilities": {
       "world.block_state.read": "1.0.0",
-      "player.looking_at.read": "1.0.0"
+      "player.looking_at.read": "1.0.0",
+      "world.explode": "1.0.0",
+      "player.equipment.read": "1.0.0",
+      "player.inventory.slot": "1.0.0"
     }
   }
 }
@@ -112,6 +115,35 @@ ctx.server.schedule_block(x, y, z, 10)    -- de 1 a 24000 tiques
 
 `break_block` nao e o mesmo que escrever ar: respeita a tabela de loot e derrama o inventario do
 bloco, que e o que "quebrar" significa para quem joga.
+
+### Explosão, raio e quebra global
+
+Explosão e raio são operações server-side separadas e protegidas por permissões próprias. Declare
+`world.explode` e `world.lightning` em `permissions` e as capabilities homónimas em
+`requires.capabilities`. A força da explosão deve satisfazer `force > 0` e `force <= 8`; por omissão os blocos não são
+quebrados e a API nunca acende fogo.
+
+```lua
+ctx.server.explode(x, y, z, 2.0)          -- efeito sem destruir blocos
+ctx.server.explode(x, y, z, 1.25, true)   -- destruição explicitamente pedida
+ctx.server.strike_lightning(x, y, z)
+```
+
+Para reagir a uma quebra feita por um jogador, use o callback global. Ele vê ids vanilla e ids de
+outros mods, recebe o contexto antes da conclusão e pode cancelar devolvendo `false`.
+
+```lua
+mod.on("block_broken", function(ctx)
+    if ctx.block.id == "minecraft:diamond_ore" then
+        ctx.player.send_message("Minério protegido nesta área")
+        return false
+    end
+end)
+```
+
+O callback global não recebe explosões, pistões, substituições de script ou outras remoções indirectas.
+Para um bloco declarativo, `behavior.on_broken` continua sendo o callback específico e não duplica o
+global do próprio mod.
 
 ### Ler e alterar o estado real de um bloco
 
@@ -254,6 +286,8 @@ local xp = ctx.player.experience()        -- { level, progress }
 local modo = ctx.player.game_mode()
 local onde = ctx.player.dimension()
 local carga = ctx.player.inventory()      -- { { slot, item, count }, ... }
+local equipamento = ctx.player.equipment() -- mão e armadura como snapshots
+local slot5 = ctx.player.inventory_slot(5) -- { item, count }
 
 -- escrita
 ctx.player.set_health(20)
@@ -263,6 +297,8 @@ ctx.player.set_game_mode("adventure")
 ctx.player.apply_effect("minecraft:speed", 200, 1)
 ctx.player.clear_effects()
 ctx.player.clear_inventory()
+ctx.player.set_inventory_slot(5, "minecraft:stone", 16)
+ctx.player.set_inventory_slot(5, nil, 0) -- quantidade zero limpa o slot
 
 -- aviso
 ctx.player.show_title("Fase 2", "prepare-se", 10, 60, 10)
@@ -283,8 +319,13 @@ sugeriria que ela viaja junto com o jogador, e ela nao viaja.
 Um mod que abre um painel de administracao deve perguntar, e nao presumir: o comando `/mod` esta ao
 alcance de qualquer jogador.
 
-A escrita exige a permissao `player.modify`, separada de `player.read` e de `player.inventory`:
-mudar vida ou modo de jogo altera as regras sob os pes de quem joga.
+A escrita de vida e modo exige a permissao `player.modify`, separada de `player.read` e de
+`player.inventory`: mudar vida ou modo de jogo altera as regras sob os pes de quem joga. Equipamento
+exige `player.read` e `player.equipment.read`; leitura e escrita de slots exigem `player.inventory` e
+`player.inventory.slot`. Os seis campos de equipamento são `main_hand`, `off_hand`, `head`, `chest`,
+`legs` e `feet`; cada um contém somente `item` e `count`. Slots usam a faixa comum `0..63`, mas cada
+bridge recusa índices que não existam no inventário real e também recusa quantidade acima do stack
+máximo do item.
 
 ## Consultar o registro
 

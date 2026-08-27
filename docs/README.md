@@ -30,7 +30,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 | [COMMANDS.md](COMMANDS.md) | Schemas declarativos de comandos, árvore Brigadier, argumentos tipados, autocomplete e migração. |
 | [MINIMAP.md](MINIMAP.md) | Minimapa declarativo com câmera lógica aérea client-side, textura de baixa resolução, radar, waypoints, configuração e limites honestos. |
 | [UI_HTML_DESIGN.md](UI_HTML_DESIGN.md) | Estudo da futura camada de interface por HTML/CSS; não é contrato implementado. |
-| [CONTROLES_MUNDO.md](CONTROLES_MUNDO.md) | Estado de bloco, Game Rules, dificuldade, hora, clima, mapa, dimensões e prioridades de mundo. |
+| [CONTROLES_MUNDO.md](CONTROLES_MUNDO.md) | Estado de bloco, Game Rules, dificuldade, hora, clima, explosão, raio, quebra global, jogador, mapa, dimensões e prioridades de mundo. |
 | [examples/README.md](examples/README.md) | Manifestos que demonstram capabilities, domínios e bibliotecas entre mods. |
 
 ## 2. Segurança e distribuição
@@ -72,7 +72,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 
 ## Convenções
 
-Os documentos de API devem usar nomes exactos do Lua, distinguir leitura de escrita e indicar a permissão necessária. Uma capability só deve ser marcada como comum depois de existir no core, nas quatro bridges mantidas e nos testes correspondentes.
+Os documentos de API devem usar nomes exactos do Lua, distinguir leitura de escrita e indicar a permissão necessária. Uma capability só deve ser marcada como comum depois de existir no core, nas quatro bridges mantidas e nos testes correspondentes. Nesta leva, isso inclui `world.explode`, `world.lightning`, `player.equipment.read`, `player.inventory.slot` e `events.block.break`.
 
 Documentos de estudo podem conter alternativas e código ilustrativo, mas precisam indicar claramente quando uma proposta ainda não é implementada. Em particular, shaders, pipelines de renderização avançados, mapa-múndi persistente e integrações com Iris/Sodium/Canvas não fazem parte do contrato actual. O minimapa documentado em [MINIMAP.md](MINIMAP.md) é uma demonstração funcional baseada na capability de câmera virtual; não é uma API de cartografia completa nem uma câmera 3D geral.
 

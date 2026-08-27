@@ -10,13 +10,13 @@ na mesma mudança que o implementa.
 |---|---|
 | Log | `mod.log.info`, `mod.log.warn` |
 | Servidor | `broadcast`, `players`, `time_of_day`, `set_time_of_day`, `weather`, `set_weather`, `world_name`, `mods`, `difficulty`, `set_difficulty` |
-| Mundo | `get_block`, `block_state`, `set_block_state`, `set_block`, `break_block`, `fill`, `top_y`, `place_structure`, `game_rule`, `set_game_rule`, `redstone_signal` |
+| Mundo | `get_block`, `block_state`, `set_block_state`, `set_block`, `break_block`, `fill`, `top_y`, `place_structure`, `game_rule`, `set_game_rule`, `redstone_signal`, `explode`, `strike_lightning` |
 | Bloco declarativo | `set_block_variant`, `set_block_property`, `set_block_luminance` |
 | Dados por bloco | `get_block_data`, `set_block_data` |
 | Inventário de bloco | `capabilities_at`, `container_at`, `insert_into`, `extract_from` |
 | Feedback | `play_sound` com categoria, `spawn_particles` com velocidade |
-| Jogador — leitura | `name`, `uuid`, `position`, `health`, `food`, `experience`, `game_mode`, `dimension`, `held_item`, `inventory`, `screen_size`, `effects`, `movement` |
-| Jogador — escrita | `teleport`, `set_health`, `set_food`, `give_experience`, `set_game_mode`, `apply_effect`, `clear_effects` |
+| Jogador — leitura | `name`, `uuid`, `position`, `health`, `food`, `experience`, `game_mode`, `dimension`, `held_item`, `inventory`, `screen_size`, `effects`, `movement`, `equipment`, `inventory_slot` |
+| Jogador — escrita | `teleport`, `set_health`, `set_food`, `give_experience`, `set_game_mode`, `apply_effect`, `clear_effects`, `set_inventory_slot` |
 | Jogador — mensagem | `send_message`, `send_action_bar`, `show_title`, `play_sound_to` |
 | Inventário | `count_item`, `give_item`, `take_item`, `clear_inventory` |
 | Janela | `mod.menu`, `open_menu`, `update_menu`, `close_menu`, `open_menu_id` |
@@ -99,10 +99,19 @@ face e a posição, com alcance limitado. O retorno é `nil` quando a linha de v
 sprint, natação, voo e elytra num snapshot estável, sem expor a entidade real nem classes de uma
 plataforma.
 
+**Equipamento e slots — fechados.** `ctx.player.equipment()` devolve os seis campos lógicos de
+mão principal, mão secundária e armadura, sempre como `{item, count}`; vazios são `minecraft:air` e
+`0`. `inventory_slot` e `set_inventory_slot` usam a faixa comum `0..63`, validam o tamanho real de
+cada inventário e aceitam limpeza com quantidade `0`. A escrita exige `player.inventory.slot`, respeita
+o stack máximo do item na bridge e não desloca itens para outros slots.
+
 ### Efeitos de mundo
 
-**Explosão** e **raio** não existem. São os dois efeitos que um mod de magia ou combate procura
-primeiro.
+**Explosão e raio — fechados.** `ctx.server.explode(x, y, z, force[, breakBlocks])` exige a permissão e
+capability `world.explode`, aceita força finita maior que zero e no máximo `8`, mantém o fogo
+explicitamente desligado e usa `false` como padrão para não quebrar blocos. `ctx.server.strike_lightning`
+usa `world.lightning` e as mesmas coordenadas finitas e limitadas do core. Nenhuma das APIs expõe
+objectos da plataforma ou permite escolher fonte, fogo ou modo interno de interacção.
 
 **Largar item solto — fechado.** `ctx.server.drop_item(item, x, y, z, count)` cria entidades de item
 em stacks válidos, com limite de 4096 itens por chamada, e exige `entity.spawn`.
@@ -221,9 +230,11 @@ endereçar o slot que ele nomeia, e `insert_into` e `extract_from` passaram a ac
 opcional. Sem isso não dá para reproduzir filtro por slot como os módulos de chassi do original, nem
 respeitar máquina com entrada e saída separadas: inserir sem dizer onde pode encher o slot de saída.
 
-**Falta evento de bloco quebrado com o inventário ainda íntegro.** Uma rede precisa saber que um cano
-sumiu para se reconfigurar; hoje a varredura é refeita a cada abertura de tela, que é caro e só
-acontece quando alguém olha.
+**Evento global de quebra — fechado.** `mod.on("block_broken", callback)` recebe quebras iniciadas
+por jogador para blocos vanilla e declarativos, com snapshot de id, posição, face, mão, jogador e
+drops. `false` cancela a quebra. O hook não cobre explosões, pistões, substituições de script ou outras
+remoções indirectas; o `behavior.on_broken` de bloco declarativo continua a ser o caminho específico
+do comportamento e não duplica o callback global do próprio mod.
 
 ### Comportamento
 
@@ -281,13 +292,15 @@ iguais: é ali que a próxima plataforma encontra a lista de trabalho.
 | Permissão | Protege |
 |---|---|
 | `chat.send` | mensagem, barra de ação, título, som para o jogador |
-| `player.read` | nome, posição, vida, fome, experiência, modo, dimensão |
+| `player.read` | nome, posição, vida, fome, experiência, modo, dimensão, efeitos, movimento e equipamento (com capabilities específicas quando declaradas) |
 | `player.modify` | escrever vida, fome, experiência, modo de jogo, efeitos |
-| `player.inventory` | contar, dar, tirar, listar, limpar |
+| `player.inventory` | contar, dar, tirar, listar, limpar e operar slots (com `player.inventory.slot`) |
 | `player.move` | teleporte |
 | `player.menu` | abrir e atualizar janela |
 | `world.read` | ler bloco, estado, Game Rules, dificuldade, hora, clima, altura, bioma, luz e redstone |
 | `world.write` | escrever bloco/estado, regras, dificuldade, quebrar, preencher, hora, clima, agendar tique e estrutura |
+| `world.explode` | criar explosão limitada; requer também a capability `world.explode` |
+| `world.lightning` | convocar raio em coordenadas limitadas; requer também a capability `world.lightning` |
 | `world.containers` | inventário de bloco |
 | `entity.read` | listar por raio, dados de uma entidade |
 | `entity.spawn` | criar entidade |

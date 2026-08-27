@@ -1021,9 +1021,10 @@ public final class LuaRuntime {
         if (!EVENTS.contains(event)) return false;
         boolean cancelled = false;
         for (LoadedScript script : List.copyOf(scripts.values())) {
-            // Um evento de bloco pertence ao mod que declarou o bloco. Sem esta checagem,
-            // qualquer mod receberia interacoes com o conteudo de todos os outros.
-            if (block != null && !ownsBlock(script.mod(), block)) continue;
+            // Interacoes declarativas pertencem ao mod que declarou o bloco. block_broken e a
+            // excecao deliberada: e um evento global de quebra por jogador, inclusive de blocos
+            // vanilla, para que missões e redes possam observar o mundo sem polling.
+            if (block != null && !"block_broken".equals(event) && !ownsBlock(script.mod(), block)) continue;
 
             // A logica declarada no manifesto para aquele bloco tem prioridade: quando o JSON diz
             // qual codigo responde por aquele bloco, o callback global do mod nao e chamado.
@@ -1993,6 +1994,33 @@ public final class LuaRuntime {
                     throw new LuaError("clima deve ser clear, rain ou thunder; veio " + weather);
                 }
                 bridge.setWeather(weather, args.narg() < 2 ? 0 : args.arg(2).toint());
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("explode", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.explode");
+                requireCapability(mod.manifest(), "world.explode");
+                if (args.narg() < 4) throw new LuaError("explode exige x, y, z e forca");
+                float power = (float) args.arg(4).checkdouble();
+                if (!Float.isFinite(power) || power <= 0 || power > 8) {
+                    throw new LuaError("forca de explosao deve estar entre 0 e 8");
+                }
+                boolean breakBlocks = args.narg() < 5 ? false : args.arg(5).checkboolean();
+                bridge.explode(requireCoordinateDouble(args.arg(1)), requireCoordinateDouble(args.arg(2)),
+                        requireCoordinateDouble(args.arg(3)), power, breakBlocks);
+                return LuaValue.NIL;
+            }
+        });
+        serverApi.set("strike_lightning", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "world.lightning");
+                requireCapability(mod.manifest(), "world.lightning");
+                if (args.narg() < 3) throw new LuaError("strike_lightning exige x, y e z");
+                bridge.strikeLightning(requireCoordinateDouble(args.arg(1)),
+                        requireCoordinateDouble(args.arg(2)), requireCoordinateDouble(args.arg(3)));
                 return LuaValue.NIL;
             }
         });
@@ -3220,6 +3248,14 @@ public final class LuaRuntime {
                 return toLuaMovement(player.movement());
             }
         });
+        playerApi.set("equipment", new ZeroArgFunction() {
+            @Override
+            public LuaValue call() {
+                requirePermission(mod.manifest(), "player.read");
+                requireCapability(mod.manifest(), "player.equipment.read");
+                return toLuaEquipment(player.equipment());
+            }
+        });
         playerApi.set("apply_effect", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -3267,6 +3303,33 @@ public final class LuaRuntime {
                 float volume = args.narg() < 2 ? 1f : (float) args.arg(2).checkdouble();
                 float pitch = args.narg() < 3 ? 1f : (float) args.arg(3).checkdouble();
                 player.playSoundTo(id, volume, pitch);
+                return LuaValue.NIL;
+            }
+        });
+        playerApi.set("inventory_slot", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue value) {
+                requirePermission(mod.manifest(), "player.inventory");
+                requireCapability(mod.manifest(), "player.inventory.slot");
+                return toLuaItemStack(player.inventorySlot(requireSlot(value)));
+            }
+        });
+        playerApi.set("set_inventory_slot", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "player.inventory");
+                requireCapability(mod.manifest(), "player.inventory.slot");
+                if (args.narg() < 3) {
+                    throw new LuaError("set_inventory_slot exige slot, item e quantidade");
+                }
+                int slot = requireSlot(args.arg(1));
+                int count = args.arg(3).checkint();
+                if (count < 0 || count > 64) {
+                    throw new LuaError("quantidade do slot deve estar entre 0 e 64");
+                }
+                String itemId = count == 0 && args.arg(2).isnil()
+                        ? "minecraft:air" : requireIdentifier(args.arg(2).tojstring());
+                player.setInventorySlot(slot, itemId, count, readItemSpec(args.arg(4)));
                 return LuaValue.NIL;
             }
         });
@@ -4348,6 +4411,38 @@ public final class LuaRuntime {
         value.set("flying", LuaValue.valueOf(movement.flying()));
         value.set("gliding", LuaValue.valueOf(movement.gliding()));
         return value;
+    }
+
+    private static LuaTable toLuaItemStack(PlayerHandle.ItemStackView stack) {
+        LuaTable value = new LuaTable();
+        if (stack == null) {
+            value.set("item", LuaValue.valueOf("minecraft:air"));
+            value.set("count", LuaValue.ZERO);
+            return value;
+        }
+        value.set("item", LuaValue.valueOf(stack.itemId()));
+        value.set("count", LuaValue.valueOf(stack.count()));
+        return value;
+    }
+
+    private static LuaTable toLuaEquipment(PlayerHandle.Equipment equipment) {
+        LuaTable value = new LuaTable();
+        if (equipment == null) return value;
+        value.set("main_hand", toLuaItemStack(equipment.mainHand()));
+        value.set("off_hand", toLuaItemStack(equipment.offHand()));
+        value.set("head", toLuaItemStack(equipment.head()));
+        value.set("chest", toLuaItemStack(equipment.chest()));
+        value.set("legs", toLuaItemStack(equipment.legs()));
+        value.set("feet", toLuaItemStack(equipment.feet()));
+        return value;
+    }
+
+    private static int requireSlot(LuaValue value) {
+        int slot = value.checkint();
+        if (slot < 0 || slot > 63) {
+            throw new LuaError("slot deve estar entre 0 e 63");
+        }
+        return slot;
     }
 
     /** Uma lista de textos como tabela Lua indexada a partir de um. */

@@ -4,6 +4,7 @@ import dev.lualoader.LuaLoaderMod;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.platform.BlockEventData;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.Registries;
@@ -50,6 +51,9 @@ public final class BlockInteractionEvents {
                     ? ActionResult.FAIL
                     : ActionResult.PASS;
         });
+
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
+                !dispatch("block_broken", world, pos, player));
     }
 
     /** @return {@code true} se um script pediu para cancelar a acao padrao */
@@ -59,9 +63,11 @@ public final class BlockInteractionEvents {
         if (!(player instanceof ServerPlayerEntity serverPlayer)) return false;
 
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DeclarativeBlock declarativeBlock)) return false;
+        DeclarativeBlock declarativeBlock = state.getBlock() instanceof DeclarativeBlock block
+                ? block : null;
+        if (!"block_broken".equals(event) && declarativeBlock == null) return false;
 
-        Identifier id = Registries.BLOCK.getId(declarativeBlock);
+        Identifier id = Registries.BLOCK.getId(state.getBlock());
         if (id == null) return false;
 
         BlockEventData data = new BlockEventData(

@@ -179,10 +179,8 @@ public class DeclarativeBlock extends Block {
 
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
-        // Trocar de variante tambem substitui o estado; so avisa quando o bloco deixa de existir.
-        if (!moved && !newState.isOf(this)) {
-            notifyLoader("block_broken", world, pos, state, null);
-        }
+        // block_broken e disparado pelo PlayerBlockBreakEvents.BEFORE, que traz o jogador e permite
+        // cancelar. Uma substituicao por pistao, explosao ou script nao e uma quebra manual.
         super.onStateReplaced(state, world, pos, newState, moved);
     }
 

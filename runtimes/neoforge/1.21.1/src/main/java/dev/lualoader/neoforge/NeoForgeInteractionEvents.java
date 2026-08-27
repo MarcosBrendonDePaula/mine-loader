@@ -114,7 +114,8 @@ public final class NeoForgeInteractionEvents {
         if (serverLevel == null || !(player instanceof ServerPlayer serverPlayer)) return false;
 
         BlockState state = serverLevel.getBlockState(pos);
-        if (!(state.getBlock() instanceof NeoForgeDeclarativeBlock)) return false;
+        boolean declarative = state.getBlock() instanceof NeoForgeDeclarativeBlock;
+        if (!"block_broken".equals(event) && !declarative) return false;
 
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         if (id == null) return false;
@@ -122,7 +123,7 @@ public final class NeoForgeInteractionEvents {
         BlockEventData data = new BlockEventData(
                 id.toString(),
                 pos.getX(), pos.getY(), pos.getZ(),
-                state.hasProperty(NeoForgeDeclarativeBlock.VARIANT)
+                declarative && state.hasProperty(NeoForgeDeclarativeBlock.VARIANT)
                         ? state.getValue(NeoForgeDeclarativeBlock.VARIANT) : 0,
                 content.variantCount(id));
 

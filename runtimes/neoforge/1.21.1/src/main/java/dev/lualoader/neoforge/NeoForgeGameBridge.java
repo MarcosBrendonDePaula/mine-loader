@@ -582,6 +582,25 @@ public class NeoForgeGameBridge implements GameBridge {
     }
 
     @Override
+    public void explode(double x, double y, double z, float power, boolean breakBlocks) {
+        ServerLevel level = requireLevel();
+        level.explode(null, x, y, z, power,
+                breakBlocks ? net.minecraft.world.level.Level.ExplosionInteraction.BLOCK
+                        : net.minecraft.world.level.Level.ExplosionInteraction.NONE);
+    }
+
+    @Override
+    public void strikeLightning(double x, double y, double z) {
+        ServerLevel level = requireLevel();
+        var lightning = net.minecraft.world.entity.EntityType.LIGHTNING_BOLT.create(level);
+        if (lightning == null) throw new BridgeException("nao foi possivel convocar um raio");
+        lightning.moveTo(x, y, z, 0f, 0f);
+        if (!level.addFreshEntity(lightning)) {
+            throw new BridgeException("nao foi possivel adicionar o raio ao mundo");
+        }
+    }
+
+    @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
         ResourceLocation id = parse(entityId);
         var type = BuiltInRegistries.ENTITY_TYPE.getOptional(id)

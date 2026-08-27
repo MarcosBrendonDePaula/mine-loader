@@ -24,7 +24,12 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
 | `ctx.player.effects()` | `player.read` | Lista snapshot de efeitos activos: id, duração, amplificador e flags visuais | quatro runtimes |
 | `ctx.player.movement()` | `player.read` | Snapshot de velocidade, chão, agachamento, sprint, natação, voo e elytra | quatro runtimes |
+| `ctx.player.equipment()` | `player.read` + `player.equipment.read` | Snapshot de `main_hand`, `off_hand`, `head`, `chest`, `legs` e `feet`, sempre com `{item, count}` | quatro runtimes |
+| `ctx.player.inventory_slot(slot)` | `player.inventory` + `player.inventory.slot` | Snapshot de um slot lógico `0..63`; vazio é `minecraft:air` com quantidade `0` | quatro runtimes |
+| `ctx.player.set_inventory_slot(slot, item, count[, itemSpec])` | `player.inventory` + `player.inventory.slot` | Substitui um slot; `count = 0` limpa-o e a bridge ainda respeita o stack máximo real do item | quatro runtimes |
 | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks, devolvendo a quantidade criada; máximo 4096 por chamada | quatro runtimes |
+| `ctx.server.explode(x, y, z, force[, breakBlocks])` | `world.explode` | Explosão server-side; força `> 0` e `<= 8`, fogo sempre desactivado e blocos intactos por padrão | quatro runtimes |
+| `ctx.server.strike_lightning(x, y, z)` | `world.lightning` | Convoca um raio server-side em coordenadas finitas e limitadas | quatro runtimes |
 | `mod.every(ticks, callback)` / `mod.cancel(id)` | `scheduler.every` | Tarefa recorrente com ID lógico; `false` no callback ou cancelamento encerra | core e runtimes |
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
 | `mod.camera(id, definição)` | `client.camera.register` e `client.camera.virtual` | Câmera lógica ortográfica, publicada como catálogo S2C versionado; o bridge gere a textura | quatro runtimes |
@@ -33,6 +38,32 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
 
 Hotkeys usam o contrato `client.input.keybind` `1.0.0`. A tecla e os modificadores são dados declarados no `mod.json`; o cliente detecta a transição e envia apenas o id qualificado, enquanto a função associada continua a executar no servidor. O formato completo está em [HOTKEYS.md](HOTKEYS.md).
+
+## Efeitos de mundo
+
+`ctx.server.explode(x, y, z, force[, breakBlocks])` é uma operação server-side deliberadamente pequena. As coordenadas são finitas e limitadas pelo mesmo orçamento de mundo do core; a força deve ser maior que zero e no máximo `8`. O quinto argumento é opcional e vale `false`, portanto um mod precisa pedir explicitamente `true` para destruir blocos. A API não acende fogo e não expõe fonte, modo de interacção ou objectos da plataforma.
+
+```lua
+ctx.server.explode(ctx.player.position()[1], 70, ctx.player.position()[3], 2.5)
+ctx.server.explode(120, 64, -30, 1.5, true) -- destruição explícita
+```
+
+`ctx.server.strike_lightning(x, y, z)` cria um raio na posição indicada. Ambas as operações exigem uma permissão própria e a capability correspondente; `requires.capabilities` é negociação explícita do contrato, não um bypass de `permissions`. O loader não implementa neste evento uma política de frequência por mod além dos limites da chamada: scripts devem agendar efeitos com parcimónia e evitar loops por tick.
+
+## Evento global de quebra de bloco
+
+`mod.on("block_broken", callback)` recebe a quebra iniciada por um jogador, antes de o jogo a concluir, com `ctx.block.id`, `ctx.block.x`, `ctx.block.y`, `ctx.block.z`, `ctx.block.variant`, `ctx.block.variant_count` e `ctx.player`. O callback retorna `false` para cancelar a quebra; qualquer outro retorno permite-a. O evento é global: o id pode ser vanilla ou de outro mod, e não fica limitado ao namespace do mod que registou o callback. O contrato v1 não inclui face, mão, `ItemStack` nem drops: neste ponto a quebra ainda não foi concluída e os drops não são conhecidos pelo core.
+
+O mesmo nome continua a suportar `behavior.on_broken` de blocos declarativos. Para evitar dois disparos, uma quebra de bloco declarativo tratada por `on_broken` não chama também o callback global do próprio mod. O evento cobre somente quebra iniciada por jogador. Não é emitido para explosões, pistões, substituições de script ou remoções indirectas.
+
+```lua
+mod.on("block_broken", function(ctx)
+    if ctx.block.id == "minecraft:iron_ore" then
+        ctx.player.send_message("Esta área está protegida")
+        return false
+    end
+end)
+```
 
 ## Estado de bloco
 
@@ -82,6 +113,22 @@ end
 
 Apenas `peaceful`, `easy`, `normal` e `hard` são aceitos para dificuldade. Se o mundo tiver a dificuldade bloqueada, `set_difficulty` recusa a operação em vez de contornar a configuração. A alteração é global ao servidor de teste ou mundo em execução; um mod deve restaurar valores temporários e não disputar a configuração com outros mods.
 
+## Equipamento e slots do jogador
+
+`ctx.player.equipment()` devolve uma tabela snapshot com os seis nomes lógicos de equipamento. Cada campo tem apenas `item` e `count`; um campo vazio é sempre `minecraft:air` e `0`. O Lua não recebe índices de armadura, `ItemStack`, componentes ou uma referência viva ao jogador.
+
+`ctx.player.inventory_slot(slot)` lê um índice do inventário interno através de uma faixa comum de `0` a `63`; cada bridge valida o tamanho real do jogador e recusa índices que não existam naquela plataforma. `ctx.player.set_inventory_slot(slot, item, count[, itemSpec])` aceita quantidade de `0` a `64`; quantidade zero limpa o slot e pode usar `nil` como item. Para quantidade positiva, o identificador deve existir e a bridge recusa uma quantidade acima do stack máximo real do item. `itemSpec`, quando usado, é o mesmo vocabulário declarativo de itens da API de entrega.
+
+```lua
+local gear = ctx.player.equipment()
+if gear.main_hand.item == "minecraft:iron_pickaxe" then
+    local slot = ctx.player.inventory_slot(5)
+    ctx.player.set_inventory_slot(5, slot.item, slot.count + 1)
+end
+```
+
+As três operações exigem as permissões `player.read` ou `player.inventory` e as capabilities `player.equipment.read` e `player.inventory.slot`. A escrita substitui o slot inteiro; não tenta inserir, empilhar ou deslocar itens para outros slots.
+
 ## Redstone e dados persistentes
 
 A potência redstone foi modelada como leitura do sinal que chega à posição. Ela não finge que qualquer bloco pode emitir sinal dinâmico: emissão depende do conteúdo registrado e da semântica do bloco. Essa escolha permite que máquinas declarativas reajam a alavancas, comparadores, trilhos e blocos de outros mods sem expor a API interna de nenhuma plataforma.
@@ -109,7 +156,10 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
     },
     "capabilities": {
       "world.block_state.read": "1.0.0",
-      "world.redstone.read": "1.0.0"
+      "world.redstone.read": "1.0.0",
+      "world.explode": "1.0.0",
+      "player.equipment.read": "1.0.0",
+      "player.inventory.slot": "1.0.0"
     }
   }
 }
@@ -179,15 +229,13 @@ Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige
 
 ## Próximas APIs priorizadas
 
-As APIs de `drop_item`, efeitos activos, movimento e tarefas recorrentes já fazem parte da primeira expansão útil. O drop cria entidades limitadas e exige `entity.spawn`; efeitos e movimento devolvem snapshots neutros, sem referências ao jogador real; `mod.every` mantém o mesmo vínculo ao jogador que `mod.after` e é removido automaticamente quando o callback falha ou devolve `false`.
-
-**Evento de quebra**, explosão e raio continuam como próximos trabalhos porque precisam de contratos explícitos de cancelamento, ordem entre mods, contexto de drops e limites de área/frequência. Fluidos e energia precisam de unidades próprias do loader, não `FluidStack`, capabilities ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
+As APIs de `drop_item`, efeitos activos, movimento, tarefas recorrentes, quebra global, explosão, raio, equipamento e slots fazem parte da expansão útil actual. O drop cria entidades limitadas; efeitos, movimento e equipamento devolvem snapshots neutros; slots têm escrita explícita e limitada; e `block_broken` só observa a acção directa de um jogador. A evolução seguinte deve focar eventos de mundo, transferência por face, fluidos e energia com unidades próprias do loader, não `FluidStack`, `IItemHandler` ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
 
 Networking declarativo deve usar payloads pequenos e versionados, schema fechado, direção explícita, limite de tamanho e validação no servidor. Expor `send_packet` com bytes arbitrários seria incompatível com a sandbox [2]. Data components devem ser expostos somente como dados imutáveis e portáveis para itens declarados, não como o mapa inteiro de componentes internos [8].
 
 ## Validação
 
-A expansão é considerada válida quando o core passa a suíte JUnit, os quatro bridges compilam e os GameTests reais continuam verdes. O pacote atual tem testes de contrato para `block_state`, `set_block_state`, Game Rules, dificuldade, permissões e validação de entrada; cada runtime também exercita estado de porta, uma Game Rule e o getter/setter de dificuldade dentro de um servidor Minecraft real.
+A expansão é considerada válida quando o core passa a suíte JUnit, os quatro bridges compilam e os GameTests reais continuam verdes. O pacote actual tem testes de contrato para estado de bloco, Game Rules, dificuldade, permissões, limites de explosão/raio, snapshots de equipamento, slots, limpeza e cancelamento global de quebra; cada runtime também exercita operações de bridge dentro de um servidor Minecraft real. Estes GameTests provam integração server-side e não pixels, FPS, autocomplete visual ou qualidade de renderização.
 
 A validação completa da matriz é:
 

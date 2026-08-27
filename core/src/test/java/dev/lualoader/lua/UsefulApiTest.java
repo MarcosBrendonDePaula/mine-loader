@@ -1,6 +1,7 @@
 package dev.lualoader.lua;
 
 import dev.lualoader.manifest.ModLoader;
+import dev.lualoader.platform.BlockEventData;
 import dev.lualoader.platform.PlayerHandle;
 import dev.lualoader.platform.TestBridge;
 import dev.lualoader.platform.TestPlayer;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -144,6 +146,211 @@ class UsefulApiTest {
 
         assertEquals(List.of("false"), bridge.calls);
         assertEquals(0, bridge.droppedCount);
+    }
+
+    @Test
+    void worldEffectsUseSeparateBoundedOperations(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeModWithCapabilities(root,
+                "\"world.explode\", \"world.lightning\", \"chat.send\"",
+                "\"world.explode\": \"1.0.0\", \"world.lightning\": \"1.0.0\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.explode(1.5, 64.25, -2.5, 4.0, true)
+                    ctx.server.strike_lightning(3.5, 70.0, -4.5)
+                    ctx.server.broadcast("efeitos")
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("efeitos"), bridge.calls);
+        assertArrayEquals(new double[]{1.5, 64.25, -2.5}, bridge.lastExplosionPosition);
+        assertEquals(4.0f, bridge.lastExplosionPower);
+        assertTrue(bridge.lastExplosionBreakBlocks);
+        assertArrayEquals(new double[]{3.5, 70.0, -4.5}, bridge.lastLightningPosition);
+    }
+
+    @Test
+    void equipmentAndSlotsAreExposedAsStableTables(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        player.slots.put(5, new PlayerHandle.ItemStackView("minecraft:iron_ingot", 12));
+        player.equipment = new PlayerHandle.Equipment(
+                new PlayerHandle.ItemStackView("minecraft:iron_sword", 1),
+                new PlayerHandle.ItemStackView("minecraft:torch", 8),
+                new PlayerHandle.ItemStackView("minecraft:iron_helmet", 1),
+                new PlayerHandle.ItemStackView("minecraft:iron_chestplate", 1),
+                new PlayerHandle.ItemStackView("minecraft:iron_leggings", 1),
+                new PlayerHandle.ItemStackView("minecraft:iron_boots", 1));
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeModWithCapabilities(root,
+                "\"chat.send\", \"player.read\", \"player.inventory\"",
+                "\"player.equipment.read\": \"1.0.0\", \"player.inventory.slot\": \"1.0.0\"", """
+                mod.on("player_joined", function(ctx)
+                    local slot = ctx.player.inventory_slot(5)
+                    local gear = ctx.player.equipment()
+                    ctx.player.set_inventory_slot(6, "minecraft:stone", 3)
+                    ctx.server.broadcast(slot.item .. ":" .. slot.count .. "|"
+                        .. gear.main_hand.item .. "|" .. gear.head.item)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("minecraft:iron_ingot:12|minecraft:iron_sword|minecraft:iron_helmet"),
+                bridge.calls);
+        assertEquals(new PlayerHandle.ItemStackView("minecraft:stone", 3), player.slots.get(6));
+    }
+
+    @Test
+    void blockBrokenIsGlobalAndCanCancel(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("block_broken", function(ctx)
+                    if ctx.block.id == "minecraft:iron_ore" then
+                        ctx.player.send_message("bloqueado")
+                        return false
+                    end
+                end)
+                """));
+
+        TestPlayer player = new TestPlayer();
+        boolean cancelled = runtime.triggerBlock("block_broken", player,
+                new BlockEventData("minecraft:iron_ore", 1, 2, 3, 0, 1));
+
+        assertTrue(cancelled);
+        assertEquals(List.of("bloqueado"), player.received);
+
+        boolean allowed = runtime.triggerBlock("block_broken", player,
+                new BlockEventData("minecraft:gold_ore", 1, 2, 3, 0, 1));
+        assertTrue(!allowed);
+        assertEquals(List.of("bloqueado"), player.received);
+    }
+
+    @Test
+    void worldEffectsUseDefaultsAndRejectUnsafeArguments(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeModWithCapabilities(root,
+                "\"world.explode\", \"world.lightning\", \"chat.send\"",
+                "\"world.explode\": \"1.0.0\", \"world.lightning\": \"1.0.0\"", """
+                mod.on("server_started", function(ctx)
+                    local default_ok = pcall(function() ctx.server.explode(0, 64, 0, 1) end)
+                    local zero = pcall(function() ctx.server.explode(0, 64, 0, 0) end)
+                    local high = pcall(function() ctx.server.explode(0, 64, 0, 9) end)
+                    local infinite = pcall(function() ctx.server.explode(0, 64, 0, math.huge) end)
+                    local bad_coordinate = pcall(function()
+                        ctx.server.strike_lightning(math.huge, 70, 0)
+                    end)
+                    ctx.server.broadcast(tostring(default_ok) .. "|" .. tostring(zero)
+                        .. "|" .. tostring(high) .. "|" .. tostring(infinite)
+                        .. "|" .. tostring(bad_coordinate))
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        assertEquals(List.of("true|false|false|false|false"), bridge.calls);
+        assertEquals(1.0f, bridge.lastExplosionPower);
+        assertTrue(!bridge.lastExplosionBreakBlocks);
+        assertEquals(null, bridge.lastLightningPosition);
+    }
+
+    @Test
+    void worldEffectsNeedPermissionAndCapability(@TempDir Path root) throws IOException {
+        RecordingBridge missingPermissionBridge = new RecordingBridge();
+        LuaRuntime missingPermissionRuntime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        missingPermissionRuntime.attach(missingPermissionBridge);
+        missingPermissionRuntime.load(writeMod(root.resolve("permission"), "\"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    local ok = pcall(function() ctx.server.explode(0, 64, 0, 1) end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+        missingPermissionRuntime.triggerAll("server_started", null);
+
+        RecordingBridge missingCapabilityBridge = new RecordingBridge();
+        LuaRuntime missingCapabilityRuntime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        missingCapabilityRuntime.attach(missingCapabilityBridge);
+        missingCapabilityRuntime.load(writeMod(root.resolve("capability"),
+                "\"chat.send\", \"world.explode\"", """
+                mod.on("server_started", function(ctx)
+                    local ok = pcall(function() ctx.server.explode(0, 64, 0, 1) end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+        missingCapabilityRuntime.triggerAll("server_started", null);
+
+        assertEquals(List.of("false"), missingPermissionBridge.calls);
+        assertEquals(List.of("false"), missingCapabilityBridge.calls);
+        assertEquals(null, missingPermissionBridge.lastExplosionPosition);
+        assertEquals(null, missingCapabilityBridge.lastExplosionPosition);
+    }
+
+    @Test
+    void slotsRejectUnsafeArgumentsAndZeroClears(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        player.slots.put(5, new PlayerHandle.ItemStackView("minecraft:iron_ingot", 12));
+
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeModWithCapabilities(root,
+                "\"chat.send\", \"player.read\", \"player.inventory\"",
+                "\"player.equipment.read\": \"1.0.0\", \"player.inventory.slot\": \"1.0.0\"", """
+                mod.on("player_joined", function(ctx)
+                    local empty = ctx.player.inventory_slot(7)
+                    ctx.player.set_inventory_slot(6, "minecraft:stone", 3)
+                    local cleared = pcall(function()
+                        ctx.player.set_inventory_slot(6, nil, 0)
+                    end)
+                    local negative = pcall(function()
+                        ctx.player.inventory_slot(-1)
+                    end)
+                    local high_slot = pcall(function()
+                        ctx.player.inventory_slot(64)
+                    end)
+                    local high_count = pcall(function()
+                        ctx.player.set_inventory_slot(6, "minecraft:stone", 65)
+                    end)
+                    ctx.server.broadcast(empty.item .. ":" .. empty.count .. "|"
+                        .. tostring(cleared) .. "|" .. tostring(negative) .. "|"
+                        .. tostring(high_slot) .. "|" .. tostring(high_count))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("minecraft:air:0|true|false|false|false"), bridge.calls);
+        assertEquals(null, player.slots.get(6));
+    }
+
+    @Test
+    void emptyEquipmentUsesAirAndZero(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+        runtime.load(writeModWithCapabilities(root,
+                "\"chat.send\", \"player.read\"",
+                "\"player.equipment.read\": \"1.0.0\"", """
+                mod.on("player_joined", function(ctx)
+                    local gear = ctx.player.equipment()
+                    ctx.server.broadcast(gear.main_hand.item .. ":" .. gear.main_hand.count .. "|"
+                        .. gear.off_hand.item .. ":" .. gear.off_hand.count .. "|"
+                        .. gear.feet.item .. ":" .. gear.feet.count)
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", new TestPlayer());
+
+        assertEquals(List.of("minecraft:air:0|minecraft:air:0|minecraft:air:0"), bridge.calls);
     }
 
     @Test

@@ -127,6 +127,31 @@ public class NeoForgeBlockGameTest {
         helper.succeed();
     }
 
+    /** A bridge cria efeitos de mundo sem destruir blocos quando isso foi desativado. */
+    @GameTest(template = EMPTY)
+    public static void bridgeExecutaEfeitosSegurosDoMundo(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos relativa = new BlockPos(1, 1, 1);
+        BlockPos absoluta = helper.absolutePos(relativa);
+        level.setBlock(absoluta, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 3);
+
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentLevel(level);
+        try {
+            bridge.explode(absoluta.getX() + 0.5, absoluta.getY() + 0.5,
+                    absoluta.getZ() + 0.5, 0.5f, false);
+            if (level.getBlockState(absoluta).isAir()) {
+                throw new AssertionError("explosao sem breakBlocks nao deveria destruir o bloco");
+            }
+            bridge.strikeLightning(absoluta.getX() + 0.5, absoluta.getY() + 1.0,
+                    absoluta.getZ() + 0.5);
+        } finally {
+            bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
     /** O setter de dificuldade aceita o valor atual sem alterar o mundo global do GameTest. */
     @GameTest(template = EMPTY)
     public static void bridgeLeEEscreveDificuldade(GameTestHelper helper) {

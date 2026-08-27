@@ -176,6 +176,16 @@ public interface GameBridge {
         throw new BridgeException("drop_item nao existe neste adaptador");
     }
 
+    /** Cria uma explosão server-side; {@code breakBlocks} controla a destruição de blocos. */
+    default void explode(double x, double y, double z, float power, boolean breakBlocks) {
+        throw new BridgeException("explode nao existe neste adaptador");
+    }
+
+    /** Convoca um raio server-side na posição indicada. */
+    default void strikeLightning(double x, double y, double z) {
+        throw new BridgeException("strike_lightning nao existe neste adaptador");
+    }
+
     /**
      * Invoca uma entidade do jogo na posição indicada.
      *

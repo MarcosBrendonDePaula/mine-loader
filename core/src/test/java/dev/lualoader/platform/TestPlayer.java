@@ -22,6 +22,11 @@ public class TestPlayer implements PlayerHandle {
     public String held = "minecraft:air";
     public int[] where = {0, 64, 0};
     public int capacity = Integer.MAX_VALUE;
+    public final Map<Integer, ItemStackView> slots = new LinkedHashMap<>();
+    public Equipment equipment = new Equipment(
+            new ItemStackView("minecraft:air", 0), new ItemStackView("minecraft:air", 0),
+            new ItemStackView("minecraft:air", 0), new ItemStackView("minecraft:air", 0),
+            new ItemStackView("minecraft:air", 0), new ItemStackView("minecraft:air", 0));
 
     public String menuId;
     public List<String> menuItems = List.of();
@@ -76,6 +81,22 @@ public class TestPlayer implements PlayerHandle {
     public int giveItem(String itemId, int count, ItemSpec spec) {
         lastItemSpec = spec == null ? ItemSpec.EMPTY : spec;
         return giveItem(itemId, count);
+    }
+
+    @Override
+    public ItemStackView inventorySlot(int slot) {
+        return slots.getOrDefault(slot, new ItemStackView("minecraft:air", 0));
+    }
+
+    @Override
+    public void setInventorySlot(int slot, String itemId, int count, ItemSpec spec) {
+        if (count == 0) slots.remove(slot);
+        else slots.put(slot, new ItemStackView(itemId, count));
+    }
+
+    @Override
+    public Equipment equipment() {
+        return equipment;
     }
 
     @Override

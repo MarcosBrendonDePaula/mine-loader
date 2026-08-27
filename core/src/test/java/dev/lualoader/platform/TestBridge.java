@@ -123,6 +123,26 @@ public abstract class TestBridge implements GameBridge {
         return "00000000-0000-0000-0000-000000000000";
     }
 
+    /** Última explosão recebida pelo dublê de mundo. */
+    public double[] lastExplosionPosition;
+    public float lastExplosionPower;
+    public boolean lastExplosionBreakBlocks;
+
+    @Override
+    public void explode(double x, double y, double z, float power, boolean breakBlocks) {
+        lastExplosionPosition = new double[]{x, y, z};
+        lastExplosionPower = power;
+        lastExplosionBreakBlocks = breakBlocks;
+    }
+
+    /** Último raio recebido pelo dublê de mundo. */
+    public double[] lastLightningPosition;
+
+    @Override
+    public void strikeLightning(double x, double y, double z) {
+        lastLightningPosition = new double[]{x, y, z};
+    }
+
     @Override
     public java.util.List<String> entitiesNear(double x, double y, double z, double radius) {
         return java.util.List.of();

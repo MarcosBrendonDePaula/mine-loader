@@ -534,7 +534,59 @@ public class NeoForgePlayerHandle implements PlayerHandle {
     }
 
     @Override
+    public PlayerHandle.ItemStackView inventorySlot(int slot) {
+        var inventory = player.getInventory();
+        validateSlot(slot, inventory.getContainerSize());
+        return stackView(inventory.getItem(slot));
+    }
+
+    @Override
+    public void setInventorySlot(int slot, String itemId, int count, dev.lualoader.platform.ItemSpec spec) {
+        var inventory = player.getInventory();
+        validateSlot(slot, inventory.getContainerSize());
+        if (count == 0) {
+            inventory.setItem(slot, ItemStack.EMPTY);
+            inventory.setChanged();
+            return;
+        }
+
+        Item item = requireItem(itemId);
+        if (count > new ItemStack(item).getMaxStackSize()) {
+            throw new BridgeException("quantidade excede o stack maximo do item: " + itemId);
+        }
+        ItemStack stack = new ItemStack(item, count);
+        if (spec != null && !spec.isEmpty()) applySpec(stack, spec, player.level());
+        inventory.setItem(slot, stack);
+        inventory.setChanged();
+    }
+
+    @Override
+    public PlayerHandle.Equipment equipment() {
+        return new PlayerHandle.Equipment(
+                stackView(player.getMainHandItem()),
+                stackView(player.getOffhandItem()),
+                stackView(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD)),
+                stackView(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST)),
+                stackView(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.LEGS)),
+                stackView(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET)));
+    }
+
+    @Override
     public void clearInventory() {
         player.getInventory().clearContent();
+    }
+
+    private static void validateSlot(int slot, int size) {
+        if (slot < 0 || slot >= size) {
+            throw new BridgeException("slot de inventario fora do intervalo: " + slot);
+        }
+    }
+
+    private static PlayerHandle.ItemStackView stackView(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return new PlayerHandle.ItemStackView("minecraft:air", 0);
+        }
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return new PlayerHandle.ItemStackView(id == null ? "minecraft:air" : id.toString(), stack.getCount());
     }
 }

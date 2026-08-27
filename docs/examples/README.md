@@ -31,7 +31,11 @@ exigir `client.input.keybind` sem pedir o domínio inteiro de UI.
   "capabilities": {
     "world.block_state.read": "1.0.0",
     "world.redstone.read": "1.0.0",
+    "world.explode": "1.0.0",
+    "world.lightning": "1.0.0",
     "player.looking_at.read": "1.0.0",
+    "player.equipment.read": "1.0.0",
+    "player.inventory.slot": "1.0.0",
     "client.input.keybind": "1.0.0"
   }
 }
@@ -79,5 +83,7 @@ satisfazer a mesma versão de domínio.
 
 O perfil comum actual entrega todos estes domínios na versão `1.0.0`: `core`, `world`, `player`,
 `entity`, `inventory`, `registry`, `events`, `scheduler`, `ui`, `client` e `resources`.
- O catálogo detalhado de
-capabilities está em `docs/API_ESTAVEL.md` e no `RuntimeContract` do core.
+ O catálogo detalhado de capabilities está em `docs/API_ESTAVEL.md` e no `RuntimeContract` do core.
+A nova leva acrescenta `world.explode`, `world.lightning`, `player.equipment.read`,
+`player.inventory.slot` e `events.block.break`; as duas últimas APIs de jogador continuam protegidas
+por `player.read` ou `player.inventory` além da capability declarada.

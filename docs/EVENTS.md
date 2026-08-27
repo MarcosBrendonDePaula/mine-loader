@@ -18,7 +18,9 @@ script não precise descobrir com quem está falando. Um evento sem dono — ser
 entrou — é **global**.
 
 Eventos por objeto têm prioridade: quando o manifesto associa lógica a um bloco, o callback global
-do mod não é chamado para aquele bloco.
+do mod não é chamado para aquele bloco. Para `block_broken`, isto significa que `behavior.on_broken`
+continua a ser o caminho específico do bloco declarativo, enquanto `mod.on("block_broken", ...)` pode
+observar blocos vanilla e ids declarativos que não tenham esse comportamento específico.
 
 ## Implementado hoje
 
@@ -35,7 +37,7 @@ do mod não é chamado para aquele bloco.
 | `block_used` | Clique direito em bloco declarativo | `ctx.block`, `ctx.player` |
 | `block_attacked` | Clique esquerdo em bloco declarativo | `ctx.block`, `ctx.player` |
 | `block_placed` | O bloco foi colocado no mundo | `ctx.block`, `ctx.player` |
-| `block_broken` | O bloco deixou de existir na posição | `ctx.block` |
+| `block_broken` | Um jogador iniciou a quebra, antes de ela ser concluída | `ctx.block` (`id`, posição, `variant`, `variant_count`) e `ctx.player`; `false` cancela |
 | `block_random_tick` | Tick aleatório, com `settings.random_ticks` ligado | `ctx.block` |
 | `block_neighbor_update` | Um bloco vizinho mudou | `ctx.block` |
 | `block_scheduled` | Chegou o tique pedido com `schedule_block` naquela posição | `ctx.block` |
@@ -183,8 +185,10 @@ Devolver `nil`, nada ou qualquer outro valor deixa o jogo seguir normalmente, pa
 que apenas observa não precise se preocupar com o retorno. Se vários mods reagem ao mesmo evento,
 basta um pedir cancelamento para a ação ser bloqueada.
 
-Hoje o cancelamento vale para `block_used`, `block_attacked`, `item_used` e `item_used_on_block`.
-Eventos de notificação, como `block_broken`, informam algo que já aconteceu e ignoram o retorno.
+Hoje o cancelamento vale para `block_used`, `block_attacked`, `block_broken`, `item_used` e
+`item_used_on_block`. No caso de `block_broken`, o hook é chamado antes da quebra de jogador ser
+concluída; devolver `false` impede a operação. Ele não é emitido para explosões, pistões,
+substituições de script ou outras remoções indirectas.
 
 ## Estado compartilhado
 

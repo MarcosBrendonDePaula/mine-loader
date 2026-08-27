@@ -20,13 +20,15 @@ A promessa do MineLoader é que o mod declarativo dependa do contrato do loader,
 | Inventário e block data | sim | sim | sim | sim |
 | Leitura de potência redstone | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge |
 | Estado de bloco (`block_state`/`set_block_state`) | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |
+| Explosão/raio: bridge server-side, limites e modo seguro | sim, core + GameTest | sim, core + GameTest | sim, core + GameTest | sim, core + GameTest |
+| `block_broken`: hook global de quebra de jogador | sim, core + bridge | sim, core + bridge | sim, core + bridge | sim, core + bridge |
 | Game Rules whitelist | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |
 | Dificuldade | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |
 | `player.data` persistente | sim, core + teste de reinício | sim, core + bridge | sim, core + teste de reinício | sim, core + bridge |
 | Menus declarados | sim | sim | sim | sim |
 | Tags, drops e estruturas | sim | sim | sim | sim |
 | Herança entre entidades declaradas | sim | sim | sim | sim |
-| GameTests obrigatórios | 22/22 | 22/22 | 22/22 | 22/22 |
+| GameTests obrigatórios | 23/23 | 23/23 | 23/23 | 23/23 |
 | Modelo `.obj` de bloco | sim | **não — desativado** | sim | **não — desativado** |
 | Modelo/skin customizados de entidades | sim | **degradado para renderer vanilla** | sim | **degradado para renderer vanilla** |
 | Cores customizadas do spawn egg | sim | **degradado para cores padrão** | sim | **degradado para cores padrão** |
@@ -41,13 +43,13 @@ As linhas de OBJ, renderer de entidades, cores de ovos, reparação e partícula
 
 | Verificação | Resultado |
 |---|---|
-| `./gradlew :core:test` | passou, incluindo estado de bloco, Game Rules, dificuldade, redstone e `player.data` |
+| `./gradlew :core:test` | passou, incluindo estado de bloco, Game Rules, dificuldade, redstone, efeitos de mundo, slots/equipamento e cancelamento de `block_broken` |
 | `./gradlew compileAllRuntimes` | passou para Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 |
 | `CommandSchemaTest` + bridges Brigadier | schema, argumentos nomeados e compatibilidade legada passaram; quatro bridges compilados |
-| `:runtimes:fabric:1.21.1:runGametest` | 22/22 testes obrigatórios passaram |
-| `:runtimes:fabric:1.21.4:runGametest` | 22/22 testes obrigatórios passaram |
-| `:runtimes:neoforge:1.21.1:runGameTestServer` | 22/22 testes obrigatórios passaram |
-| `:runtimes:neoforge:1.21.4:runGameTestServer` | 22/22 testes obrigatórios passaram |
+| `:runtimes:fabric:1.21.1:runGametest` | 23/23 testes obrigatórios passaram, incluindo bridge de efeitos seguros |
+| `:runtimes:fabric:1.21.4:runGametest` | 23/23 testes obrigatórios passaram, incluindo bridge de efeitos seguros |
+| `:runtimes:neoforge:1.21.1:runGameTestServer` | 23/23 testes obrigatórios passaram, incluindo bridge de efeitos seguros |
+| `:runtimes:neoforge:1.21.4:runGameTestServer` | 23/23 testes obrigatórios passaram, incluindo bridge de efeitos seguros |
 
 Os testes usam os mesmos exemplos em `examples/`, sincronizados para cada diretório de jogo. Eles cobrem registro, propriedades declaradas, inventários, persistência, automação, eventos, fila de ticks, leitura de redstone, tags, ovos e herança. **Eles são testes de servidor:** não conseguem verificar pixels, iluminação, modelos na mão do jogador, câmeras, texturas, telas client-side ou qualidade visual. A câmera virtual exige ainda uma sessão manual nos quatro bridges para confirmar rasterização, escala, movimento, troca de dimensão e custo.
 
@@ -59,7 +61,7 @@ Isso não significa que toda API visual esteja pronta. Na 1.21.4 o sistema de re
 
 ## Critério para promover 1.21.4 a compatível
 
-A versão 1.21.4 deve continuar marcada como **experimental** até que OBJ, renderização declarada de entidades, formato de receitas e as capabilities degradadas sejam validados. O mínimo já alcançado é significativo, mas não é paridade completa: compilação dos quatro runtimes e 22/22 GameTests em cada combinação provam que o core e as partes de servidor atravessam a versão; não provam que o cliente desenha tudo igual.
+A versão 1.21.4 deve continuar marcada como **experimental** até que OBJ, renderização declarada de entidades, formato de receitas e as capabilities degradadas sejam validados. O mínimo já alcançado é significativo, mas não é paridade completa: compilação dos quatro runtimes e 23/23 GameTests em cada combinação provam que o core e as partes de servidor atravessam a versão; não provam que o cliente desenha tudo igual.
 
 ## Plataformas ainda não cobertas
 

@@ -517,7 +517,65 @@ public record FabricPlayerHandle(ServerPlayerEntity player) implements PlayerHan
     }
 
     @Override
+    public PlayerHandle.ItemStackView inventorySlot(int slot) {
+        ItemStack stack = inventoryStack(slot);
+        return stackView(stack);
+    }
+
+    @Override
+    public void setInventorySlot(int slot, String itemId, int count, dev.lualoader.platform.ItemSpec spec) {
+        var inventory = player.getInventory();
+        validateSlot(slot, inventory.size());
+        if (count == 0) {
+            inventory.setStack(slot, ItemStack.EMPTY);
+            inventory.markDirty();
+            return;
+        }
+
+        Item item = resolveItem(itemId);
+        if (count > item.getMaxCount()) {
+            throw new BridgeException("quantidade excede o stack maximo do item: " + itemId);
+        }
+        ItemStack stack = new ItemStack(item, count);
+        if (spec != null && !spec.isEmpty()) applySpec(stack, spec, player.getWorld());
+        inventory.setStack(slot, stack);
+        inventory.markDirty();
+    }
+
+    @Override
+    public PlayerHandle.Equipment equipment() {
+        var inventory = player.getInventory();
+        return new PlayerHandle.Equipment(
+                stackView(player.getMainHandStack()),
+                stackView(inventory.getStack(40)),
+                stackView(inventory.getStack(39)),
+                stackView(inventory.getStack(38)),
+                stackView(inventory.getStack(37)),
+                stackView(inventory.getStack(36)));
+    }
+
+    @Override
     public void clearInventory() {
         player.getInventory().clear();
+    }
+
+    private ItemStack inventoryStack(int slot) {
+        var inventory = player.getInventory();
+        validateSlot(slot, inventory.size());
+        return inventory.getStack(slot);
+    }
+
+    private static void validateSlot(int slot, int size) {
+        if (slot < 0 || slot >= size) {
+            throw new BridgeException("slot de inventario fora do intervalo: " + slot);
+        }
+    }
+
+    private static PlayerHandle.ItemStackView stackView(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return new PlayerHandle.ItemStackView("minecraft:air", 0);
+        }
+        Identifier id = Registries.ITEM.getId(stack.getItem());
+        return new PlayerHandle.ItemStackView(id == null ? "minecraft:air" : id.toString(), stack.getCount());
     }
 }

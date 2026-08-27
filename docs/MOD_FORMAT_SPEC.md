@@ -91,7 +91,11 @@ Fabric 1.21.1, Fabric 1.21.4, NeoForge 1.21.1 e NeoForge 1.21.4 podem satisfazer
   },
   "capabilities": {
     "world.block_state.read": "1.0.0",
-    "world.redstone.read": "1.0.0"
+    "world.redstone.read": "1.0.0",
+    "world.explode": "1.0.0",
+    "world.lightning": "1.0.0",
+    "player.equipment.read": "1.0.0",
+    "player.inventory.slot": "1.0.0"
   }
 }
 ```
@@ -186,7 +190,12 @@ As APIs de runtime seguem o mesmo princípio: o manifesto negocia capabilities, 
 |---|---|---|---|
 | `player.effects.read` | `ctx.player.effects()` | `player.read` | Lista snapshot com `id`, `duration`, `amplifier`, `ambient` e `show_particles`. |
 | `player.movement.read` | `ctx.player.movement()` | `player.read` | Snapshot com `velocity.x/y/z`, `on_ground`, `sneaking`, `sprinting`, `swimming`, `flying` e `gliding`. |
+| `player.equipment.read` | `ctx.player.equipment()` | `player.read` | Snapshot com `main_hand`, `off_hand`, `head`, `chest`, `legs` e `feet`; cada campo é `{item, count}` e vazio é `minecraft:air`, `0`. |
+| `player.inventory.slot` | `ctx.player.inventory_slot(slot)` e `ctx.player.set_inventory_slot(slot, item, count[, itemSpec])` | `player.inventory` | Slots na faixa comum `0..63`; quantidade `0..64`; quantidade zero limpa e quantidade positiva respeita o stack máximo real. |
 | `world.item_drop` | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks válidos; quantidade entre 1 e 4096; devolve a quantidade criada. |
+| `world.explode` | `ctx.server.explode(x, y, z, force[, breakBlocks])` | `world.explode` | Coordenadas finitas/limitadas; força `> 0` e `<= 8`; fogo desligado e `breakBlocks` falso por omissão. |
+| `world.lightning` | `ctx.server.strike_lightning(x, y, z)` | `world.lightning` | Cria um raio server-side em coordenadas finitas e limitadas. |
+| `events.block.break` | `mod.on("block_broken", callback)` | nenhuma nova | Hook global de quebra iniciada por jogador; callback com `false` cancela. O comportamento declarativo `on_broken` continua compatível. |
 | `scheduler.every` | `mod.every(ticks, callback)` e `mod.cancel(id)` | nenhuma nova | Intervalo entre 1 e 1.728.000 ticks; o callback repete até devolver `false`, falhar ou ser cancelado pelo próprio mod. |
 
 Exemplo mínimo de requisito:
@@ -205,7 +214,9 @@ Exemplo mínimo de requisito:
 }
 ```
 
-`mod.after` continua sendo a tarefa única compatível com mods existentes. A tarefa recorrente lembra o jogador do callback original, é eliminada ao recarregar o mod e nunca executa Lua numa thread do cliente. Efeitos e movimento são leituras: não há mutação de `Player`, `MobEffectInstance`, vector ou qualquer objecto vivo atravessando a fronteira.
+`mod.after` continua sendo a tarefa única compatível com mods existentes. A tarefa recorrente lembra o jogador do callback original, é eliminada ao recarregar o mod e nunca executa Lua numa thread do cliente. Efeitos, movimento e equipamento são leituras: não há mutação de `Player`, `ItemStack`, `MobEffectInstance`, vector ou qualquer objecto vivo atravessando a fronteira.
+
+`block_broken` é disparado antes da conclusão da quebra de um jogador e pode observar ids vanilla e declarativos. O contexto é um snapshot com `ctx.block.id`, `x`, `y`, `z`, `variant`, `variant_count` e `ctx.player`. O contrato v1 não inclui face, mão, `ItemStack` ou drops. Ele não representa destruição por explosão, pistão, substituição de script ou outra remoção indirecta. Uma quebra de bloco declarativo tratada por `behavior.on_broken` não chama também o callback global do próprio mod.
 
 ## 3. Blocos
 

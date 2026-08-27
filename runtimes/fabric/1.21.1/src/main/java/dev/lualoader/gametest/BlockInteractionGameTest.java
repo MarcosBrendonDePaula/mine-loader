@@ -108,6 +108,30 @@ public class BlockInteractionGameTest implements FabricGameTest {
     }
 
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void bridgeExecutesSafeWorldEffects(TestContext context) {
+        var world = context.getWorld();
+        BlockPos relative = new BlockPos(1, 1, 1);
+        BlockPos absolute = context.getAbsolutePos(relative);
+        world.setBlockState(absolute, net.minecraft.block.Blocks.STONE.getDefaultState(), 3);
+
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(world);
+        try {
+            bridge.explode(absolute.getX() + 0.5, absolute.getY() + 0.5,
+                    absolute.getZ() + 0.5, 0.5f, false);
+            if (world.getBlockState(absolute).isAir()) {
+                throw new AssertionError("explosao sem breakBlocks nao deveria destruir o bloco");
+            }
+            bridge.strikeLightning(absolute.getX() + 0.5, absolute.getY() + 1.0,
+                    absolute.getZ() + 0.5);
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void bridgeReadsAndWritesDifficulty(TestContext context) {
         var bridge = LuaLoaderMod.gameBridge();
         if (bridge == null) throw new AssertionError("a bridge nao foi montada");

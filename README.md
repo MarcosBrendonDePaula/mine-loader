@@ -15,7 +15,7 @@ O projecto testa a mesma ideia em quatro combinações: **Fabric 1.21.1, Fabric 
 | Fabric 1.21.4 | Experimental, com limitações visuais documentadas |
 | NeoForge 1.21.1 | Implementado e testado |
 | NeoForge 1.21.4 | Experimental, com limitações visuais documentadas |
-| GameTests | 22/22 em cada combinação mantida |
+| GameTests | 23/23 em cada combinação mantida |
 | `mod.require()` | Bibliotecas entre mods, com resolução sob demanda e detecção de ciclos |
 | `requires.domains` / `requires.capabilities` | Negociação de contrato no manifesto |
 | Shaders client-side | Ainda não fazem parte da API estável |
@@ -108,7 +108,7 @@ O servidor lê mods de `run/mods-lua`. Para testar uma versão específica, use 
 
 ## Manifesto e compatibilidade
 
-O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`. A API Lua também oferece snapshots neutros de efeitos e movimento do jogador, drop de itens no mundo e tarefas recorrentes.
+O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`. A API Lua também oferece snapshots neutros de efeitos, movimento e equipamento do jogador, acesso seguro a slots, drop de itens, explosão sem fogo por padrão, raio e tarefas recorrentes.
 
 ```json
 {
@@ -130,6 +130,10 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
       "player.effects.read": "1.0.0",
       "player.movement.read": "1.0.0",
       "world.item_drop": "1.0.0",
+      "world.explode": "1.0.0",
+      "world.lightning": "1.0.0",
+      "player.equipment.read": "1.0.0",
+      "player.inventory.slot": "1.0.0",
       "scheduler.every": "1.0.0"
     }
   }
@@ -138,7 +142,7 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
 
 `dependencies` permite usar `mod.require("ui_lib")` e controla a ordem de carga. `requires` apenas verifica se o runtime oferece o contrato; não instala código nem substitui uma dependency entre mods. A resolução de bibliotecas é feita sob demanda quando necessário e recusa ciclos com a cadeia completa, sem recursão infinita nem scripts parciais.
 
-No Lua, `ctx.player.effects()` e `ctx.player.movement()` devolvem tabelas snapshot, sem objectos Minecraft. `ctx.server.drop_item(item, x, y, z, count)` cria loot limitado no mundo e exige `entity.spawn`. Para lógica periódica, `mod.every(ticks, callback)` exige `scheduler.every: "1.0.0"`, devolve um ID privado e termina quando o callback devolve `false` ou quando o mod chama `mod.cancel(id)`. O guia completo está em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md) e [`docs/GUIA_DO_MOD.md`](docs/GUIA_DO_MOD.md).
+No Lua, `ctx.player.effects()`, `ctx.player.movement()` e `ctx.player.equipment()` devolvem tabelas snapshot, sem objectos Minecraft; `inventory_slot` e `set_inventory_slot` usam índices limitados e limpeza explícita. `ctx.server.drop_item(item, x, y, z, count)` cria loot limitado no mundo e exige `entity.spawn`; `ctx.server.explode` exige `world.explode` e `ctx.server.strike_lightning` exige `world.lightning`. Para lógica periódica, `mod.every(ticks, callback)` exige `scheduler.every: "1.0.0"`, devolve um ID privado e termina quando o callback devolve `false` ou quando o mod chama `mod.cancel(id)`. O evento global `mod.on("block_broken", callback)` cobre quebras iniciadas por jogador e cancela com `false`. O guia completo está em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md) e [`docs/GUIA_DO_MOD.md`](docs/GUIA_DO_MOD.md).
 
 As regras completas, campos aceites e limites estão em [docs/MOD_FORMAT_SPEC.md](docs/MOD_FORMAT_SPEC.md). O schema oficial está em [spec/mod.schema.json](spec/mod.schema.json).
 
@@ -148,8 +152,8 @@ O Lua recebe tabelas e escalares simples. Classes Java, referências vivas do Mi
 
 | Domínio | APIs já disponíveis |
 |---|---|
-| Mundo | `block_state`, `set_block_state`, `game_rule`, `set_game_rule`, `difficulty`, `set_difficulty`, hora, clima, bioma, luz e redstone |
-| Jogador | nome, UUID, mensagens, mira, dados persistentes, inventário e operações declaradas |
+| Mundo | `block_state`, `set_block_state`, `game_rule`, `set_game_rule`, `difficulty`, `set_difficulty`, hora, clima, bioma, luz, redstone, explosão e raio |
+| Jogador | nome, UUID, mensagens, mira, dados persistentes, inventário, equipamento, slots e operações declaradas |
 | Conteúdo | blocos, itens, entidades, spawn eggs, tags, loot, estruturas, processos e herança declarativa |
 | Eventos | ciclo de vida, ticks, jogador, blocos, itens, entidades, cliente e menus |
 | Interface | menus, telas, HUD, sobreposições, mapas e protocolo fechado servidor-cliente |
@@ -224,7 +228,7 @@ Para executar um cliente específico:
 ./gradlew :runtimes:neoforge:1.21.4:runClient
 ```
 
-Os GameTests verificam contratos de servidor, registo, propriedades, inventários, persistência, automação, eventos, fila de ticks, redstone, tags, ovos e herança. A validação visual precisa de uma etapa separada no cliente.
+Os GameTests verificam contratos de servidor, registo, propriedades, inventários, persistência, automação, efeitos seguros do mundo, eventos, fila de ticks, redstone, tags, ovos e herança. A validação visual precisa de uma etapa separada no cliente; estes testes não provam pixels, FPS ou qualidade de renderização.
 
 ## Arquitectura
 
@@ -255,7 +259,7 @@ O projecto também não pretende ser um clone do KubeJS nem expor toda a JVM. A 
 
 ## Próximas prioridades
 
-A ordem actual de maior valor é completar drops e eventos de quebra com contexto íntegro, explosão e raio, slots/armadura/efeitos do jogador, fluidos e energia, e depois waypoints, teleporte entre dimensões e worldgen limitado. A API client-side de shaders só deve entrar como um domínio próprio, depois de uma bridge visual comprovada nas quatro combinações.
+A ordem actual de maior valor é completar transferência por face, fluidos e energia, e depois waypoints, teleporte entre dimensões e worldgen limitado. Quebra global, explosão, raio, slots, equipamento e efeitos do jogador já estão na superfície estável. A API client-side de shaders só deve entrar como um domínio próprio, depois de uma bridge visual comprovada nas quatro combinações.
 
 O backlog vivo está em [docs/API_GAPS.md](docs/API_GAPS.md), o roadmap em [docs/ROADMAP.md](docs/ROADMAP.md) e o diário histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 

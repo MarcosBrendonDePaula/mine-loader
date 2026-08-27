@@ -386,6 +386,7 @@ public final class ModLoader {
                     // um mod que so quer contar itens nao deveria carregar esse poder junto.
                     "player.modify",
                     "server.read", "server.command.register", "world.read", "world.write",
+                    "world.explode", "world.lightning",
                     "entity.read", "entity.spawn", "entity.modify", "world.containers",
                     // Criar especie e mais forte que criar, ler ou modificar uma: acrescenta um
                     // tipo ao registro do jogo, que vale para o mundo inteiro e nao pode ser

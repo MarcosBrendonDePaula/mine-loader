@@ -347,6 +347,26 @@ public final class FabricGameBridge implements GameBridge {
     }
 
     @Override
+    public void explode(double x, double y, double z, float power, boolean breakBlocks) {
+        ServerWorld world = requireWorld();
+        world.createExplosion(null, x, y, z, power, false,
+                breakBlocks ? net.minecraft.world.World.ExplosionSourceType.BLOCK
+                        : net.minecraft.world.World.ExplosionSourceType.NONE);
+    }
+
+    @Override
+    public void strikeLightning(double x, double y, double z) {
+        ServerWorld world = requireWorld();
+        var lightning = net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(
+                world, SpawnReason.TRIGGERED);
+        if (lightning == null) throw new BridgeException("nao foi possivel convocar um raio");
+        lightning.refreshPositionAndAngles(x, y, z, 0f, 0f);
+        if (!world.spawnEntity(lightning)) {
+            throw new BridgeException("nao foi possivel adicionar o raio ao mundo");
+        }
+    }
+
+    @Override
     public String spawnEntity(String entityId, double x, double y, double z) {
         Identifier id = parseIdentifier(entityId);
         if (!Registries.ENTITY_TYPE.containsId(id)) {

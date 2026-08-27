@@ -46,9 +46,14 @@ public final class RuntimeContract {
         capabilities.put("world.biome.read", "1.0.0");
         capabilities.put("world.light.read", "1.0.0");
         capabilities.put("world.item_drop", "1.0.0");
+        capabilities.put("world.explode", "1.0.0");
+        capabilities.put("world.lightning", "1.0.0");
+        capabilities.put("events.block.break", "1.0.0");
         capabilities.put("player.looking_at.read", "1.0.0");
         capabilities.put("player.effects.read", "1.0.0");
         capabilities.put("player.movement.read", "1.0.0");
+        capabilities.put("player.equipment.read", "1.0.0");
+        capabilities.put("player.inventory.slot", "1.0.0");
         capabilities.put("player.data.read", "1.0.0");
         capabilities.put("player.data.write", "1.0.0");
         capabilities.put("entity.read", "1.0.0");

@@ -67,11 +67,11 @@ registrada na seção "O que a auditoria encontrou".
 - [x] Sandbox: nega `io`, `os`, `package`, `debug`, `luajava`, `require`, `dofile`, `loadfile`,
       `load`, `loadstring`
 - [x] Orçamento de tempo por callback — 20 ms, verificado a cada 2.048 instruções
-- [x] Permissões declaradas no manifesto e verificadas na operação — quatorze, sem hierarquia
+- [x] Permissões declaradas no manifesto e verificadas na operação — catálogo explícito, sem hierarquia
 - [x] Integridade de recurso remoto por sha256
 - [x] Limite de tamanho de recurso (`maxBytes`)
 - [x] Tetos de operação: `fill` 32.768 blocos, coordenada 30 milhões, 4.096 tarefas agendadas,
-      128 módulos por mod, 64 KiB de payload de tela
+      128 módulos por mod, 64 KiB de payload de tela, explosão com força máxima 8 e slots 0..63
 - [x] Import remoto só por HTTPS, com cache e hash
 - [ ] Orçamento de memória por mod
 - [ ] Limite de operações por tique — hoje um `set_block` em laço só é freado pelo tempo
@@ -81,8 +81,9 @@ registrada na seção "O que a auditoria encontrou".
 - [ ] Quarentena: mod que falha repetidamente é desligado sozinho
 
 As permissões incluem `chat.send`, `server.read`, `server.command.register`, `client.input.register`,
-`client.camera.register`, `world.read`, `world.write`, `world.containers`, `entity.read`, `entity.spawn`,
-`entity.modify`, `player.read`, `player.modify`, `player.inventory`, `player.menu` e `player.move`.
+`client.camera.register`, `world.read`, `world.write`, `world.explode`, `world.lightning`,
+`world.containers`, `entity.read`, `entity.spawn`, `entity.modify`, `player.read`, `player.modify`,
+`player.inventory`, `player.menu` e `player.move`.
 
 ## 3. Conteúdo declarável
 
@@ -177,8 +178,8 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Ler bioma numa posição
 - [x] Ler nível de luz numa posição
 - [x] Largar item solto no mundo, com limite por chamada
-- [ ] Explosão
-- [ ] Raio
+- [x] Explosão limitada, sem fogo e sem destruição por padrão
+- [x] Raio em coordenadas finitas e limitadas
 - [x] Ler sinal de redstone — emissão dinâmica ainda não faz parte do contrato
 - [x] Game Rules com whitelist e dificuldade do mundo
 - [x] Tique agendado por posição (`schedule_block` / `on_scheduled`) — "volte aqui em N tiques"
@@ -202,8 +203,8 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 - [x] Velocidade e vetor de movimento
 - [ ] Empurrão e impulso
 - [ ] Partícula direcionada a um jogador
-- [ ] Ler e escrever um slot específico do inventário do jogador
-- [ ] Armadura equipada
+- [x] Ler e escrever um slot específico do inventário do jogador — faixa comum `0..63`, limpeza com quantidade zero
+- [x] Armadura equipada — snapshot lógico de mão e seis campos de equipamento
 - [x] Nível de operador (`is_operator`, `permission_level`)
 - [ ] Estatísticas e avanços
 - [ ] `ItemSpec.color`, `.attributes`, `.keepOnDeath`, `.noDrop` — declarados e ignorados **nas duas**
@@ -224,7 +225,7 @@ Cinco dos sete campos de `render` não fazem nada em plataforma nenhuma.
 
 ## 8. Eventos
 
-- [x] Bloco: usado, atacado, quebrado, colocado
+- [x] Bloco: usado, atacado, quebrado, colocado — `block_broken` global cobre ids vanilla e declarativos e `false` cancela a quebra de jogador
 - [x] Item: usado, usado em bloco
 - [x] Menu: clique
 - [x] Tela: `click`, `change`, `submit`, `close`
@@ -438,7 +439,7 @@ nas duas plataformas** — não quando os itens estão riscados.
 
 ### Nível 0 — Fundação `[alcançado]`
 
-Descoberta, manifesto, sandbox, quatorze permissões, resource pack, registro de bloco e item, ponte
+Descoberta, manifesto, sandbox, catálogo explícito de permissões, resource pack, registro de bloco e item, ponte
 de mundo e jogador, interface completa, duas plataformas, quatro níveis de teste.
 
 **Prova:** os onze mods de `examples/` rodam.
@@ -460,9 +461,9 @@ Antes de acrescentar qualquer capacidade nova, fazer valer o que já foi prometi
 - [x] Os campos mortos: `drops_like`, `flammability` e `burn_spread` aplicados nas duas;
       `required_features` e a classe `ItemBehaviorAdvanced` removidas
 - [x] `ManifestDiagnostics` completo — e um aviso novo para `drops_like` anulado por `drops_nothing`
-- [x] **GameTests rodando no NeoForge** — 22 casos, e no CI junto com os do Fabric
+- [x] **GameTests rodando no NeoForge** — 23 casos, e no CI junto com os do Fabric
 
-**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 22/22 em cada combinação.
+**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 23/23 em cada combinação.
 Os casos `eventos_globais` e `agendador` foram escritos *antes* de olhar o resultado e falharam no
 NeoForge na primeira execução — que é o que os torna prova e não cerimônia.
 
@@ -477,7 +478,7 @@ A correção foi acrescentar `hello_lua:bloco_de_prova`, cujo único propósito 
 **diferentes** dos padrões. Só depois disso o teste falhou com o defeito e passou sem ele — nas duas
 plataformas.
 
-**Um teste que não se viu falhar não é verificação, é decoração.** Vale para os 22 casos daqui: a
+**Um teste que não se viu falhar não é verificação, é decoração.** Vale para os 23 casos daqui: a
 regressão foi introduzida de propósito e revertida em cada plataforma, e o que ficou registrado é
 que eles *conseguem* falhar.
 

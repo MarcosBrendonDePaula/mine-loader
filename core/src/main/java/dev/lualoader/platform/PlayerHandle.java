@@ -18,6 +18,16 @@ public interface PlayerHandle {
                     boolean swimming, boolean flying, boolean gliding) {
     }
 
+    /** Snapshot de um stack, sem transportar ItemStack ou componentes da plataforma. */
+    record ItemStackView(String itemId, int count) {
+    }
+
+    /** Equipamento do jogador em nomes estáveis, independentemente dos índices internos. */
+    record Equipment(ItemStackView mainHand, ItemStackView offHand,
+                     ItemStackView head, ItemStackView chest,
+                     ItemStackView legs, ItemStackView feet) {
+    }
+
     String name();
 
     String uuid();
@@ -325,6 +335,21 @@ public interface PlayerHandle {
      */
     default java.util.List<String> inventory() {
         throw new BridgeException("inventory nao existe neste adaptador");
+    }
+
+    /** Snapshot do slot; um slot vazio devolve {@code minecraft:air} com quantidade zero. */
+    default ItemStackView inventorySlot(int slot) {
+        throw new BridgeException("inventory_slot nao existe neste adaptador");
+    }
+
+    /** Substitui um slot; quantidade zero limpa-o e {@code spec} é opcional. */
+    default void setInventorySlot(int slot, String itemId, int count, ItemSpec spec) {
+        throw new BridgeException("set_inventory_slot nao existe neste adaptador");
+    }
+
+    /** Equipamento actual, em snapshot independente da entidade real. */
+    default Equipment equipment() {
+        throw new BridgeException("equipment nao existe neste adaptador");
     }
 
     /** Esvazia o inventário. */
