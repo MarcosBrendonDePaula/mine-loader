@@ -22,6 +22,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 |---|---|
 | [GUIA_DO_MOD.md](GUIA_DO_MOD.md) | Tutorial prático de manifestos, Lua, blocos, itens, entidades, inventário, UI, recursos e permissões. |
 | [tutorials/README.md](tutorials/README.md) | Fonte JSON canónica dos guias de bloco, item, UI e Lua consumida diretamente pelo site público. |
+| [GITHUB_PAGES.md](GITHUB_PAGES.md) | Endereço público, estrutura de build em `docs/` e regras de manutenção do site estático. |
 | [MOD_FORMAT_SPEC.md](MOD_FORMAT_SPEC.md) | Especificação normativa do `mod.json`, campos aceites, recursos, dependencies, requirements e limites. |
 | [API_ESTAVEL.md](API_ESTAVEL.md) | Contrato público agnóstico, snapshots, APIs de mundo, jogador, bibliotecas e regras de evolução. |
 | [EVENTS.md](EVENTS.md) | Eventos globais e por objecto, contexto, cancelamento e prioridades. |

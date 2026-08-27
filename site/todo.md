@@ -32,17 +32,23 @@
 
 ## Tutoriais dinâmicos via GitHub
 
-- [ ] Definir o schema versionado de documento tutorial JSON e os dados de índice.
-- [ ] Criar e validar os quatro documentos JSON no repositório MineLoader.
-- [ ] Publicar a fonte JSON e a documentação que explica seu contrato.
-- [ ] Fazer o site consultar, validar e renderizar o índice e as páginas a partir da `main`.
-- [ ] Preservar fallback explícito, contraste e responsividade quando a fonte estiver indisponível.
-- [ ] Validar os dois projetos, salvar checkpoints e entregar a integração.
+- [x] Definir o schema versionado de documento tutorial JSON e os dados de índice.
+- [x] Criar e validar os quatro documentos JSON no repositório MineLoader.
+- [x] Publicar a fonte JSON e a documentação que explica seu contrato.
+- [x] Fazer o site consultar, validar e renderizar o índice e as páginas a partir da `main`.
+- [x] Preservar fallback explícito, contraste e responsividade quando a fonte estiver indisponível.
+- [x] Validar os dois projetos, o GitHub Pages e a integração dinâmica.
 
 ## GitHub Pages em /docs
 
-- [ ] Gerar o artefato estático do site no diretório `docs/` do repositório MineLoader.
-- [ ] Configurar a base pública e o roteamento do site para a rota `/docs`.
-- [ ] Garantir fallback estático para links diretos nas páginas de documentação.
-- [ ] Criar o workflow de build e publicação no GitHub Pages.
-- [ ] Validar o artefato publicado, URLs de assets e consulta aos JSON da `main`.
+- [x] Gerar o artefato estático do site no diretório `docs/` do repositório MineLoader.
+- [x] Configurar a base pública e o roteamento do site para a rota `/docs`.
+- [x] Garantir fallback estático para links diretos nas páginas de documentação.
+- [x] Criar o workflow de build e publicação no GitHub Pages.
+- [x] Validar o artefato publicado, URLs de assets e consulta aos JSON da `main`.
+
+## CI do site
+
+- [x] Criar gatilhos por alterações no frontend, assets, fonte JSON e workflow.
+- [x] Executar verificação TypeScript, validação dos tutoriais JSON e build em `docs/`.
+- [x] Garantir que o CI falha quando o artefato de Pages estiver desatualizado.
