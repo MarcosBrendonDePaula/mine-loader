@@ -149,6 +149,35 @@ um consumidor de domínio e um mod que combina `dependencies` com `requires`.
 
 A forma estática de comandos usa o campo `commands` do manifesto e exige a capability `server.command.schema` além da permissão `server.command.register`. O Lua associa o callback com `mod.command(nome, callback)`. Para comandos condicionais ou protótipos, `mod.command(nome, schema, callback)` continua disponível, e `mod.command_extend(nome, schema)` acrescenta ramos durante a carga. Literais, argumentos tipados, limites e sugestões são validados pelo core e publicados pelo bridge. A forma legada `mod.command(nome, callback)` sem declaração no manifesto continua válida e usa texto livre. Consulte [COMMANDS.md](COMMANDS.md) para o contrato completo.
 
+### 2.5 Câmeras virtuais client-side
+
+`cameras` é um objecto opcional no manifesto, indexado por IDs curtos. A declaração exige a permissão `client.camera.register` e a capability `client.camera.virtual: 1.0.0`. A versão 1 aceita apenas uma câmera ortográfica de mundo, ancorada no jogador, com saída `texture`, resolução entre 16 e 192, raio entre 8 e 96 e actualização entre 1 e 40 ticks.
+
+```json
+{
+  "permissions": ["client.camera.register"],
+  "requires": {
+    "capabilities": { "client.camera.virtual": "1.0.0" }
+  },
+  "cameras": {
+    "minimap": {
+      "projection": "orthographic",
+      "source": "world",
+      "anchor": "player",
+      "orientation": "north",
+      "resolution": 96,
+      "radius": 48,
+      "update_ticks": 5,
+      "output": "texture"
+    }
+  }
+}
+```
+
+Para câmeras condicionais, o Lua pode registar a definição durante a execução com `mod.camera("minimap", definição)`. O ID devolvido é qualificado pelo loader, como `meu_mod:minimap`; não é um nome de textura e não expõe APIs do cliente. Se o mesmo ID existir no manifesto e no Lua, as definições precisam ser idênticas. Uma divergência falha explicitamente, evitando que duas fontes substituam a câmera em silêncio.
+
+O elemento `map` referencia a câmera com `render = "client_camera"` e `camera = "meu_mod:minimap"`. `resolution`, `radius` e `update_ticks` do elemento são overrides opcionais; quando omitidos, herdam da câmera. O bridge gere o recurso físico e rasteriza uma imagem pequena a partir do estado client-side disponível. Esta capability não é uma câmera 3D arbitrária nem dá ao Lua acesso a framebuffer, OpenGL, `NativeImage`, `Identifier` ou `RenderSystem`.
+
 ## 3. Blocos
 
 A declaração de bloco é composta por identidade, material, configurações, estados, renderização, item, drops, tags e comportamento.
@@ -500,6 +529,8 @@ Permissões são strings conhecidas pelo loader. O mod não pode inventar uma pe
 | `player.read` | Nome e UUID do jogador no contexto de evento. |
 | `server.read` | Leitura de informações públicas do servidor. |
 | `server.command.register` | Registro de comandos do mod. |
+| `client.input.register` | Registro de hotkeys declarativas ligadas a callbacks server-side. |
+| `client.camera.register` | Registro de câmeras lógicas virtuais client-side. |
 | `world.write` | Alteração autorizada de estados e propriedades de conteúdo do loader. |
 
 Permissões futuras para recursos remotos, conteúdo de cliente e persistência devem ser específicas e ter limites próprios.

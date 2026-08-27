@@ -1,6 +1,7 @@
 package dev.lualoader.network;
 
 import dev.lualoader.LuaLoaderMod;
+import dev.lualoader.camera.CameraProtocol;
 import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.minecraft.FabricPlayerHandle;
 import dev.lualoader.ui.ScreenProtocol;
@@ -35,6 +36,8 @@ public final class ScreenNetwork {
                 ScreenPayloads.ClearOverlay.ID, ScreenPayloads.ClearOverlay.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 ScreenPayloads.Keybinds.ID, ScreenPayloads.Keybinds.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ScreenPayloads.Cameras.ID, ScreenPayloads.Cameras.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 ScreenPayloads.ScreenEvent.ID, ScreenPayloads.ScreenEvent.CODEC);
         PayloadTypeRegistry.playC2S().register(
@@ -133,6 +136,15 @@ public final class ScreenNetwork {
                 || !ServerPlayNetworking.canSend(player, ScreenPayloads.Keybinds.ID)) return;
         ServerPlayNetworking.send(player, new ScreenPayloads.Keybinds(
                 KeybindProtocol.VERSION, KeybindProtocol.encode(runtime.keybindDefinitions())));
+    }
+
+    /** Publica no jogador o catálogo de câmeras do runtime actual. */
+    public static void sendCameras(ServerPlayerEntity player) {
+        var runtime = LuaLoaderMod.luaRuntime();
+        if (runtime == null || player == null
+                || !ServerPlayNetworking.canSend(player, ScreenPayloads.Cameras.ID)) return;
+        ServerPlayNetworking.send(player, new ScreenPayloads.Cameras(
+                CameraProtocol.VERSION, CameraProtocol.encode(runtime.cameraDefinitions())));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

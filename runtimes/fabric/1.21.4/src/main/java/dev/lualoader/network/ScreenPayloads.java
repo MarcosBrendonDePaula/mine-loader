@@ -184,6 +184,22 @@ public final class ScreenPayloads {
         }
     }
 
+    /** Catálogo de câmeras lógicas que o servidor publicou para este cliente. */
+    public record Cameras(int version, String definitions) implements CustomPayload {
+        public static final CustomPayload.Id<Cameras> ID =
+                new CustomPayload.Id<>(channel(dev.lualoader.camera.CameraProtocol.CHANNEL_SET));
+
+        public static final PacketCodec<RegistryByteBuf, Cameras> CODEC = PacketCodec.tuple(
+                PacketCodecs.VAR_INT, Cameras::version,
+                PacketCodecs.STRING, Cameras::definitions,
+                Cameras::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
     /** Evento cliente -> servidor: uma hotkey qualificada foi pressionada. */
     public record KeybindEvent(int version, String qualifiedId) implements CustomPayload {
         public static final CustomPayload.Id<KeybindEvent> ID =

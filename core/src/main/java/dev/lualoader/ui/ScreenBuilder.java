@@ -314,6 +314,11 @@ public final class ScreenBuilder {
                     : (int) clamp(content.todouble(), 0, ScreenProtocol.MAX_CONTENT_SIZE, "content"));
         }
         if (type.equals("map")) {
+            String render = text(source.get("render"), "server_cells", "map.render")
+                    .trim().toLowerCase(Locale.ROOT);
+            if (!MapHudProtocol.RENDER_MODES.contains(render)) {
+                throw new InvalidScreenException("modo de renderização de mapa desconhecido: " + render);
+            }
             int columns = source.get("columns").isnil()
                     ? 25 : (int) clamp(source.get("columns").todouble(), 1,
                     MapHudProtocol.MAX_COLUMNS, "map.columns");
@@ -322,7 +327,11 @@ public final class ScreenBuilder {
                     MapHudProtocol.MAX_ROWS, "map.rows");
             json.addProperty("map_columns", columns);
             json.addProperty("map_rows", rows);
-            json.add("map_cells", mapCells(source.get("cells"), index, columns, rows));
+            if (render.equals("server_cells")) {
+                json.add("map_cells", mapCells(source.get("cells"), index, columns, rows));
+            } else {
+                json.add("map_cells", new JsonArray());
+            }
             json.add("map_markers", mapMarkers(source.get("markers"), index));
             json.addProperty("map_direction_x", clamp(source.get("direction_x").isnil()
                     ? 0 : source.get("direction_x").todouble(), -1, 1, "direction_x"));
@@ -331,6 +340,32 @@ public final class ScreenBuilder {
             json.addProperty("map_round", source.get("round").isnil() || source.get("round").toboolean());
             json.addProperty("map_grid", !source.get("grid").isnil() && source.get("grid").toboolean());
             json.addProperty("map_north", text(source.get("north"), "N", "north"));
+            json.addProperty("map_render", render);
+            String camera = text(source.get("camera"), "", "map.camera").trim();
+            if (render.equals("client_camera") && camera.isEmpty()) {
+                throw new InvalidScreenException("map client_camera exige camera");
+            }
+            json.addProperty("map_camera", camera);
+            // Zero significa "herdar da câmera" no modo client_camera. No modo topdown legado
+            // mantemos os defaults históricos no payload para clientes antigos.
+            json.addProperty("map_resolution", source.get("resolution").isnil()
+                    ? (render.equals("client_camera") ? 0 : 96)
+                    : (int) clamp(source.get("resolution").todouble(), 16,
+                    MapHudProtocol.MAX_CLIENT_RESOLUTION, "map.resolution"));
+            json.addProperty("map_radius", source.get("radius").isnil()
+                    ? (render.equals("client_camera") ? 0 : 48)
+                    : (int) clamp(source.get("radius").todouble(), 8,
+                    MapHudProtocol.MAX_CLIENT_RADIUS, "map.radius"));
+            json.addProperty("map_update_ticks", source.get("update_ticks").isnil()
+                    ? (render.equals("client_camera") ? 0 : 5)
+                    : (int) clamp(source.get("update_ticks").todouble(), 1,
+                    MapHudProtocol.MAX_CLIENT_UPDATE_TICKS, "map.update_ticks"));
+            String rotate = text(source.get("rotate"), "north", "map.rotate")
+                    .trim().toLowerCase(Locale.ROOT);
+            if (!rotate.equals("north") && !rotate.equals("player")) {
+                throw new InvalidScreenException("map.rotate precisa ser north ou player");
+            }
+            json.addProperty("map_rotate", rotate);
         }
         return json;
     }

@@ -1,5 +1,6 @@
 package dev.lualoader.lua;
 
+import dev.lualoader.camera.CameraProtocol;
 import dev.lualoader.command.CommandSchema;
 import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.manifest.LoaderEvents;
@@ -131,6 +132,9 @@ public final class LuaRuntime {
     /** Keybinds registrados por mod, indexados pelo id qualificado mod:id. */
     private final Map<String, RegisteredKeybind> keybinds = new LinkedHashMap<>();
 
+    /** Câmeras lógicas publicadas ao cliente, indexadas pelo id qualificado mod:id. */
+    private final Map<String, RegisteredCamera> cameras = new LinkedHashMap<>();
+
     /**
      * Callbacks de janela, por identificador de menu.
      *
@@ -198,6 +202,9 @@ public final class LuaRuntime {
     /** Como o adaptador republica o catálogo de hotkeys quando um mod entra ou recarrega. */
     private Runnable keybindRefresh;
 
+    /** Como o adaptador republica o catálogo de câmeras quando um mod entra ou recarrega. */
+    private Runnable cameraRefresh;
+
     /** Liga o instalador do bootstrap. Sem ele, a API de instalacao recusa. */
     public void attachInstaller(dev.lualoader.install.ModInstaller installer,
                                 dev.lualoader.install.InstallPolicy policy) {
@@ -213,6 +220,11 @@ public final class LuaRuntime {
     /** Como a plataforma republica as hotkeys declaradas aos clientes online. */
     public void onKeybindsChanged(Runnable refresh) {
         this.keybindRefresh = refresh;
+    }
+
+    /** Como a plataforma republica as câmeras quando um mod entra ou recarrega. */
+    public void onCamerasChanged(Runnable refresh) {
+        this.cameraRefresh = refresh;
     }
 
     /**
@@ -241,6 +253,7 @@ public final class LuaRuntime {
                 load(found);
                 if (commandRefresh != null) commandRefresh.run();
                 if (keybindRefresh != null) keybindRefresh.run();
+                if (cameraRefresh != null) cameraRefresh.run();
                 return true;
             }
             logger.error("Mod {} instalado mas nao encontrado na pasta de mods", modId);
@@ -323,10 +336,12 @@ public final class LuaRuntime {
     private RegistrationSnapshot detachRegistrations(String modId) {
         RegistrationSnapshot snapshot = new RegistrationSnapshot(
                 new LinkedHashMap<>(commands), new LinkedHashMap<>(keybinds),
-                new LinkedHashMap<>(menus), new LinkedHashMap<>(screens),
+                new LinkedHashMap<>(cameras), new LinkedHashMap<>(menus),
+                new LinkedHashMap<>(screens),
                 new LinkedHashMap<>(processes), new ArrayList<>(scheduled));
         commands.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         keybinds.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
+        cameras.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         menus.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         screens.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
         processes.entrySet().removeIf(entry -> entry.getValue().modId().equals(modId));
@@ -339,6 +354,8 @@ public final class LuaRuntime {
         commands.putAll(snapshot.commands());
         keybinds.clear();
         keybinds.putAll(snapshot.keybinds());
+        cameras.clear();
+        cameras.putAll(snapshot.cameras());
         menus.clear();
         menus.putAll(snapshot.menus());
         screens.clear();
@@ -526,6 +543,11 @@ public final class LuaRuntime {
     /** Definições de hotkey que têm callback e podem ser publicadas ao cliente. */
     public List<KeybindProtocol.Binding> keybindDefinitions() {
         return keybinds.values().stream().map(RegisteredKeybind::binding).toList();
+    }
+
+    /** Definições de câmera que podem ser publicadas ao cliente. */
+    public List<CameraProtocol.Camera> cameraDefinitions() {
+        return cameras.values().stream().map(RegisteredCamera::camera).toList();
     }
 
     /** Entrega ao mod o evento de uma hotkey já validada pelo catálogo publicado. */
@@ -725,6 +747,7 @@ public final class LuaRuntime {
                 discarded == 0 ? "" : " (" + discarded + " tarefa(s) pendente(s) descartada(s))");
         if (commandRefresh != null) commandRefresh.run();
         if (keybindRefresh != null) keybindRefresh.run();
+        if (cameraRefresh != null) cameraRefresh.run();
         return true;
     }
 
@@ -1019,6 +1042,7 @@ public final class LuaRuntime {
         LuaTable state = states.computeIfAbsent(mod.manifest().id, key -> stateStore.load(key));
         modApi.set("state", state);
 
+        registerManifestCameras(mod.manifest());
         registerManifestCommands(mod.manifest());
 
         // API de servidor com as permissoes deste mod, independente de quem chamar.
@@ -1196,6 +1220,47 @@ public final class LuaRuntime {
             }
         });
 
+        modApi.set("camera", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue idValue, LuaValue definitionValue) {
+                requirePermission(mod.manifest(), "client.camera.register");
+                if (mod.manifest().requires == null
+                        || mod.manifest().requires.capabilities == null
+                        || !mod.manifest().requires.capabilities.containsKey("client.camera.virtual")) {
+                    throw new LuaError("camera exige requires.capabilities.client.camera.virtual");
+                }
+                if (!definitionValue.istable()) {
+                    throw new LuaError("camera exige id e uma tabela de definição");
+                }
+
+                String id = idValue.tojstring();
+                if (!id.matches("^[a-z][a-z0-9_-]{0,31}$")) {
+                    throw new LuaError("id de câmera inválido: " + id);
+                }
+                CameraProtocol.Camera camera;
+                try {
+                    camera = cameraFromLua(mod.manifest().id, id, (LuaTable) definitionValue);
+                } catch (IllegalArgumentException error) {
+                    throw new LuaError("câmera " + id + " inválida: " + error.getMessage());
+                }
+
+                String qualified = camera.qualifiedId();
+                RegisteredCamera existing = cameras.get(qualified);
+                if (existing != null && !existing.modId().equals(mod.manifest().id)) {
+                    throw new LuaError("câmera " + id + " já registrada pelo mod " + existing.modId());
+                }
+                if (existing != null && !existing.camera().equals(camera)) {
+                    throw new LuaError("câmera " + id
+                            + " diverge da definição já registrada no manifesto ou no Lua");
+                }
+                if (existing == null) {
+                    cameras.put(qualified, new RegisteredCamera(mod.manifest().id, camera));
+                    refreshCamerasIfRuntimeMutation();
+                }
+                return LuaValue.valueOf(qualified);
+            }
+        });
+
         modApi.set("keybind", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -1337,6 +1402,75 @@ public final class LuaRuntime {
 
     private void refreshCommandsIfRuntimeMutation() {
         if (compilationDepth == 0 && commandRefresh != null) commandRefresh.run();
+    }
+
+    private void refreshCamerasIfRuntimeMutation() {
+        if (compilationDepth == 0 && cameraRefresh != null) cameraRefresh.run();
+    }
+
+    private static CameraProtocol.Camera cameraFromLua(String modId, String id, LuaTable source) {
+        return new CameraProtocol.Camera(modId, id,
+                cameraText(source.get("projection"), "orthographic"),
+                cameraText(source.get("source"), "world"),
+                cameraText(source.get("anchor"), "player"),
+                cameraText(source.get("orientation"), "north"),
+                cameraInt(source.get("resolution"), 96, 16, CameraProtocol.MAX_RESOLUTION),
+                cameraInt(source.get("radius"), 48, 8, CameraProtocol.MAX_RADIUS),
+                cameraInt(source.get("update_ticks"), 5, 1, CameraProtocol.MAX_UPDATE_TICKS),
+                cameraText(source.get("output"), "texture"));
+    }
+
+    private static String cameraText(LuaValue value, String fallback) {
+        return value == null || value.isnil() ? fallback : value.tojstring().trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static int cameraInt(LuaValue value, int fallback, int minimum, int maximum) {
+        int number = value == null || value.isnil() ? fallback : value.checkint();
+        if (number < minimum || number > maximum) {
+            throw new IllegalArgumentException("valor fora do limite [" + minimum + ", " + maximum + "]");
+        }
+        return number;
+    }
+
+    private void registerManifestCameras(ModManifest manifest) {
+        if (manifest.cameras == null || manifest.cameras.isEmpty()) return;
+        for (Map.Entry<String, ModManifest.CameraDefinition> entry : manifest.cameras.entrySet()) {
+            String id = entry.getKey();
+            ModManifest.CameraDefinition definition = entry.getValue();
+            if (definition == null) {
+                throw new IllegalArgumentException("câmera " + id + " inválida: definição nula");
+            }
+            CameraProtocol.Camera camera;
+            try {
+                camera = new CameraProtocol.Camera(manifest.id, id,
+                        cameraValue(definition.projection, "orthographic"),
+                        cameraValue(definition.source, "world"),
+                        cameraValue(definition.anchor, "player"),
+                        cameraValue(definition.orientation, "north"),
+                        definition.resolution, definition.radius,
+                        definition.updateTicks, cameraValue(definition.output, "texture"));
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("câmera " + id
+                        + " inválida: " + error.getMessage(), error);
+            }
+            String qualified = camera.qualifiedId();
+            RegisteredCamera existing = cameras.get(qualified);
+            if (existing != null && !existing.modId().equals(manifest.id)) {
+                throw new IllegalArgumentException("câmera " + id
+                        + " já registrada pelo mod " + existing.modId());
+            }
+            if (existing != null && !existing.camera().equals(camera)) {
+                throw new IllegalArgumentException("câmera " + id
+                        + " diverge da definição já registrada no manifesto ou no Lua");
+            }
+            if (existing == null) {
+                cameras.put(qualified, new RegisteredCamera(manifest.id, camera));
+            }
+        }
+    }
+
+    private static String cameraValue(String value, String fallback) {
+        return value == null ? fallback : value;
     }
 
     private void registerManifestCommands(ModManifest manifest) {
@@ -4035,6 +4169,7 @@ public final class LuaRuntime {
 
     private record RegistrationSnapshot(Map<String, RegisteredCommand> commands,
                                          Map<String, RegisteredKeybind> keybinds,
+                                         Map<String, RegisteredCamera> cameras,
                                          Map<String, RegisteredMenu> menus,
                                          Map<String, RegisteredMenu> screens,
                                          Map<String, RegisteredProcess> processes,
@@ -4051,6 +4186,10 @@ public final class LuaRuntime {
     /** Hotkey declarada no manifesto e ligada a um callback Lua do mesmo mod. */
     private record RegisteredKeybind(String modId, KeybindProtocol.Binding binding,
                                      LuaFunction callback) {
+    }
+
+    /** Câmera lógica declarada ou criada pelo Lua e publicada ao cliente. */
+    private record RegisteredCamera(String modId, CameraProtocol.Camera camera) {
     }
 
     /**

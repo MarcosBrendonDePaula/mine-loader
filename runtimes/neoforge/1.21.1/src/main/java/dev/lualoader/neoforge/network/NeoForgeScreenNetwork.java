@@ -1,5 +1,6 @@
 package dev.lualoader.neoforge.network;
 
+import dev.lualoader.camera.CameraProtocol;
 import dev.lualoader.input.KeybindProtocol;
 import dev.lualoader.lua.LuaRuntime;
 import dev.lualoader.neoforge.NeoForgeLuaLoader;
@@ -47,6 +48,8 @@ public final class NeoForgeScreenNetwork {
         void clearOverlay(String overlayId);
 
         void setKeybinds(int version, String definitions);
+
+        void setCameras(int version, String definitions);
     }
 
     private static volatile ClientSink client;
@@ -104,6 +107,11 @@ public final class NeoForgeScreenNetwork {
                 NeoForgeScreenPayloads.Keybinds.CODEC, (payload, context) -> context.enqueueWork(
                         () -> {
                             if (client != null) client.setKeybinds(payload.version(), payload.definitions());
+                        }));
+        registrar.playToClient(NeoForgeScreenPayloads.Cameras.TYPE,
+                NeoForgeScreenPayloads.Cameras.CODEC, (payload, context) -> context.enqueueWork(
+                        () -> {
+                            if (client != null) client.setCameras(payload.version(), payload.definitions());
                         }));
 
         registrar.playToServer(NeoForgeScreenPayloads.ScreenEvent.TYPE,
@@ -200,6 +208,15 @@ public final class NeoForgeScreenNetwork {
                 || !player.connection.hasChannel(NeoForgeScreenPayloads.Keybinds.TYPE)) return;
         send(player, new NeoForgeScreenPayloads.Keybinds(
                 KeybindProtocol.VERSION, KeybindProtocol.encode(runtime.keybindDefinitions())));
+    }
+
+    /** Publica no jogador o catálogo de câmeras do runtime actual. */
+    public static void sendCameras(ServerPlayer player) {
+        LuaRuntime runtime = NeoForgeLuaLoader.luaRuntime();
+        if (runtime == null || player == null
+                || !player.connection.hasChannel(NeoForgeScreenPayloads.Cameras.TYPE)) return;
+        send(player, new NeoForgeScreenPayloads.Cameras(
+                CameraProtocol.VERSION, CameraProtocol.encode(runtime.cameraDefinitions())));
     }
 
     /** Indica se o cliente daquele jogador registrou o canal de telas. */

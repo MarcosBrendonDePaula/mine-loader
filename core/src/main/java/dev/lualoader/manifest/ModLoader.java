@@ -3,6 +3,7 @@ package dev.lualoader.manifest;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.FieldNamingPolicy;
+import dev.lualoader.camera.CameraProtocol;
 import com.google.gson.JsonParseException;
 import dev.lualoader.command.CommandSchema;
 import dev.lualoader.input.KeybindProtocol;
@@ -379,7 +380,7 @@ public final class ModLoader {
         if (manifest.permissions != null) {
             Set<String> knownPermissions = Set.of(
                     "chat.send", "player.read", "player.inventory", "player.move", "player.menu",
-                    "client.input.register",
+                    "client.input.register", "client.camera.register",
                     // player.modify e separada de read e de inventory de proposito: escrever vida,
                     // fome, experiencia ou modo de jogo muda as regras sob os pes de quem joga, e
                     // um mod que so quer contar itens nao deveria carregar esse poder junto.
@@ -404,6 +405,7 @@ public final class ModLoader {
             }
         }
         validateKeybinds(manifest);
+        validateCameras(manifest);
         validateCommands(manifest);
 
         validateDependencies(manifest);
@@ -614,6 +616,45 @@ public final class ModLoader {
             require(category.matches("^[a-z][a-z0-9_.-]{0,63}$"),
                     "categoria de keybind invalida: " + category);
         }
+    }
+
+    private void validateCameras(ModManifest manifest) {
+        if (manifest.cameras == null || manifest.cameras.isEmpty()) return;
+
+        require(manifest.permissions != null
+                        && manifest.permissions.contains("client.camera.register"),
+                "cameras exigem a permissao client.camera.register");
+        require(manifest.requires != null
+                        && manifest.requires.capabilities != null
+                        && manifest.requires.capabilities.containsKey("client.camera.virtual"),
+                "cameras exigem requires.capabilities.client.camera.virtual");
+        require(runtimeContract.satisfiesCapability("client.camera.virtual", "1.0.0"),
+                "o runtime nao entrega a capability client.camera.virtual 1.0.0");
+
+        Set<String> ids = new HashSet<>();
+        for (Map.Entry<String, ModManifest.CameraDefinition> entry : manifest.cameras.entrySet()) {
+            String id = entry.getKey();
+            require(id != null && id.matches("^[a-z][a-z0-9_-]{0,31}$"),
+                    "id de câmera inválido: " + id);
+            require(ids.add(id), "câmera duplicada no manifesto: " + id);
+            ModManifest.CameraDefinition definition = entry.getValue();
+            require(definition != null, "câmera inválida: " + id);
+            try {
+                new CameraProtocol.Camera(manifest.id, id,
+                        value(definition.projection, "orthographic"),
+                        value(definition.source, "world"),
+                        value(definition.anchor, "player"),
+                        value(definition.orientation, "north"),
+                        definition.resolution, definition.radius,
+                        definition.updateTicks, value(definition.output, "texture"));
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("câmera " + id + ": " + error.getMessage(), error);
+            }
+        }
+    }
+
+    private static String value(String value, String fallback) {
+        return value == null ? fallback : value;
     }
 
     private void validateCommands(ModManifest manifest) {

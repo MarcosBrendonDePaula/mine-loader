@@ -56,6 +56,9 @@ public class LuaLoaderClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.Keybinds.ID,
                 (payload, context) -> context.client().execute(
                         () -> KeybindClient.set(payload.version(), payload.definitions())));
+        ClientPlayNetworking.registerGlobalReceiver(ScreenPayloads.Cameras.ID,
+                (payload, context) -> context.client().execute(
+                        () -> CameraClient.set(payload.version(), payload.definitions())));
 
         // Antes do HUD: uma especie sem desenhista e invisivel, e o aviso precisa sair cedo o
         // bastante para nao se perder no meio do log de carga.
@@ -111,6 +114,11 @@ public class LuaLoaderClient implements ClientModInitializer {
     private static void reportScreenSize() {
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register(
                 (handler, sender, client) -> client.execute(LuaLoaderClient::sendScreenSize));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, client) -> {
+                    CameraClient.clear();
+                    TopDownMapRenderer.clear();
+                });
 
         net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register(
                 (client, screen, width, height) -> sendScreenSize());

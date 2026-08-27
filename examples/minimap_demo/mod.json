@@ -3,9 +3,9 @@
   "id": "minimap_demo",
   "name": "Minimap Demo",
   "version": "0.1.0",
-  "description": "Protótipo de minimap declarativo em HUD, com configuração persistente aberta pela tecla M.",
+  "description": "Minimap client-side com câmera ortográfica aérea de baixa resolução e configuração persistente aberta pela tecla M.",
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "player.read", "player.modify", "player.menu", "world.read", "entity.read", "server.command.register", "client.input.register"],
+  "permissions": ["chat.send", "player.read", "player.modify", "player.menu", "world.read", "entity.read", "server.command.register", "client.input.register", "client.camera.register"],
   "keybinds": [
     { "id": "toggle", "key": "key.keyboard.m", "category": "minimap_demo" }
   ],
@@ -41,6 +41,7 @@
       "entity.read": "1.0.0",
       "ui.menu": "1.0.0",
       "client.input.keybind": "1.0.0",
+      "client.camera.virtual": "1.0.0",
       "server.command.schema": "1.0.0",
       "player.data.read": "1.0.0",
       "player.data.write": "1.0.0"

@@ -61,6 +61,7 @@ public final class RuntimeContract {
         capabilities.put("ui.menu", "1.0.0");
         capabilities.put("ui.screen", "1.0.0");
         capabilities.put("client.input.keybind", "1.0.0");
+        capabilities.put("client.camera.virtual", "1.0.0");
         capabilities.put("resources.pack", "1.0.0");
         STANDARD_CAPABILITIES = Map.copyOf(capabilities);
     }

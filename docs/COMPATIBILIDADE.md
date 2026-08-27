@@ -16,6 +16,7 @@ A promessa do MineLoader é que o mod declarativo dependa do contrato do loader,
 | Eventos, comandos e scheduler | sim | sim | sim | sim |
 | Schemas de comandos e autocomplete | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual |
 | `map` no HUD: grelha, máscara, radar e waypoints | sim, bridge + core; visual manual | sim, bridge + core; visual manual | sim, bridge + core; visual manual | sim, bridge + core; visual manual |
+| Câmera virtual `client_camera`: contrato, catálogo e textura aérea | sim, bridge compilado; visual manual pendente | sim, bridge compilado; visual manual pendente | sim, bridge compilado; visual manual pendente | sim, bridge compilado; visual manual pendente |
 | Inventário e block data | sim | sim | sim | sim |
 | Leitura de potência redstone | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge |
 | Estado de bloco (`block_state`/`set_block_state`) | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |
@@ -48,7 +49,7 @@ As linhas de OBJ, renderer de entidades, cores de ovos, reparação e partícula
 | `:runtimes:neoforge:1.21.1:runGameTestServer` | 22/22 testes obrigatórios passaram |
 | `:runtimes:neoforge:1.21.4:runGameTestServer` | 22/22 testes obrigatórios passaram |
 
-Os testes usam os mesmos exemplos em `examples/`, sincronizados para cada diretório de jogo. Eles cobrem registro, propriedades declaradas, inventários, persistência, automação, eventos, fila de ticks, leitura de redstone, tags, ovos e herança. **Eles são testes de servidor:** não conseguem verificar pixels, iluminação, modelos na mão do jogador, telas client-side ou qualidade visual.
+Os testes usam os mesmos exemplos em `examples/`, sincronizados para cada diretório de jogo. Eles cobrem registro, propriedades declaradas, inventários, persistência, automação, eventos, fila de ticks, leitura de redstone, tags, ovos e herança. **Eles são testes de servidor:** não conseguem verificar pixels, iluminação, modelos na mão do jogador, câmeras, texturas, telas client-side ou qualidade visual. A câmera virtual exige ainda uma sessão manual nos quatro bridges para confirmar rasterização, escala, movimento, troca de dimensão e custo.
 
 ## O que significa “mesmo mod”
 

@@ -46,9 +46,9 @@ atributos. Veja `GUIA_DO_MOD.md`. Exemplos de `requires` estão em `docs/example
 Máquina com inventário próprio, baú customizado, loja com menu, painel com HUD, catálogo de itens,
 mod de economia, sistema de missões, chefe de masmorra equipado, estrutura que se constrói ao
 clicar, bloco que reage e guarda estado, item com comportamento próprio, e conteúdo declarado com
-textura, modelo, receita, loot e tag. O exemplo `minimap_demo` acrescenta um minimapa 2D funcional
-com cache incremental, radar, waypoint persistente e configuração; os detalhes ficam em
-[MINIMAP.md](MINIMAP.md).
+textura, modelo, receita, loot e tag. O exemplo `minimap_demo` acrescenta um minimapa funcional
+com câmera lógica aérea client-side de baixa resolução, radar, waypoint persistente e configuração;
+os detalhes ficam em [MINIMAP.md](MINIMAP.md).
 
 ## O que ainda não dá
 
@@ -63,7 +63,7 @@ mais surpreendem quem esbarra nelas.
 | `spawn_entity`, `damage_entity`, `heal_entity` | mover uma entidade |
 | `mod.after`, que dispara uma vez | repetir a cada N tiques, e cancelar |
 | `play_sound_to`, direcionado a um jogador | partícula direcionada |
-| `map` no HUD, com grelha e marcadores | mapa-múndi persistente, texturas de blocos e navegação integrada |
+| `map` no HUD, com grelha, marcadores e câmera aérea v1 | mapa-múndi persistente, texturas completas de blocos e navegação integrada |
 
 ### Estado de bloco — fechado
 

@@ -49,6 +49,7 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
         // As entidades desenhadas apontam para o mundo em que foram criadas; sair dele as invalida.
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
             KeybindClient.clear();
+            CameraClient.clear();
             NeoForgeScreenRenderer.forgetEntities();
         });
     }
@@ -138,5 +139,10 @@ public final class NeoForgeLuaLoaderClient implements NeoForgeScreenNetwork.Clie
     @Override
     public void setKeybinds(int version, String definitions) {
         KeybindClient.set(version, definitions);
+    }
+
+    @Override
+    public void setCameras(int version, String definitions) {
+        CameraClient.set(version, definitions);
     }
 }

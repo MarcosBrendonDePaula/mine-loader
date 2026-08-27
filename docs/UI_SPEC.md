@@ -594,16 +594,17 @@ O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `
 
 ## Elemento `map`
 
-`map` é uma primitiva de HUD para dados cartográficos já amostrados pelo mod. Não lê chunks no
-cliente, não aceita código e não conhece classes de Minecraft no core. O mod envia `columns * rows`
-cores em `cells`, e o bridge desenha a grelha, a moldura, a forma `round`/`square`, a bússola e os
-marcadores normalizados.
+`map` é uma primitiva de HUD cartográfica. O modo padrão, `server_cells`, transporta uma grelha de
+cores já amostrada pelo mod. Os modos `client_topdown` e `client_camera` deixam a amostragem da
+superfície para o bridge client-side, que actualiza uma textura pequena a partir dos chunks que o
+cliente já recebeu. Nenhum modo aceita código client-side ou classes de Minecraft no core.
 
 ```lua
 {
-    type = "map", anchor = "top_right", x = 4, y = 4, w = 150, h = 150,
-    columns = 25, rows = 25, cells = cores, round = true,
-    direction_x = 1, direction_z = 0,
+    type = "map", anchor = "top_right", x = -4, y = 4, w = 120, h = 120,
+    render = "client_camera", camera = "meu_mod:minimap",
+    -- resolution/radius/update_ticks opcionais: herdam da câmera quando omitidos.
+    round = true,
     markers = {
         { type = "player", x = 0.5, z = 0.5, color = "#F5D547" },
         { type = "waypoint", label = "Casa", x = 0.8, z = 0.2, color = "#55FF55" }
@@ -611,10 +612,22 @@ marcadores normalizados.
 }
 ```
 
-O elemento permite até 64 colunas, 64 linhas e 4096 células por payload. Um marcador pode ser
-`player`, `waypoint` ou `entity`; `x` e `z` ficam entre 0 e 1. O contrato não promete textura de
-bloco, iluminação ou mapa-múndi: essas são decisões do mod que produz as cores, enquanto a máscara e
-a composição visual são responsabilidades do cliente.
+| Campo | Regra |
+|---|---|
+| `render` | `server_cells`, `client_topdown` ou `client_camera`; por defeito `server_cells`. |
+| `camera` | Obrigatório e qualificado em `client_camera`, por exemplo `meu_mod:minimap`. |
+| `resolution` | Override de 16 a 192 pixels; omitido herda da câmera no modo `client_camera`. |
+| `radius` | Override de 8 a 96 blocos; omitido herda da câmera no modo `client_camera`. |
+| `update_ticks` | Override de 1 a 40; omitido herda da câmera no modo `client_camera`. |
+| `columns`, `rows`, `cells` | Usados pelo `server_cells`, até 64 × 64 e 4096 células. Nos modos client-side, as células são vazias. |
+| `markers` | Até 64 `player`, `waypoint` ou `entity`; `x` e `z` ficam entre 0 e 1. |
+
+Uma câmera é registada pelo contrato `client.camera.virtual: 1.0.0`, no manifesto ou com
+`mod.camera("id", definição)`. O modder escolhe um ID curto; o loader qualifica-o com o namespace do
+mod. O bridge gere o recurso físico e o estado por ID, sem expor `Identifier`, `NativeImage`,
+framebuffer ou OpenGL ao Lua. A câmera v1 é ortográfica, de mundo, ancorada no jogador e produz uma
+textura; não é uma segunda passagem 3D geral nem promete iluminação, modelos de bloco completos ou
+mapa-múndi persistente.
 
 ## Tamanho dos elementos
 

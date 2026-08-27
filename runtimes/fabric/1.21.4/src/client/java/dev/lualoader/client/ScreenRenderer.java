@@ -259,8 +259,14 @@ public final class ScreenRenderer {
         context.fill(x - 3, y - 3, x + width + 3, y + height + 3, 0xD90A0E14);
         context.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF53606B);
 
+        boolean textured = "client_topdown".equals(element.mapRender())
+                || "client_camera".equals(element.mapRender());
+        if (textured) {
+            TopDownMapRenderer.draw(context, element, x, y);
+        }
+
         List<ScreenModel.MapCell> cells = element.mapCells();
-        for (int row = 0; row < rows; row++) {
+        if (!textured) for (int row = 0; row < rows; row++) {
             for (int column = 0; column < columns; column++) {
                 double cellCenterX = x + (column + 0.5) * width / columns;
                 double cellCenterY = y + (row + 0.5) * height / rows;

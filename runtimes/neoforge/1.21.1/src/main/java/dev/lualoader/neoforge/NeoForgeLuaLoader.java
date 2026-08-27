@@ -380,6 +380,12 @@ public class NeoForgeLuaLoader {
                 dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendKeybinds(player);
             }
         });
+        runtime.onCamerasChanged(() -> {
+            if (currentServer == null) return;
+            for (var player : currentServer.getPlayerList().getPlayers()) {
+                dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendCameras(player);
+            }
+        });
 
         // O loader esta pronto quando os scripts carregaram e os comandos existem. No Fabric este
         // evento sai da inicializacao do mod; aqui o runtime so nasce com o servidor, entao o
@@ -408,6 +414,7 @@ public class NeoForgeLuaLoader {
         if (runtime == null) return;
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
         dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendKeybinds(player);
+        dev.lualoader.neoforge.network.NeoForgeScreenNetwork.sendCameras(player);
         runtime.triggerAll("player_joined", new NeoForgePlayerHandle(player));
     }
 

@@ -198,6 +198,24 @@ public final class NeoForgeScreenPayloads {
         }
     }
 
+    /** Catálogo de câmeras lógicas que o servidor publicou para este cliente. */
+    public record Cameras(int version, String definitions)
+            implements CustomPacketPayload {
+        public static final Type<Cameras> TYPE =
+                new Type<>(channel(dev.lualoader.camera.CameraProtocol.CHANNEL_SET));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, Cameras> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, Cameras::version,
+                        ByteBufCodecs.STRING_UTF8, Cameras::definitions,
+                        Cameras::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Evento cliente -> servidor: uma hotkey qualificada foi pressionada. */
     public record KeybindEvent(int version, String qualifiedId)
             implements CustomPacketPayload {

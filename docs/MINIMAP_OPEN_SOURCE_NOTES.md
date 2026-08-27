@@ -18,9 +18,9 @@ O repositório é público e organiza código comum e adapters separados para Fa
 
 A principal ideia aproveitável é uma pipeline em camadas: dados de chunks actualizados incrementalmente, cache persistente por mundo/dimensão, textura dinâmica actualizada em background e uma camada de composição que desenha moldura, jogador, entidades e waypoints. O código usa APIs internas e diferenças de plataforma; o MineLoader deve absorver isso nos bridges e expor ao Lua apenas dados serializáveis/contratos versionados.
 
-## Decisão provisória
+## Decisão de arquitectura
 
-Usar JustMap como referência de decomposição de módulos e VoxelMap como referência de pipeline/caching/UX. Não copiar código, assets ou APIs de plataforma. A primeira evolução do `minimap_demo` deve priorizar: mapa topográfico incremental, cache por dimensão, orientação/configuração consistente, marcador do jogador, waypoints declarativos, radar com filtros e renderização client-side em uma superfície neutra comum às quatro versões.
+Usar JustMap como referência de decomposição de módulos e VoxelMap como referência de pipeline/caching/UX. Não copiar código, assets ou APIs de plataforma. A implementação própria do MineLoader separa contrato no core, catálogo S2C, captura no bridge, textura dinâmica e composição de radar/waypoints. A primeira câmera é ortográfica, aérea, de baixa resolução e ancorada no jogador; não é uma câmera 3D arbitrária nem uma segunda passagem completa do `WorldRenderer` por frame.
 
 ## Padrão observado no cache de chunks
 
@@ -41,15 +41,15 @@ Fontes de código:
 
 ## Estado actual do MineLoader
 
-O `minimap_demo` já usa uma boa ideia de primeira fase: cache de colunas partilhado, aquecimento em espiral, orçamento de leituras por actualização, expiração de colunas antigas, classificação simples de blocos, sombreado por diferença de altura e compressão de células em faixas horizontais para respeitar o limite de elementos do HUD. O ponto fraco é que o mapa ainda é uma aproximação por cores e faixas; não tem cache por dimensão, textura de tiles, rotação visual, moldura/recorte, waypoints ou radar real.
+O `minimap_demo` deixou de rasterizar o terreno no Lua. O servidor mantém apenas a lógica por jogador, radar, waypoints, coordenadas e configuração. O Lua regista `mod.camera("minimap", definição)`, o loader qualifica o ID como `minimap_demo:minimap` e o catálogo versionado é publicado aos clientes.
 
-A próxima versão deve conservar o orçamento e o cache incremental, mas mover a composição rica para client-side. O servidor deve continuar a enviar apenas snapshots de dados portáveis (células, jogador, entidades, waypoints e configuração), enquanto cada bridge desenha o mesmo modelo visual com as APIs locais.
+Cada bridge mantém o estado da textura por ID qualificado, deriva um recurso físico privado e rasteriza uma imagem pequena a partir da superfície disponível no cliente. O custo actual é limitado por resolução e intervalo, mas ainda é uma implementação simples de amostragem: não há mapa-múndi persistente, streaming de tiles, actualização incremental por chunk ou renderização de modelos completos.
 
 ## Limite actual do HUD do MineLoader
 
-Fabric e NeoForge têm renderers equivalentes que recebem um `ScreenModel` textual com elementos genéricos e desenham rectângulos, texto e ícones através do renderer de telas. O HUD não captura input e é escondido quando há uma tela aberta ou o HUD vanilla está oculto. A API actual não possui uma primitiva de mapa rasterizado, recorte circular, rotação, textura dinâmica ou camada de ícones posicionados por coordenadas do mundo.
+Fabric e NeoForge têm renderers equivalentes que recebem um `ScreenModel` textual com elementos genéricos e desenham rectângulos, texto, ícones e o elemento `map`. O HUD não captura input e é escondido quando há uma tela aberta ou o HUD vanilla está oculto. A textura aérea é dinâmica e privada do bridge; o core só transporta a referência lógica da câmera, parâmetros limitados e marcadores.
 
-Conclusão de desenho: não é suficiente aumentar o número de faixas Lua. Para uma melhoria real e eficiente, convém introduzir um modelo neutro de `MapHud` no core/protocolo e dois renderers equivalentes por plataforma, mantendo a captura de mundo e o orçamento fora do cliente. O protocolo deve transportar uma grelha compacta de células e elementos sem expor classes Minecraft.
+Conclusão de desenho: não era suficiente aumentar o número de faixas Lua. O caminho adoptado foi um contrato `CameraProtocol` versionado, catálogo S2C, validação de permissão/capability, estado por ID qualificado e quatro implementações equivalentes de rasterização. A grelha `server_cells` continua como fallback e compatibilidade.
 
 ## Protocolo neutro existente
 
@@ -63,12 +63,28 @@ O renderer Fabric/NeoForge já sabe desenhar painéis, imagens, itens, entidades
 
 ## Decisão de integração
 
-A evolução será feita como um novo tipo de elemento `map` dentro do protocolo HUD existente. O core continuará responsável apenas por validar e serializar uma definição fechada: largura/altura visual, grelha de cores, escala, forma, posição do jogador, norte, waypoints e entidades. O servidor Lua constrói esse snapshot a partir de `top_y`, `get_block`, `entities_near` e `player.data`; o cliente apenas desenha.
+A câmera foi integrada como um novo contrato lógico usado pelo elemento `map`. O core valida e serializa somente `projection`, `source`, `anchor`, `orientation`, resolução, raio, intervalo e saída. O Lua pode declarar a câmera no manifesto ou criá-la dinamicamente; se manifesto e Lua usarem o mesmo ID, definições divergentes falham. O servidor envia marcadores e configuração, não blocos ou pixels.
 
-Nos bridges, Fabric usará `DrawContext` e NeoForge usará `GuiGraphics`, mantendo a mesma geometria e os mesmos dados. O mapa será um único elemento, não centenas de painéis. Isso reduz o payload e permite máscara circular, moldura, sombreado, marcador do jogador, waypoints e radar numa rotina dedicada.
+Nos bridges, Fabric usa `DrawContext` e NeoForge usa `GuiGraphics`, mantendo a mesma geometria. A imagem é uma textura pequena por câmera, não centenas de painéis e não uma chamada completa do pipeline 3D. O bridge absorve `NativeImage`, `DynamicTexture`, `BlockColors`, altura e registro da textura; essas classes não atravessam o core.
 
-Fora do escopo desta primeira evolução ficam mapa-múndi persistente, leitura de chunks fora do raio por threads próprias e compatibilidade com JourneyMap/Xaero. A API continuará a ser MineLoader, não um clone das classes internas de outros mods.
+Fora do escopo desta primeira evolução ficam mapa-múndi persistente, leitura forçada de chunks remotos, tiles em background, entidades renderizadas na captura e compatibilidade com JourneyMap/Xaero. A API continua a ser MineLoader, não um clone das classes internas de outros mods.
 
 ## Licenciamento e limites de reutilização
 
 A cópia local do JustMap contém `LICENSE` com LGPL-3.0. A cópia local do VoxelMap Updated não contém um ficheiro de licença no topo do repositório, pelo que não é tratada como fonte de código ou assets reutilizáveis. O MineLoader não incorpora código, texturas, sprites ou nomes de classes desses projectos; apenas aplica padrões de arquitectura observados, com implementação própria e API própria.
+
+## Referência adicional: MapWriter
+
+Fonte: https://github.com/daveyliam/mapwriter
+
+O MapWriter é público, contém `LICENSE` MIT e descreve-se como minimapa open source. A árvore é histórica (última actividade visível em 2019 e voltada para versões antigas), portanto não será usado como dependência. A página e os acknowledgements mostram uma separação entre overlay, mapa e texturas de moldura/seta; a lição relevante é que a apresentação é uma camada própria e não deve ser confundida com a captura dos dados.
+
+A ideia de uma “câmera de cima” merece uma distinção: uma segunda câmera ortográfica que renderiza o mundo inteiro num framebuffer parece simples, mas em Minecraft exigiria repetir o pipeline client-side de chunks, entidades, iluminação, culling e texturas num alvo off-screen. Isso é caro e atravessa APIs específicas de cada versão. Para o MineLoader, a abordagem segura é uma captura client-side de baixa resolução baseada nos chunks já carregados, com cache de tiles e textura dinâmica; não uma entidade-câmera exposta ao core.
+
+A inspeção adicional do JustMap encontrou `ExtendedFramebuffer`, `Image` com `NativeImage` e renderizadores próprios. Isso confirma que uma apresentação rica pode usar uma textura dinâmica/target separado, mas também confirma o custo de manter um framebuffer e o estado de renderização entre versões. A primeira implementação de captura aérea deve encapsular isso exclusivamente no client bridge e ter fallback para a grelha server-side se o alvo não puder ser criado.
+
+## Decisão final para captura aérea
+
+A leitura dos métodos do VoxelMap confirmou o padrão mais eficiente: uma imagem dinâmica actualizada por deslocamento, mudança de intervalo ou alteração de estado relevante, com upload apenas quando necessário. O mapa é uma textura rasterizada, não uma segunda câmera que repete o `WorldRenderer` inteiro a cada frame.
+
+No MineLoader, `map_render = "client_camera"` referencia um ID qualificado publicado pelo catálogo `CameraProtocol`. `map_resolution`, `map_radius` e `map_update_ticks` são overrides opcionais; quando omitidos, herdam da câmera. `server_cells` continua como fallback e compatibilidade, e `client_topdown` fica como modo legado sem catálogo. A implementação não passa `Framebuffer`, `RenderSystem`, `Camera`, `NativeImage` ou `BlockState` pelo core.

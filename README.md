@@ -146,7 +146,7 @@ O Lua recebe tabelas e escalares simples. Classes Java, referências vivas do Mi
 | Jogador | nome, UUID, mensagens, mira, dados persistentes, inventário e operações declaradas |
 | Conteúdo | blocos, itens, entidades, spawn eggs, tags, loot, estruturas, processos e herança declarativa |
 | Eventos | ciclo de vida, ticks, jogador, blocos, itens, entidades, cliente e menus |
-| Interface | menus, telas, HUD, sobreposições e protocolo fechado servidor-cliente |
+| Interface | menus, telas, HUD, sobreposições, mapas e protocolo fechado servidor-cliente |
 | Comandos | `commands` no `mod.json` + `mod.command`/`mod.command_extend` no Lua; schema tipado com autocomplete |
 | Bibliotecas | `mod.require()` para exports Lua de outro mod declarado em `dependencies` |
 | Contrato | `requires.domains` e `requires.capabilities` com versões do MineLoader |
@@ -173,13 +173,13 @@ A pasta [examples/](examples/) contém mods usados pela bateria de GameTests e p
 | `gerenciador` | Catálogo, activação e instalação por link |
 | `bestiario` | Entidades declaradas, variantes e herança |
 | `logistica` | Rede de canos e entrega de itens |
-| `minimap_demo` | Minimapa 2D no HUD, com cache por dimensão, grelha compacta, recorte redondo, radar, waypoint persistente, configuração e comando estruturado no manifesto |
+| `minimap_demo` | Minimapa no HUD com câmera ortográfica aérea client-side de baixa resolução, textura por ID lógico, radar, waypoint persistente, configuração e comando estruturado no manifesto |
 
 Os exemplos documentais de capabilities, domínios e bibliotecas entre mods ficam separados em [docs/examples/](docs/examples/), para não serem carregados pela bateria de GameTests.
 
 ### Testar o `minimap_demo`
 
-O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D no HUD, classifica a superfície por cor, marca o centro do jogador e mostra coordenadas e dimensão. O exemplo actualiza o cache e o HUD automaticamente pelo agendador do servidor; a tecla `M` abre a UI de configuração sem executar código Lua no cliente.
+O `minimap_demo` demonstra o elemento `map` com `render = "client_camera"`. A câmera lógica é registada pelo Lua com `mod.camera("minimap", definição)`; o loader qualifica o ID como `minimap_demo:minimap` e cada bridge gere uma textura física privada. A captura é uma rasterização aérea pequena da superfície client-side, não uma segunda cena 3D completa por frame. Radar, waypoints, coordenadas e configuração continuam a ser dados server-side; a tecla `M` abre a UI sem executar Lua no cliente. Consulte [docs/MINIMAP.md](docs/MINIMAP.md) para limites e verificação.
 
 ```bash
 ./gradlew :runtimes:fabric:1.21.1:linkModsLua

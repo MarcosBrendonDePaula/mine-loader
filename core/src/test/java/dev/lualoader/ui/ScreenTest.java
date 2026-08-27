@@ -1607,4 +1607,57 @@ class ScreenTest {
         assertEquals(List.of("false"), bridge.calls);
         assertNull(player.hudJson);
     }
+
+    @Test
+    void clientCameraMapRequiresAQualifiedReference(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local sem_camera = pcall(function()
+                        ctx.player.set_hud({ { type = "map", render = "client_camera",
+                            w = 96, h = 96 } })
+                    end)
+                    local ok = ctx.player.set_hud({ { type = "map", render = "client_camera",
+                        camera = "ui_mod:minimap", w = 96, h = 96 } })
+                    ctx.server.broadcast(tostring(sem_camera) .. "|" .. tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("false|true"), bridge.calls);
+        assertTrue(player.hudJson.contains("\"map_render\":\"client_camera\""), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_camera\":\"ui_mod:minimap\""), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_cells\":[]"), player.hudJson);
+    }
+
+    @Test
+    void clientTopdownMapUsesAClosedLowResolutionContract(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = ctx.player.set_hud({
+                        { type = "map", render = "client_topdown", w = 96, h = 96,
+                          resolution = 64, radius = 40, update_ticks = 6, rotate = "player",
+                          markers = { { type = "player", x = 0.5, z = 0.5 } } }
+                    })
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("true"), bridge.calls);
+        assertTrue(player.hudJson.contains("\"map_render\":\"client_topdown\""), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_resolution\":64"), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_radius\":40"), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_update_ticks\":6"), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_rotate\":\"player\""), player.hudJson);
+    }
 }

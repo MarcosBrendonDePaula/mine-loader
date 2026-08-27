@@ -80,9 +80,9 @@ registrada na seção "O que a auditoria encontrou".
 - [ ] Auditoria: registro do que cada mod fez com permissão sensível
 - [ ] Quarentena: mod que falha repetidamente é desligado sozinho
 
-As quatorze permissões: `chat.send`, `server.read`, `server.command.register`, `world.read`,
-`world.write`, `world.containers`, `entity.read`, `entity.spawn`, `entity.modify`, `player.read`,
-`player.modify`, `player.inventory`, `player.menu`, `player.move`.
+As permissões incluem `chat.send`, `server.read`, `server.command.register`, `client.input.register`,
+`client.camera.register`, `world.read`, `world.write`, `world.containers`, `entity.read`, `entity.spawn`,
+`entity.modify`, `player.read`, `player.modify`, `player.inventory`, `player.menu` e `player.move`.
 
 ## 3. Conteúdo declarável
 
@@ -252,13 +252,14 @@ lugar nenhum.
 
 - [x] Menu com slots reais, sobre a tela de baú do jogo
 - [x] Tela desenhada, descrita em dados — dez tipos de elemento
-- [x] HUD genérico e elemento `map` com grelha compacta, máscara, radar e waypoints — visual manual ainda pendente
+- [x] HUD genérico e elemento `map` com grelha, câmera aérea client-side, radar e waypoints — visual manual ainda pendente
 - [x] Sobreposição de tela do jogo — onze alvos
 - [x] Vocabulário fechado de ações, elementos, âncoras e alvos
 - [x] Eventos do cliente: tela do jogo aberta e fechada
 - [x] Diagnóstico de tela (`dump_screen`) — posições resolvidas e colisões
 - [ ] Botão e campo de texto dentro de um viewport — hoje recusado: widget não rola
 - [x] Evento de tecla, com atalho declarado no manifesto (`client.input.keybind`)
+- [x] Câmera virtual lógica, catálogo versionado e rasterização aérea leve nos quatro bridges — pixels, FPS, máscara e rotação ainda exigem teste manual
 - [x] Schema declarativo de comandos no JSON/Lua, merge determinístico, argumentos tipados e autocomplete (`server.command.schema`)
 - [x] Geometria e ancoragem no núcleo, compartilhadas entre as plataformas
 - [x] Recusa explícita quando a plataforma não suporta (`supports_screens`)

@@ -42,7 +42,9 @@ public final class ScreenModel {
                           List<MapCell> mapCells, List<MapMarker> mapMarkers,
                           int mapColumns, int mapRows,
                           double mapDirectionX, double mapDirectionZ,
-                          boolean mapRound, boolean mapGrid, String mapNorth) {
+                          boolean mapRound, boolean mapGrid, String mapNorth,
+                          String mapRender, int mapResolution, int mapRadius,
+                          int mapUpdateTicks, String mapRotate, String mapCamera) {
     }
 
     private final String title;
@@ -195,7 +197,13 @@ public final class ScreenModel {
                     integer(element, "map_columns", 0), integer(element, "map_rows", 0),
                     decimal(element, "map_direction_x", 0.0), decimal(element, "map_direction_z", 0.0),
                     bool(element, "map_round", false), bool(element, "map_grid", false),
-                    text(element, "map_north", "N")));
+                    text(element, "map_north", "N"),
+                    text(element, "map_render", "server_cells"),
+                    integer(element, "map_resolution", 0),
+                    integer(element, "map_radius", 0),
+                    integer(element, "map_update_ticks", 0),
+                    text(element, "map_rotate", "north"),
+                    text(element, "map_camera", "")));
         }
         return list;
     }

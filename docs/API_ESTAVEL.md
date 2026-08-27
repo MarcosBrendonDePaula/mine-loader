@@ -23,6 +23,7 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.server.set_weather(kind, duration)` | `world.write` | Altera o clima por uma duração em ticks | quatro runtimes |
 | `ctx.player.data.{get,has,set,remove}` | `player.read`/`player.modify` | Dados persistentes no escopo jogador + mod | core e runtimes |
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
+| `mod.camera(id, definição)` | `client.camera.register` e `client.camera.virtual` | Câmera lógica ortográfica, publicada como catálogo S2C versionado; o bridge gere a textura | quatro runtimes |
 | `commands` no JSON + `mod.command`/`mod.command_extend` no Lua | `server.command.register` e `server.command.schema` | Árvore tipada, autocomplete e `ctx.command.arguments`, com merge que recusa conflitos | quatro runtimes |
 
 A hora e o clima **já fazem parte da API**; não são uma lacuna futura. A separação entre leitura e escrita é deliberada: consultar um mundo não deve conceder a um mod a capacidade de alterar o relógio, o clima ou as regras administrativas.
@@ -164,11 +165,11 @@ O Lua recebe tabelas e escalares simples. Ele não recebe objetos Java, referên
 
 ## Mapa não é uma única capability
 
-“Mapa” pode significar três coisas diferentes. A consulta física do mundo já inclui bloco, estado, bioma, luz, altura, clima e redstone. Navegação inclui posição, raycast, teleporte e dimensão. Cartografia inclui waypoints e marcadores próprios.
+“Mapa” pode significar três coisas diferentes. A consulta física do mundo já inclui bloco, estado, bioma, luz, altura, clima e redstone. Navegação inclui posição, raycast, teleporte e dimensão. Cartografia inclui waypoints, marcadores próprios e uma imagem aérea client-side.
 
-O elemento `map` do HUD já fornece a camada de apresentação: recebe uma grelha compacta de cores e marcadores normalizados, e os bridges desenham a máscara e a composição. O exemplo `minimap_demo` usa essa camada com cache de colunas, radar e um waypoint `Casa` persistido por jogador. A especificação está em [MINIMAP.md](MINIMAP.md).
+O elemento `map` oferece três modos. `server_cells` recebe uma grelha compacta de cores calculada pelo servidor; `client_topdown` é o modo legado sem catálogo; `client_camera` referencia uma câmera lógica qualificada, publicada pelo contrato `client.camera.virtual: 1.0.0`. Nos dois modos client-side, o bridge rasteriza uma imagem pequena a partir dos chunks disponíveis, sem uma segunda passagem 3D geral por frame. A especificação completa está em [MINIMAP.md](MINIMAP.md).
 
-O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa. Uma futura API geral de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
+O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa. A câmera v1 não expõe framebuffer, OpenGL, `NativeImage`, `Identifier` ou nomes de textura ao Lua. Uma futura API geral de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
 
 Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige definir céu, bioma, geração, altura, respawn e acesso. Não é correto prometer `teleport_dimension` ou dimensão declarativa completa antes de existir um schema fechado e GameTests para mundos novos.
 

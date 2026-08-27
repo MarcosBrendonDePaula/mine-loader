@@ -34,6 +34,18 @@ public final class MapHudProtocol {
     /** Formas comuns de recorte, sem textura específica de uma plataforma. */
     public static final Set<String> SHAPES = Set.of("square", "round");
 
+    /** Fontes de imagem suportadas pelo elemento. */
+    public static final Set<String> RENDER_MODES = Set.of("server_cells", "client_topdown", "client_camera");
+
+    /** Resolução máxima da textura aérea client-side. */
+    public static final int MAX_CLIENT_RESOLUTION = 192;
+
+    /** Raio máximo do mundo representado pela textura aérea. */
+    public static final int MAX_CLIENT_RADIUS = 96;
+
+    /** Intervalo máximo entre actualizações client-side, em ticks. */
+    public static final int MAX_CLIENT_UPDATE_TICKS = 40;
+
     /** Classes de marcador que os renderers entendem. */
     public static final Set<String> MARKER_TYPES = Set.of("waypoint", "entity", "player");
 }

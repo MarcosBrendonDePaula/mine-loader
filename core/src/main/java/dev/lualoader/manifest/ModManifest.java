@@ -34,6 +34,20 @@ public final class ModManifest {
         public List<String> modifiers = new ArrayList<>();
     }
 
+    /** Câmeras lógicas estáticas publicadas antes de executar o entrypoint Lua. */
+    public Map<String, CameraDefinition> cameras = new LinkedHashMap<>();
+
+    public static final class CameraDefinition {
+        public String projection = "orthographic";
+        public String source = "world";
+        public String anchor = "player";
+        public String orientation = "north";
+        public int resolution = 96;
+        public int radius = 48;
+        public int updateTicks = 5;
+        public String output = "texture";
+    }
+
     /** Comandos estáticos que o loader publica antes de executar o entrypoint Lua. */
     public Map<String, CommandDefinition> commands = new LinkedHashMap<>();
 

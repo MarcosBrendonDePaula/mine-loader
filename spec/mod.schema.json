@@ -59,6 +59,8 @@
           "player.modify",
           "server.read",
           "server.command.register",
+          "client.input.register",
+          "client.camera.register",
           "world.read",
           "world.write",
           "world.containers",
@@ -84,6 +86,17 @@
           "player_joined",
           "tick"
         ]
+      }
+    },
+    "cameras": {
+      "type": "object",
+      "description": "Câmeras lógicas client-side; o bridge gere a textura física.",
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/cameraDefinition"
       }
     },
     "commands": {
@@ -150,6 +163,50 @@
     }
   },
   "$defs": {
+    "cameraDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projection": {
+          "const": "orthographic",
+          "default": "orthographic"
+        },
+        "source": {
+          "const": "world",
+          "default": "world"
+        },
+        "anchor": {
+          "const": "player",
+          "default": "player"
+        },
+        "orientation": {
+          "enum": ["north", "player"],
+          "default": "north"
+        },
+        "resolution": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 192,
+          "default": 96
+        },
+        "radius": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 96,
+          "default": 48
+        },
+        "update_ticks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40,
+          "default": 5
+        },
+        "output": {
+          "const": "texture",
+          "default": "texture"
+        }
+      }
+    },
     "commandDefinition": {
       "type": "object",
       "additionalProperties": false,
