@@ -1544,4 +1544,67 @@ class ScreenTest {
         runtime.triggerAll("player_joined", player);
         assertEquals("ui_mod:ok", player.screenId);
     }
+    @Test
+    void mapIsSerializedAsOneRichHudElement(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local cells = {
+                        "#2B5D9AFF", "#3D8A52FF", "#D8B45AFF",
+                        "#53606BFF", "#F5D547FF", "#6B4E2EFF",
+                        "#20242CFF", "#8B6A43FF", "#28A0B8FF"
+                    }
+                    local ok = ctx.player.set_hud({
+                        { type = "map", x = 4, y = 4, w = 96, h = 96,
+                          columns = 3, rows = 3, cells = cells,
+                          round = true, grid = true,
+                          direction_x = 1, direction_z = 0,
+                          markers = {
+                              { type = "player", x = 0.5, z = 0.5, color = "#F5D547" },
+                              { type = "waypoint", label = "Casa", x = 0.8, z = 0.2,
+                                color = "#55FF55" }
+                          }
+                        }
+                    })
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("true"), bridge.calls);
+        assertTrue(player.hudJson.contains("\"type\":\"map\""), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_columns\":3"), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_rows\":3"), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_cells\""), player.hudJson);
+        assertTrue(player.hudJson.contains("\"map_markers\""), player.hudJson);
+        assertTrue(player.hudJson.contains("Casa"), player.hudJson);
+    }
+
+    @Test
+    void mapWithWrongCellCountIsRefused(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        TestPlayer player = new TestPlayer();
+        LuaRuntime runtime = runtime(bridge);
+
+        runtime.load(writeMod(root, """
+                mod.on("player_joined", function(ctx)
+                    local ok = pcall(function()
+                        ctx.player.set_hud({
+                            { type = "map", w = 64, h = 64, columns = 2, rows = 2,
+                              cells = { "#FF0000", "#00FF00", "#0000FF" } }
+                        })
+                    end)
+                    ctx.server.broadcast(tostring(ok))
+                end)
+                """));
+
+        runtime.triggerAll("player_joined", player);
+
+        assertEquals(List.of("false"), bridge.calls);
+        assertNull(player.hudJson);
+    }
 }

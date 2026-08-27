@@ -155,6 +155,7 @@ public final class NeoForgeScreenRenderer {
                 // O recorte e a moldura sao feitos por quem hospeda a superficie, que conhece o
                 // deslocamento da rolagem. Aqui o viewport em si nao desenha nada.
             }
+            case "map" -> map(graphics, font, element, x, y);
             case "image" -> {
                 ResourceLocation texture = ResourceLocation.tryParse(element.texture());
                 if (texture != null) {
@@ -260,6 +261,112 @@ public final class NeoForgeScreenRenderer {
      * <p>{@code slot} e {@code inset} invertem as bordas: a sombra passa para cima, e o retângulo
      * parece afundado — é o que distingue um slot de um botão, no jogo inteiro.
      */
+    /** Desenha o mapa compacto e os seus marcadores sem criar um elemento por célula. */
+    private static void map(GuiGraphics graphics, Font font,
+                            ScreenModel.Element element, int x, int y) {
+        int width = Math.max(1, element.w());
+        int height = Math.max(1, element.h());
+        int columns = Math.max(1, element.mapColumns());
+        int rows = Math.max(1, element.mapRows());
+        int centerX = x + width / 2;
+        int centerY = y + height / 2;
+        double radiusX = width / 2.0;
+        double radiusY = height / 2.0;
+        graphics.fill(x - 3, y - 3, x + width + 3, y + height + 3, 0xD90A0E14);
+        graphics.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF53606B);
+
+        List<ScreenModel.MapCell> cells = element.mapCells();
+        for (int row = 0; row < rows; row++) {
+            for (int column = 0; column < columns; column++) {
+                double cellCenterX = x + (column + 0.5) * width / columns;
+                double cellCenterY = y + (row + 0.5) * height / rows;
+                if (element.mapRound() && !insideEllipse(cellCenterX, cellCenterY,
+                        centerX, centerY, radiusX, radiusY)) continue;
+                int position = row * columns + column;
+                if (position >= cells.size()) continue;
+                int color = cells.get(position).color();
+                if ((color >>> 24) == 0) continue;
+                int left = x + column * width / columns;
+                int top = y + row * height / rows;
+                int right = x + (column + 1) * width / columns;
+                int bottom = y + (row + 1) * height / rows;
+                graphics.fill(left, top, right, bottom, color);
+                if (element.mapGrid() && width / columns >= 3 && height / rows >= 3) {
+                    graphics.fill(left, top, right, top + 1, 0x30304050);
+                    graphics.fill(left, top, left + 1, bottom, 0x30304050);
+                }
+            }
+        }
+        if (element.mapRound()) drawEllipseCorners(graphics, x, y, width, height);
+
+        for (ScreenModel.MapMarker marker : element.mapMarkers()) {
+            int markerX = x + (int) Math.round(marker.x() * Math.max(0, width - 1));
+            int markerY = y + (int) Math.round(marker.z() * Math.max(0, height - 1));
+            if (element.mapRound() && !insideEllipse(markerX, markerY,
+                    centerX, centerY, radiusX, radiusY)) continue;
+            drawMapMarker(graphics, font, element, marker, markerX, markerY,
+                    x, y, width, height);
+        }
+        String north = element.mapNorth();
+        if (north != null && !north.isBlank()) {
+            graphics.drawString(font, Component.literal(north),
+                    centerX - font.width(north) / 2, y + 3, 0xFFFFFFFF, true);
+        }
+    }
+
+    private static boolean insideEllipse(double px, double py, double cx, double cy,
+                                         double radiusX, double radiusY) {
+        double dx = (px - cx) / Math.max(1.0, radiusX - 1.0);
+        double dy = (py - cy) / Math.max(1.0, radiusY - 1.0);
+        return dx * dx + dy * dy <= 1.0;
+    }
+
+    private static void drawEllipseCorners(GuiGraphics graphics, int x, int y, int width, int height) {
+        int right = x + width;
+        int bottom = y + height;
+        graphics.fill(x, y, x + 2, y + 2, 0xFF0A0E14);
+        graphics.fill(right - 2, y, right, y + 2, 0xFF0A0E14);
+        graphics.fill(x, bottom - 2, x + 2, bottom, 0xFF0A0E14);
+        graphics.fill(right - 2, bottom - 2, right, bottom, 0xFF0A0E14);
+    }
+
+    private static void drawMapMarker(GuiGraphics graphics, Font font,
+                                      ScreenModel.Element element, ScreenModel.MapMarker marker,
+                                      int x, int y, int mapX, int mapY,
+                                      int mapWidth, int mapHeight) {
+        int color = marker.color();
+        switch (marker.type()) {
+            case "player" -> {
+                graphics.fill(x - 3, y - 3, x + 4, y + 4, 0xCC101318);
+                graphics.fill(x - 2, y - 2, x + 3, y + 3, color);
+                double directionX = element.mapDirectionX();
+                double directionZ = element.mapDirectionZ();
+                double length = Math.sqrt(directionX * directionX + directionZ * directionZ);
+                if (length > 0.01) {
+                    int tipX = x + (int) Math.round(directionX / length * 7);
+                    int tipY = y + (int) Math.round(directionZ / length * 7);
+                    graphics.fill(tipX - 1, tipY - 1, tipX + 2, tipY + 2, color);
+                }
+            }
+            case "entity" -> {
+                graphics.fill(x - 3, y - 3, x + 4, y + 4, 0xCC101318);
+                graphics.fill(x - 2, y - 2, x + 3, y + 3, color);
+            }
+            default -> {
+                graphics.fill(x - 3, y - 3, x + 4, y + 4, 0xCC101318);
+                graphics.fill(x - 2, y - 4, x + 3, y + 3, color);
+                graphics.fill(x - 1, y - 6, x + 2, y - 3, color);
+                if (marker.label() != null && !marker.label().isBlank()) {
+                    int labelX = Math.min(mapX + mapWidth - font.width(marker.label()) - 2,
+                            Math.max(mapX + 2, x + 5));
+                    int labelY = Math.max(mapY + 2, y - 8);
+                    graphics.drawString(font, Component.literal(marker.label()), labelX, labelY,
+                            0xFFFFFFFF, true);
+                }
+            }
+        }
+    }
+
     /**
      * A janela do jogo desenhada por regra, para quem chama de fora do modelo de tela.
      *

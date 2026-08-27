@@ -75,6 +75,7 @@ Coordenadas são relativas ao canto da tela, que é centralizada. Âncora `cente
 | `input` | Campo de texto editável | digitação |
 | `grid` | Grade de itens, com colunas e passo | clique na célula |
 | `viewport` | Recorte com rolagem, para o que não cabe | roda do mouse |
+| `map` | Grelha compacta de cores com máscara e marcadores | não |
 
 Um conjunto pequeno cobre a maior parte do que um mod precisa. Elementos compostos — listas,
 abas, grades — são montados a partir desses, e podem virar tipos próprios quando o padrão aparecer.
@@ -591,6 +592,30 @@ local abriu = ctx.player.open_screen("forja", desenhar(ctx))
 
 O contexto do evento traz `ctx.ui.screen`, `ctx.ui.element`, `ctx.ui.action` e `ctx.ui.value`.
 
+## Elemento `map`
+
+`map` é uma primitiva de HUD para dados cartográficos já amostrados pelo mod. Não lê chunks no
+cliente, não aceita código e não conhece classes de Minecraft no core. O mod envia `columns * rows`
+cores em `cells`, e o bridge desenha a grelha, a moldura, a forma `round`/`square`, a bússola e os
+marcadores normalizados.
+
+```lua
+{
+    type = "map", anchor = "top_right", x = 4, y = 4, w = 150, h = 150,
+    columns = 25, rows = 25, cells = cores, round = true,
+    direction_x = 1, direction_z = 0,
+    markers = {
+        { type = "player", x = 0.5, z = 0.5, color = "#F5D547" },
+        { type = "waypoint", label = "Casa", x = 0.8, z = 0.2, color = "#55FF55" }
+    }
+}
+```
+
+O elemento permite até 64 colunas, 64 linhas e 4096 células por payload. Um marcador pode ser
+`player`, `waypoint` ou `entity`; `x` e `z` ficam entre 0 e 1. O contrato não promete textura de
+bloco, iluminação ou mapa-múndi: essas são decisões do mod que produz as cores, enquanto a máscara e
+a composição visual são responsabilidades do cliente.
+
 ## Tamanho dos elementos
 
 | Tipo | Tamanho |
@@ -613,7 +638,7 @@ A tela e desenhada em tres camadas, nesta ordem:
 | Camada | O que |
 |---|---|
 | 1 | Fundo: desfoque e escurecimento |
-| 2 | Elementos do mod: `panel`, `label`, `image`, `item`, `progress` |
+| 2 | Elementos do mod: `panel`, `label`, `image`, `item`, `progress`, `map` |
 | 3 | Widgets do jogo: `button` e `input` |
 
 A ordem e explicita porque o metodo de renderizacao do jogo repinta o fundo antes de desenhar os
@@ -716,7 +741,7 @@ tela deixaram de ser algo que so se ve no jogo.
 | Cliente com tela generica, nos dois | pronto |
 | `dump_screen` e `ScreenOverlapTest` | pronto |
 | `panel`, `label`, `progress`, `item`, `image`, `button`, `input` | pronto |
-| HUD | pronto |
+| HUD genérico e mapa compacto | pronto |
 | Deteccao de cliente sem loader | pronto |
 | Sobreposicao em tela do jogo | pronto |
 | Texto de ajuda | pronto |

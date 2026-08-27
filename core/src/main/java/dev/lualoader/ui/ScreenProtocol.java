@@ -65,7 +65,7 @@ public final class ScreenProtocol {
     /** Tipos de elemento que o renderizador entende. */
     public static final Set<String> ELEMENTS = Set.of(
             "panel", "label", "image", "item", "progress", "button", "input",
-            "grid", "viewport", "entity");
+            "grid", "viewport", "entity", "map");
 
     /**
      * Elementos que recebem interação e por isso exigem um {@code id}.

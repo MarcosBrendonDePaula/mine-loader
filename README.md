@@ -35,6 +35,7 @@ O índice em [docs/README.md](docs/README.md) organiza os documentos por públic
 | Declarar capabilities e domínios | [Exemplos de requirements](docs/examples/README.md) |
 | Ver eventos disponíveis | [Catálogo de eventos](docs/EVENTS.md) |
 | Saber o que funciona por versão | [Matriz de compatibilidade](docs/COMPATIBILIDADE.md) |
+| Estudar o minimapa declarativo | [MINIMAP.md](docs/MINIMAP.md) |
 | Instalar mods por link | [Instalação](docs/INSTALACAO.md) |
 | Trabalhar no loader | [Arquitectura](docs/ARCHITECTURE.md) e [runtimes](docs/RUNTIMES.md) |
 | Ver prioridades futuras | [API gaps](docs/API_GAPS.md) e [roadmap](docs/ROADMAP.md) |
@@ -172,7 +173,7 @@ A pasta [examples/](examples/) contém mods usados pela bateria de GameTests e p
 | `gerenciador` | Catálogo, activação e instalação por link |
 | `bestiario` | Entidades declaradas, variantes e herança |
 | `logistica` | Rede de canos e entrega de itens |
-| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, configuração, marcador, coordenadas, dimensão e comando estruturado no manifesto |
+| `minimap_demo` | Minimapa 2D no HUD, com cache por dimensão, grelha compacta, recorte redondo, radar, waypoint persistente, configuração e comando estruturado no manifesto |
 
 Os exemplos documentais de capabilities, domínios e bibliotecas entre mods ficam separados em [docs/examples/](docs/examples/), para não serem carregados pela bateria de GameTests.
 

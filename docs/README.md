@@ -28,6 +28,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 | [UI_SPEC.md](UI_SPEC.md) | Modelo de menus, telas, HUD e protocolo servidor-cliente. |
 | [HOTKEYS.md](HOTKEYS.md) | Hotkeys declarativas, manifesto, callback Lua e segurança do input client-side. |
 | [COMMANDS.md](COMMANDS.md) | Schemas declarativos de comandos, árvore Brigadier, argumentos tipados, autocomplete e migração. |
+| [MINIMAP.md](MINIMAP.md) | Minimapa declarativo com cache incremental, grelha compacta, radar, waypoints, configuração e limites honestos. |
 | [UI_HTML_DESIGN.md](UI_HTML_DESIGN.md) | Estudo da futura camada de interface por HTML/CSS; não é contrato implementado. |
 | [CONTROLES_MUNDO.md](CONTROLES_MUNDO.md) | Estado de bloco, Game Rules, dificuldade, hora, clima, mapa, dimensões e prioridades de mundo. |
 | [examples/README.md](examples/README.md) | Manifestos que demonstram capabilities, domínios e bibliotecas entre mods. |
@@ -73,7 +74,7 @@ O MineLoader é um modloader declarativo para Minecraft Java. Mods são pastas c
 
 Os documentos de API devem usar nomes exactos do Lua, distinguir leitura de escrita e indicar a permissão necessária. Uma capability só deve ser marcada como comum depois de existir no core, nas quatro bridges mantidas e nos testes correspondentes.
 
-Documentos de estudo podem conter alternativas e código ilustrativo, mas precisam indicar claramente quando uma proposta ainda não é implementada. Em particular, shaders, pipelines de renderização avançados, waypoints, teleporte entre dimensões, worldgen amplo e integrações com Iris/Sodium/Canvas não fazem parte do contrato actual.
+Documentos de estudo podem conter alternativas e código ilustrativo, mas precisam indicar claramente quando uma proposta ainda não é implementada. Em particular, shaders, pipelines de renderização avançados, mapa-múndi persistente e integrações com Iris/Sodium/Canvas não fazem parte do contrato actual. O minimapa documentado em [MINIMAP.md](MINIMAP.md) é uma demonstração funcional, não uma API de cartografia completa.
 
 A matriz de runtimes continua deliberadamente honesta: compilação server-side e GameTests não provam pixels, iluminação, modelos client-side ou shaders. A versão 1.21.4 mantém limitações visuais documentadas em [COMPATIBILIDADE.md](COMPATIBILIDADE.md).
 

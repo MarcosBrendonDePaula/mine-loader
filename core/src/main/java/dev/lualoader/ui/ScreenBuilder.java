@@ -168,6 +168,10 @@ public final class ScreenBuilder {
                         + " precisa de w e h maiores que zero");
             }
         }
+        if (type.equals("map") && (width <= 0 || height <= 0)) {
+            throw new InvalidScreenException("elemento map em " + index
+                    + " precisa de w e h maiores que zero");
+        }
 
         LuaValue anchor = source.get("anchor");
         if (!anchor.isnil()) {
@@ -309,6 +313,25 @@ public final class ScreenBuilder {
                     ? 0
                     : (int) clamp(content.todouble(), 0, ScreenProtocol.MAX_CONTENT_SIZE, "content"));
         }
+        if (type.equals("map")) {
+            int columns = source.get("columns").isnil()
+                    ? 25 : (int) clamp(source.get("columns").todouble(), 1,
+                    MapHudProtocol.MAX_COLUMNS, "map.columns");
+            int rows = source.get("rows").isnil()
+                    ? columns : (int) clamp(source.get("rows").todouble(), 1,
+                    MapHudProtocol.MAX_ROWS, "map.rows");
+            json.addProperty("map_columns", columns);
+            json.addProperty("map_rows", rows);
+            json.add("map_cells", mapCells(source.get("cells"), index, columns, rows));
+            json.add("map_markers", mapMarkers(source.get("markers"), index));
+            json.addProperty("map_direction_x", clamp(source.get("direction_x").isnil()
+                    ? 0 : source.get("direction_x").todouble(), -1, 1, "direction_x"));
+            json.addProperty("map_direction_z", clamp(source.get("direction_z").isnil()
+                    ? 0 : source.get("direction_z").todouble(), -1, 1, "direction_z"));
+            json.addProperty("map_round", source.get("round").isnil() || source.get("round").toboolean());
+            json.addProperty("map_grid", !source.get("grid").isnil() && source.get("grid").toboolean());
+            json.addProperty("map_north", text(source.get("north"), "N", "north"));
+        }
         return json;
     }
 
@@ -366,6 +389,70 @@ public final class ScreenBuilder {
             cells.add(cell);
         }
         return cells;
+    }
+
+    private static JsonArray mapCells(LuaValue value, int index, int columns, int rows) {
+        if (!value.istable()) {
+            throw new InvalidScreenException("map em " + index + " precisa de uma lista em cells");
+        }
+        LuaTable list = (LuaTable) value;
+        int expected = columns * rows;
+        if (list.length() != expected) {
+            throw new InvalidScreenException("map em " + index + " precisa de " + expected
+                    + " células, recebeu " + list.length());
+        }
+        if (expected > MapHudProtocol.MAX_CELLS) {
+            throw new InvalidScreenException("map em " + index + " excede o limite de células");
+        }
+
+        JsonArray cells = new JsonArray();
+        for (int position = 1; position <= expected; position++) {
+            LuaValue cell = list.get(position);
+            cells.add(cell.isnil() || cell.isboolean() && !cell.toboolean()
+                    ? "#00000000" : color(cell));
+        }
+        return cells;
+    }
+
+    private static JsonArray mapMarkers(LuaValue value, int index) {
+        JsonArray markers = new JsonArray();
+        if (value.isnil()) return markers;
+        if (!value.istable()) {
+            throw new InvalidScreenException("map em " + index + " precisa de uma lista em markers");
+        }
+
+        LuaTable list = (LuaTable) value;
+        if (list.length() > MapHudProtocol.MAX_MARKERS) {
+            throw new InvalidScreenException("map em " + index + " excede o limite de marcadores");
+        }
+        for (int position = 1; position <= list.length(); position++) {
+            LuaValue entry = list.get(position);
+            if (!entry.istable()) {
+                throw new InvalidScreenException("marcador " + position + " do map precisa de tabela");
+            }
+            LuaTable source = (LuaTable) entry;
+            String type = source.get("type").isnil()
+                    ? "waypoint" : source.get("type").tojstring().trim().toLowerCase(Locale.ROOT);
+            if (!MapHudProtocol.MARKER_TYPES.contains(type)) {
+                throw new InvalidScreenException("tipo de marcador desconhecido: " + type);
+            }
+            String label = text(source.get("label"), "", "marker.label");
+            if (label.length() > MapHudProtocol.MAX_MARKER_LABEL) {
+                throw new InvalidScreenException("marker.label excede "
+                        + MapHudProtocol.MAX_MARKER_LABEL + " caracteres");
+            }
+            JsonObject marker = new JsonObject();
+            marker.addProperty("type", type);
+            marker.addProperty("label", label);
+            marker.addProperty("x", clamp(source.get("x").isnil()
+                    ? 0.5 : source.get("x").todouble(), 0, 1, "marker.x"));
+            marker.addProperty("z", clamp(source.get("z").isnil()
+                    ? 0.5 : source.get("z").todouble(), 0, 1, "marker.z"));
+            marker.addProperty("color", color(source.get("color").isnil()
+                    ? LuaValue.valueOf("#FFFFFFFF") : source.get("color")));
+            markers.add(marker);
+        }
+        return markers;
     }
 
     private static void copyText(LuaTable source, JsonObject destination, String field) {

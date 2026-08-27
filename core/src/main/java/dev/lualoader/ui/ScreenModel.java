@@ -20,6 +20,14 @@ public final class ScreenModel {
     public record Cell(String item, int count, String tooltip) {
     }
 
+    /** Uma célula de mapa já convertida para ARGB pelo core. */
+    public record MapCell(int color) {
+    }
+
+    /** Marcador em coordenadas normalizadas no rectângulo do mapa. */
+    public record MapMarker(String type, String label, double x, double z, int color) {
+    }
+
     /** Um elemento e seus atributos, todos opcionais fora do tipo. */
     public record Element(String type, String id, int x, int y, int w, int h, String anchor,
                           String text, String value, String item, String texture, String tooltip,
@@ -30,7 +38,11 @@ public final class ScreenModel {
                           int u, int v, int sheetWidth, int sheetHeight,
                           int sourceWidth, int sourceHeight,
                           int borderTop, int borderRight, int borderBottom, int borderLeft,
-                          int layer) {
+                          int layer,
+                          List<MapCell> mapCells, List<MapMarker> mapMarkers,
+                          int mapColumns, int mapRows,
+                          double mapDirectionX, double mapDirectionZ,
+                          boolean mapRound, boolean mapGrid, String mapNorth) {
     }
 
     private final String title;
@@ -178,9 +190,79 @@ public final class ScreenModel {
                     // retangulo desenhado depois. Sem uma camada, uma janela sobreposta e
                     // impossivel -- e uma janela sobreposta e o jeito natural de configurar uma
                     // coisa sem perder de vista o resto.
-                    integer(element, "layer", 0)));
+                    integer(element, "layer", 0),
+                    mapCells(element), mapMarkers(element),
+                    integer(element, "map_columns", 0), integer(element, "map_rows", 0),
+                    decimal(element, "map_direction_x", 0.0), decimal(element, "map_direction_z", 0.0),
+                    bool(element, "map_round", false), bool(element, "map_grid", false),
+                    text(element, "map_north", "N")));
         }
         return list;
+    }
+
+    /** Lê as células compactas do mapa. Vazia quando o elemento não é um mapa. */
+    private static List<MapCell> mapCells(JsonObject element) {
+        List<MapCell> cells = new ArrayList<>();
+        if (!element.has("map_cells") || !element.get("map_cells").isJsonArray()) return cells;
+
+        JsonArray array = element.getAsJsonArray("map_cells");
+        int total = Math.min(array.size(), MapHudProtocol.MAX_CELLS);
+        for (int index = 0; index < total; index++) {
+            cells.add(new MapCell(colorValue(array.get(index), 0x00000000)));
+        }
+        return cells;
+    }
+
+    /** Lê marcadores de mapa, ignorando entradas inválidas ou fora do limite. */
+    private static List<MapMarker> mapMarkers(JsonObject element) {
+        List<MapMarker> markers = new ArrayList<>();
+        if (!element.has("map_markers") || !element.get("map_markers").isJsonArray()) return markers;
+
+        JsonArray array = element.getAsJsonArray("map_markers");
+        int total = Math.min(array.size(), MapHudProtocol.MAX_MARKERS);
+        for (int index = 0; index < total; index++) {
+            JsonElement entry = array.get(index);
+            if (!entry.isJsonObject()) continue;
+            JsonObject marker = entry.getAsJsonObject();
+            String type = text(marker, "type", "waypoint");
+            if (!MapHudProtocol.MARKER_TYPES.contains(type)) continue;
+            String label = text(marker, "label", "");
+            if (label.length() > MapHudProtocol.MAX_MARKER_LABEL) {
+                label = label.substring(0, MapHudProtocol.MAX_MARKER_LABEL);
+            }
+            double x = normalized(marker, "x");
+            double z = normalized(marker, "z");
+            markers.add(new MapMarker(type, label, x, z, colorOf(marker, "color", 0xFFFFFFFF)));
+        }
+        return markers;
+    }
+
+    private static double normalized(JsonObject object, String field) {
+        try {
+            double value = object.has(field) ? object.get(field).getAsDouble() : 0.5;
+            if (!Double.isFinite(value)) return 0.5;
+            return Math.max(0.0, Math.min(1.0, value));
+        } catch (RuntimeException error) {
+            return 0.5;
+        }
+    }
+
+    private static int colorValue(JsonElement value, int fallback) {
+        try {
+            if (value == null || !value.isJsonPrimitive()) return fallback;
+            if (value.getAsJsonPrimitive().isNumber()) return value.getAsInt();
+            String cleaned = value.getAsString().trim();
+            if (cleaned.startsWith("#")) cleaned = cleaned.substring(1);
+            if (cleaned.length() == 6) cleaned = cleaned + "FF";
+            long rgba = Long.parseLong(cleaned, 16);
+            int r = (int) ((rgba >> 24) & 0xFF);
+            int g = (int) ((rgba >> 16) & 0xFF);
+            int b = (int) ((rgba >> 8) & 0xFF);
+            int a = (int) (rgba & 0xFF);
+            return (a << 24) | (r << 16) | (g << 8) | b;
+        } catch (RuntimeException error) {
+            return fallback;
+        }
     }
 
     /** Lê as células de uma grade. Vazia quando o elemento não é uma grade. */
@@ -236,19 +318,6 @@ public final class ScreenModel {
 
     private static int colorOf(JsonObject object, String field, int fallback) {
         if (!object.has(field)) return fallback;
-        String text = text(object, field, "#FFFFFFFF");
-        try {
-            String cleaned = text.startsWith("#") ? text.substring(1) : text;
-            if (cleaned.length() == 6) cleaned = cleaned + "FF";
-            long rgba = Long.parseLong(cleaned, 16);
-
-            int r = (int) ((rgba >> 24) & 0xFF);
-            int g = (int) ((rgba >> 16) & 0xFF);
-            int b = (int) ((rgba >> 8) & 0xFF);
-            int a = (int) (rgba & 0xFF);
-            return (a << 24) | (r << 16) | (g << 8) | b;
-        } catch (RuntimeException error) {
-            return fallback;
-        }
+        return colorValue(object.get(field), fallback);
     }
 }

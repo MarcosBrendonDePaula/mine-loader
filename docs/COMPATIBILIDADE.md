@@ -15,6 +15,7 @@ A promessa do MineLoader é que o mod declarativo dependa do contrato do loader,
 | Resource pack gerado | sim | sim | sim | sim |
 | Eventos, comandos e scheduler | sim | sim | sim | sim |
 | Schemas de comandos e autocomplete | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual | sim, árvore Brigadier; visual manual |
+| `map` no HUD: grelha, máscara, radar e waypoints | sim, bridge + core; visual manual | sim, bridge + core; visual manual | sim, bridge + core; visual manual | sim, bridge + core; visual manual |
 | Inventário e block data | sim | sim | sim | sim |
 | Leitura de potência redstone | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge | sim, contrato + bridge |
 | Estado de bloco (`block_state`/`set_block_state`) | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest | sim, contrato + GameTest |

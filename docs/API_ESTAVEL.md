@@ -166,8 +166,9 @@ O Lua recebe tabelas e escalares simples. Ele não recebe objetos Java, referên
 
 “Mapa” pode significar três coisas diferentes. A consulta física do mundo já inclui bloco, estado, bioma, luz, altura, clima e redstone. Navegação inclui posição, raycast, teleporte e dimensão. Cartografia inclui waypoints e marcadores próprios.
 
-O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa.
- Uma futura API de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
+O elemento `map` do HUD já fornece a camada de apresentação: recebe uma grelha compacta de cores e marcadores normalizados, e os bridges desenham a máscara e a composição. O exemplo `minimap_demo` usa essa camada com cache de colunas, radar e um waypoint `Casa` persistido por jogador. A especificação está em [MINIMAP.md](MINIMAP.md).
+
+O MineLoader não deve acoplar o contrato a JourneyMap, Xaero ou outro mod de mapa. Uma futura API geral de marcadores pode ser própria, por exemplo `map.marker_add`, `map.marker_remove` e `map.markers`, com nome, cor, dimensão e posição serializáveis. Isso permite mapas, cidades e missões sem transformar uma integração opcional em dependência de todos os mods.
 
 Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige definir céu, bioma, geração, altura, respawn e acesso. Não é correto prometer `teleport_dimension` ou dimensão declarativa completa antes de existir um schema fechado e GameTests para mundos novos.
 

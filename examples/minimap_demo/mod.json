@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "description": "Protótipo de minimap declarativo em HUD, com configuração persistente aberta pela tecla M.",
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "player.read", "player.modify", "player.menu", "world.read", "server.command.register", "client.input.register"],
+  "permissions": ["chat.send", "player.read", "player.modify", "player.menu", "world.read", "entity.read", "server.command.register", "client.input.register"],
   "keybinds": [
     { "id": "toggle", "key": "key.keyboard.m", "category": "minimap_demo" }
   ],
@@ -15,6 +15,8 @@
         { "literal": "on" },
         { "literal": "off" },
         { "literal": "config" },
+        { "literal": "mark" },
+        { "literal": "clear" },
         { "literal": "zoom", "children": [
           { "argument": {
             "name": "level",
@@ -36,6 +38,7 @@
     },
     "capabilities": {
       "world.block_state.read": "1.0.0",
+      "entity.read": "1.0.0",
       "ui.menu": "1.0.0",
       "client.input.keybind": "1.0.0",
       "server.command.schema": "1.0.0",

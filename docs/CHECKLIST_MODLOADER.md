@@ -252,7 +252,7 @@ lugar nenhum.
 
 - [x] Menu com slots reais, sobre a tela de baú do jogo
 - [x] Tela desenhada, descrita em dados — dez tipos de elemento
-- [x] HUD
+- [x] HUD genérico e elemento `map` com grelha compacta, máscara, radar e waypoints — visual manual ainda pendente
 - [x] Sobreposição de tela do jogo — onze alvos
 - [x] Vocabulário fechado de ações, elementos, âncoras e alvos
 - [x] Eventos do cliente: tela do jogo aberta e fechada

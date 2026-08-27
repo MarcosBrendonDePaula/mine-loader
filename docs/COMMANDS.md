@@ -39,6 +39,8 @@ O campo `commands` é a fonte de verdade para comandos estáticos. Cada chave é
         { "literal": "on" },
         { "literal": "off" },
         { "literal": "config" },
+        { "literal": "mark" },
+        { "literal": "clear" },
         { "literal": "zoom", "children": [
           { "argument": {
             "name": "level",
@@ -197,6 +199,6 @@ O schema não cria uma API de cliente. Ele apenas descreve a sintaxe que o servi
 
 ## Estado actual
 
-A capability está implementada no core e nos quatro bridges mantidos. O exemplo `minimap_demo` declara a árvore de `/mod minimap_demo on|off|config|zoom <1..4>` no `mod.json` e associa o callback no Lua. Os comandos sem schema continuam a funcionar no formato livre.
+A capability está implementada no core e nos quatro bridges mantidos. O exemplo `minimap_demo` declara a árvore de `/mod minimap_demo on|off|config|mark|clear|zoom <1..4>` no `mod.json` e associa o callback no Lua. Os comandos sem schema continuam a funcionar no formato livre.
 
 GameTests de servidor validam carregamento dos manifestos e os testes do core validam parsing, argumentos nomeados, limites e compatibilidade legada. A sugestão visual do cliente deve ser confirmada num cliente Minecraft, pois GameTests não simulam a caixa de chat nem pixels da interface.
