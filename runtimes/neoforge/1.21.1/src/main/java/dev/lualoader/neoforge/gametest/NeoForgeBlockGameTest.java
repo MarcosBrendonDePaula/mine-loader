@@ -164,8 +164,20 @@ public class NeoForgeBlockGameTest {
         var food = item.getFoodProperties(new net.minecraft.world.item.ItemStack(item), null);
         if (food == null || food.nutrition() != 6
                 || Math.abs(food.saturation() - (6 * 0.8f * 2.0f)) > 0.0001f
-                || !food.canAlwaysEat()) {
+                || !food.canAlwaysEat()
+                || item.getUseDuration(new net.minecraft.world.item.ItemStack(item), null) != 50
+                || food.effects().size() != 1) {
             throw new AssertionError("comida declarativa inesperada: " + food);
+        }
+        var effectEntry = food.effects().getFirst();
+        var effect = effectEntry.effect();
+        if (!effect.getEffect().equals(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || Math.abs(effectEntry.probability() - 0.75f) > 0.0001f
+                || !effect.isAmbient()
+                || effect.isVisible()) {
+            throw new AssertionError("efeito de comida inesperado: " + effectEntry);
         }
 
         var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
@@ -177,6 +189,29 @@ public class NeoForgeBlockGameTest {
             }
         } finally {
             bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
+    /** A comida avançada chega ao FoodProperties e mantém a duração efectiva no Item. */
+    @GameTest(template = EMPTY)
+    public static void efeitosDeComidaDeclarativosChegamAoJogo(GameTestHelper helper) {
+        Item item = BuiltInRegistries.ITEM.get(RATION);
+        var stack = new net.minecraft.world.item.ItemStack(item);
+        var food = item.getFoodProperties(stack, null);
+        if (food == null || item.getUseDuration(stack, null) != 50
+                || food.effects().size() != 1) {
+            throw new AssertionError("efeitos/duração da comida inesperados: " + food);
+        }
+        var entry = food.effects().getFirst();
+        var effect = entry.effect();
+        if (!effect.getEffect().equals(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || Math.abs(entry.probability() - 0.75f) > 0.0001f
+                || !effect.isAmbient()
+                || effect.isVisible()) {
+            throw new AssertionError("efeito pós-consumo inesperado: " + entry);
         }
         helper.succeed();
     }

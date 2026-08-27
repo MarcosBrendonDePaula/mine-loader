@@ -745,6 +745,28 @@ public final class ModManifest {
 
         /** Permite comer mesmo com a barra de fome cheia. */
         public boolean alwaysEdible = false;
+
+        /** Duração total do consumo em segundos; o padrão do jogo é 1.6. */
+        public double consumeSeconds = 1.6;
+
+        /** Efeitos aplicados depois do consumo completo, cada um com a sua probabilidade. */
+        public List<FoodEffectDefinition> effects = new ArrayList<>();
+    }
+
+    /** Efeito de poção simples aplicado ao terminar o consumo de uma comida. */
+    public static final class FoodEffectDefinition {
+        /** Identificador completo do efeito, por exemplo {@code minecraft:speed}. */
+        public String id;
+        /** Duração em ticks. Obrigatória quando o efeito é declarado. */
+        public Integer duration;
+        /** Nível a partir de zero; zero é o nível I. */
+        public Integer amplifier = 0;
+        /** Probabilidade de aplicação, de 0.0 a 1.0. */
+        public double chance = 1.0;
+        /** Mostra o efeito como ambiental. */
+        public boolean ambient = false;
+        /** Mantém partículas visíveis no jogador. */
+        public boolean showParticles = true;
     }
 
     /**

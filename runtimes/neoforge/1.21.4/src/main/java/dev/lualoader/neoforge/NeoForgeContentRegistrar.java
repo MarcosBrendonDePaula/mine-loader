@@ -271,6 +271,30 @@ public final class NeoForgeContentRegistrar {
                             .saturationModifier((float) definition.food.saturation);
                     if (definition.food.alwaysEdible) food.alwaysEdible();
                     properties = properties.food(food.build());
+                    if (Math.abs(definition.food.consumeSeconds - 1.6) > 0.000001
+                            || !definition.food.effects.isEmpty()) {
+                        var consumable = net.minecraft.world.item.component.Consumable.builder()
+                                .consumeSeconds((float) definition.food.consumeSeconds);
+                        for (ModManifest.FoodEffectDefinition effect : definition.food.effects) {
+                            ResourceLocation effectId = ResourceLocation.tryParse(effect.id);
+                            if (effectId == null) {
+                                throw new IllegalArgumentException("Efeito inválido: " + effect.id);
+                            }
+                            var effectHolder = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.get(
+                                    net.minecraft.resources.ResourceKey.create(Registries.MOB_EFFECT, effectId))
+                                    .orElse(null);
+                            if (effectHolder == null) {
+                                throw new IllegalArgumentException("Efeito desconhecido: " + effect.id);
+                            }
+                            consumable.onConsume(new net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect(
+                                    new net.minecraft.world.effect.MobEffectInstance(effectHolder,
+                                            effect.duration, effect.amplifier, effect.ambient,
+                                            effect.showParticles, effect.showParticles),
+                                    (float) effect.chance));
+                        }
+                        properties = properties.component(
+                                net.minecraft.core.component.DataComponents.CONSUMABLE, consumable.build());
+                    }
                 }
                 properties = properties.setId(
                         net.minecraft.resources.ResourceKey.create(Registries.ITEM, id));

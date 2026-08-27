@@ -30,6 +30,7 @@ public final class ModLoader {
     private static final Pattern LUA_FILE = Pattern.compile("^[^/\\\\][^:]*\\.lua$");
     private static final Pattern DOMAIN_ID = Pattern.compile("^[a-z][a-z0-9_-]{0,31}$");
     private static final Pattern CAPABILITY_ID = Pattern.compile("^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$");
+    private static final Pattern RESOURCE_ID = Pattern.compile("^[a-z0-9_.-]+:[a-z0-9_/.-]+$");
     private static final Pattern CONTRACT_VERSION = Pattern.compile(
             "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$");
     private static final Set<String> RARITIES = Set.of("common", "uncommon", "rare", "epic");
@@ -488,6 +489,23 @@ public final class ModLoader {
             require(Double.isFinite(item.food.saturation)
                             && item.food.saturation >= 0 && item.food.saturation <= 4,
                     "saturation de comida em " + item.id + " deve estar entre 0 e 4");
+            require(Double.isFinite(item.food.consumeSeconds)
+                            && item.food.consumeSeconds >= 0.05 && item.food.consumeSeconds <= 30,
+                    "consume_seconds de comida em " + item.id + " deve estar entre 0.05 e 30 segundos");
+            require(item.food.effects != null && item.food.effects.size() <= 8,
+                    "comida " + item.id + " pode declarar no máximo 8 efeitos");
+            if (item.food.effects != null) {
+                for (ModManifest.FoodEffectDefinition effect : item.food.effects) {
+                    require(effect != null && effect.id != null && RESOURCE_ID.matcher(effect.id).matches(),
+                            "efeito de comida em " + item.id + " precisa de id completo no formato namespace:path");
+                    require(effect.duration != null && effect.duration >= 1 && effect.duration <= 120000,
+                            "duration de efeito em comida " + item.id + " deve estar entre 1 e 120000 ticks");
+                    require(effect.amplifier != null && effect.amplifier >= 0 && effect.amplifier <= 255,
+                            "amplifier de efeito em comida " + item.id + " deve estar entre 0 e 255");
+                    require(Double.isFinite(effect.chance) && effect.chance >= 0 && effect.chance <= 1,
+                            "chance de efeito em comida " + item.id + " deve estar entre 0 e 1");
+                }
+            }
         }
         require(item.fuelBurnTime >= 0 && item.fuelBurnTime <= 32767,
                 "fuel_burn_time de item deve estar entre 0 e 32767: " + item.id);

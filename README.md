@@ -15,7 +15,7 @@ O projecto testa a mesma ideia em quatro combinações: **Fabric 1.21.1, Fabric 
 | Fabric 1.21.4 | Experimental, com limitações visuais documentadas |
 | NeoForge 1.21.1 | Implementado e testado |
 | NeoForge 1.21.4 | Experimental, com limitações visuais documentadas |
-| GameTests | 24/24 em cada combinação mantida |
+| GameTests | 25/25 em cada combinação mantida |
 | `mod.require()` | Bibliotecas entre mods, com resolução sob demanda e detecção de ciclos |
 | `requires.domains` / `requires.capabilities` | Negociação de contrato no manifesto |
 | Shaders client-side | Ainda não fazem parte da API estável |
@@ -108,7 +108,7 @@ O servidor lê mods de `run/mods-lua`. Para testar uma versão específica, use 
 
 ## Manifesto e compatibilidade
 
-O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`. A API Lua também oferece snapshots neutros de efeitos, movimento e equipamento do jogador, acesso seguro a slots, drop de itens, explosão sem fogo por padrão, raio e tarefas recorrentes. No manifesto, itens independentes também podem declarar comida básica e combustível com o mesmo contrato nos quatro runtimes.
+O manifesto declara conteúdo, permissões, eventos, comandos estáticos e dependências. Dependências entre mods ficam em `dependencies`; dependências da API do loader ficam em `requires`. A árvore de um comando pode ficar em `commands`; o Lua associa o callback e pode acrescentar ramos condicionais com `mod.command_extend`. A API Lua também oferece snapshots neutros de efeitos, movimento e equipamento do jogador, acesso seguro a slots, drop de itens, explosão sem fogo por padrão, raio e tarefas recorrentes. No manifesto, itens independentes podem declarar comida com duração e efeitos pós-consumo, além de combustível, com o mesmo contrato nos quatro runtimes.
 
 ```json
 {
@@ -133,6 +133,7 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
       "world.explode": "1.0.0",
       "world.lightning": "1.0.0",
       "registry.item.food": "1.0.0",
+      "registry.item.food.effects": "1.0.0",
       "registry.item.fuel": "1.0.0",
       "player.equipment.read": "1.0.0",
       "player.inventory.slot": "1.0.0",
@@ -144,7 +145,7 @@ O manifesto declara conteúdo, permissões, eventos, comandos estáticos e depen
 
 `dependencies` permite usar `mod.require("ui_lib")` e controla a ordem de carga. `requires` apenas verifica se o runtime oferece o contrato; não instala código nem substitui uma dependency entre mods. A resolução de bibliotecas é feita sob demanda quando necessário e recusa ciclos com a cadeia completa, sem recursão infinita nem scripts parciais.
 
-No Lua, `ctx.player.effects()`, `ctx.player.movement()` e `ctx.player.equipment()` devolvem tabelas snapshot, sem objectos Minecraft; `inventory_slot` e `set_inventory_slot` usam índices limitados e limpeza explícita. `ctx.server.drop_item(item, x, y, z, count)` cria loot limitado no mundo e exige `entity.spawn`; `ctx.server.explode` exige `world.explode` e `ctx.server.strike_lightning` exige `world.lightning`. Itens declarativos podem usar `food` com nutrição `0..20` e saturação `0..4`, e `fuel_burn_time` de `0..32767`; estes campos não exigem permissão nova. Para lógica periódica,
+No Lua, `ctx.player.effects()`, `ctx.player.movement()` e `ctx.player.equipment()` devolvem tabelas snapshot, sem objectos Minecraft; `inventory_slot` e `set_inventory_slot` usam índices limitados e limpeza explícita. `ctx.server.drop_item(item, x, y, z, count)` cria loot limitado no mundo e exige `entity.spawn`; `ctx.server.explode` exige `world.explode` e `ctx.server.strike_lightning` exige `world.lightning`. Itens declarativos podem usar `food` com nutrição `0..20`, saturação `0..4`, `consume_seconds` de `0.05..30` e até oito efeitos com duração/probabilidade limitadas, além de `fuel_burn_time` de `0..32767`; estes campos não exigem permissão nova. Para lógica periódica,
  `mod.every(ticks, callback)` exige `scheduler.every: "1.0.0"`, devolve um ID privado e termina quando o callback devolve `false` ou quando o mod chama `mod.cancel(id)`. O evento global `mod.on("block_broken", callback)` cobre quebras iniciadas por jogador e cancela com `false`. O guia completo está em [`docs/API_ESTAVEL.md`](docs/API_ESTAVEL.md) e [`docs/GUIA_DO_MOD.md`](docs/GUIA_DO_MOD.md).
 
 As regras completas, campos aceites e limites estão em [docs/MOD_FORMAT_SPEC.md](docs/MOD_FORMAT_SPEC.md). O schema oficial está em [spec/mod.schema.json](spec/mod.schema.json).

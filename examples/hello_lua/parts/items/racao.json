@@ -6,7 +6,18 @@
   "food": {
     "nutrition": 6,
     "saturation": 0.8,
-    "always_edible": true
+    "always_edible": true,
+    "consume_seconds": 2.5,
+    "effects": [
+      {
+        "id": "minecraft:speed",
+        "duration": 100,
+        "amplifier": 1,
+        "chance": 0.75,
+        "ambient": true,
+        "show_particles": false
+      }
+    ]
   },
   "fuel_burn_time": 400
 }

@@ -117,11 +117,15 @@ objectos da plataforma ou permite escolher fonte, fogo ou modo interno de intera
 em stacks válidos, com limite de 4096 itens por chamada, e exige `entity.spawn`.
 
 **Comida e combustível declarativos — fechados.** Um item em `items` pode declarar `food` com
-`nutrition` de `0` a `20`, `saturation` finita de `0` a `4` e `always_edible`, além de
-`fuel_burn_time` de `0` a `32767` ticks. O item pode ser comida e combustível ao mesmo tempo, mas
-combustível não combina com ferramenta ou armadura, e comida não combina com durabilidade, ferramenta
-ou armadura. A v1 não inclui efeitos de poção, consumo rápido customizado ou conversão após consumo.
-Não há permissão nova; `registry.item.food` e `registry.item.fuel` são capabilities de negociação.
+`nutrition` de `0` a `20`, `saturation` finita de `0` a `4`, `always_edible`, `consume_seconds` de
+`0.05` a `30` e até oito `effects`. Cada efeito exige id completo, duração de `1` a `120000` ticks,
+`amplifier` de `0` a `255`, `chance` de `0` a `1`, além de `ambient` e `show_particles`; ele é
+aplicado quando o consumo termina. O mesmo item pode declarar `fuel_burn_time` de `0` a `32767`
+ticks. O item pode ser comida e combustível ao mesmo tempo, mas combustível não combina com ferramenta
+ou armadura, e comida não combina com durabilidade, ferramenta ou armadura. Não há permissão nova;
+`registry.item.food`, `registry.item.food.effects` e `registry.item.fuel` são capabilities de
+negociação. A futura declaração de efeitos de poção reutilizáveis, fora de uma comida, continua
+pendente.
 
 **Bioma e nível de luz** são legíveis por `biome_at` e `light_at`.
  A luz volta separada por origem
@@ -171,8 +175,11 @@ O que continua faltando:
 As bases suportadas são uma lista explícita no adaptador; uma base fora dela é recusada na carga, e
 não aproximada — registrar assim daria um mob invisível.
 
-**Fluido, dimensão, bioma, encantamento, efeito.** Nenhum é declarável. Cada um tem um registro com
-regras próprias, e o loader só cobre bloco e item.
+**Fluido, dimensão, bioma, encantamento e efeito de poção reutilizável.** Nenhum desses registros
+é declarável como conteúdo próprio. Efeitos inline de comida já são suportados pela superfície acima;
+o que continua pendente é um registro de efeito de poção independente, com id, descrição, atributos,
+ícone e tradução equivalentes entre runtimes. Cada registro tem regras próprias, e o loader hoje cobre
+bloco, item e efeitos inline de comida.
 
 **Geração de mundo.** Um minério declarado não aparece no terreno. Estruturas só entram por
 `place_structure`, chamado por um script.

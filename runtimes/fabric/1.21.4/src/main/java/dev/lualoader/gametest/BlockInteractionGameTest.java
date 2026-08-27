@@ -145,6 +145,26 @@ public class BlockInteractionGameTest implements FabricGameTest {
                 || !food.canAlwaysEat()) {
             throw new AssertionError("comida declarativa inesperada: " + food);
         }
+        var consumable = new net.minecraft.item.ItemStack(item)
+                .get(net.minecraft.component.DataComponentTypes.CONSUMABLE);
+        if (consumable == null || Math.abs(consumable.consumeSeconds() - 2.5f) > 0.0001f
+                || consumable.onConsumeEffects().size() != 1) {
+            throw new AssertionError("consumable declarativo inesperado: " + consumable);
+        }
+        var consumeEffect = consumable.onConsumeEffects().getFirst();
+        if (!(consumeEffect instanceof net.minecraft.item.consume.ApplyEffectsConsumeEffect applyEffects)
+                || applyEffects.effects().size() != 1
+                || Math.abs(applyEffects.probability() - 0.75f) > 0.0001f) {
+            throw new AssertionError("efeito de consumo inesperado: " + consumeEffect);
+        }
+        var effect = applyEffects.effects().getFirst();
+        if (!effect.getEffectType().equals(net.minecraft.entity.effect.StatusEffects.SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || !effect.isAmbient()
+                || effect.shouldShowParticles()) {
+            throw new AssertionError("status effect de comida inesperado: " + effect);
+        }
 
         var bridge = LuaLoaderMod.gameBridge();
         if (bridge == null) throw new AssertionError("a bridge nao foi montada");
@@ -155,6 +175,32 @@ public class BlockInteractionGameTest implements FabricGameTest {
             }
         } finally {
             bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void declarativeFoodEffectsReachTheGame(TestContext context) {
+        var item = net.minecraft.registry.Registries.ITEM.get(RATION);
+        var consumable = new net.minecraft.item.ItemStack(item)
+                .get(net.minecraft.component.DataComponentTypes.CONSUMABLE);
+        if (consumable == null || Math.abs(consumable.consumeSeconds() - 2.5f) > 0.0001f
+                || consumable.onConsumeEffects().size() != 1) {
+            throw new AssertionError("efeitos/duração da comida inesperados: " + consumable);
+        }
+        var consumeEffect = consumable.onConsumeEffects().getFirst();
+        if (!(consumeEffect instanceof net.minecraft.item.consume.ApplyEffectsConsumeEffect applyEffects)
+                || applyEffects.effects().size() != 1
+                || Math.abs(applyEffects.probability() - 0.75f) > 0.0001f) {
+            throw new AssertionError("efeito pós-consumo inesperado: " + consumeEffect);
+        }
+        var effect = applyEffects.effects().getFirst();
+        if (!effect.getEffectType().equals(net.minecraft.entity.effect.StatusEffects.SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || !effect.isAmbient()
+                || effect.shouldShowParticles()) {
+            throw new AssertionError("status effect de comida inesperado: " + effect);
         }
         context.complete();
     }

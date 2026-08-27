@@ -139,7 +139,20 @@ class ContentContractTest {
                   "items": [{
                     "id": "racao",
                     "name": "Ração",
-                    "food": {"nutrition": 6, "saturation": 0.8, "always_edible": true},
+                    "food": {
+                      "nutrition": 6,
+                      "saturation": 0.8,
+                      "always_edible": true,
+                      "consume_seconds": 2.5,
+                      "effects": [{
+                        "id": "minecraft:speed",
+                        "duration": 100,
+                        "amplifier": 1,
+                        "chance": 0.75,
+                        "ambient": true,
+                        "show_particles": false
+                      }]
+                    },
                     "fuel_burn_time": 400
                   }]
                 }
@@ -150,6 +163,15 @@ class ContentContractTest {
         assertEquals(6, item.food.nutrition);
         assertEquals(0.8, item.food.saturation, 0.0001);
         assertTrue(item.food.alwaysEdible);
+        assertEquals(2.5, item.food.consumeSeconds, 0.0001);
+        assertEquals(1, item.food.effects.size());
+        var effect = item.food.effects.getFirst();
+        assertEquals("minecraft:speed", effect.id);
+        assertEquals(100, effect.duration);
+        assertEquals(1, effect.amplifier);
+        assertEquals(0.75, effect.chance, 0.0001);
+        assertTrue(effect.ambient);
+        assertFalse(effect.showParticles);
         assertEquals(400, item.fuelBurnTime);
     }
 
@@ -174,9 +196,56 @@ class ContentContractTest {
     }
 
     @Test
+    void invalidFoodEffectsAreRejected(@TempDir Path root) throws IOException {
+        var casos = List.of(
+                "\"food\": {\"consume_seconds\": 0.01}",
+                "\"food\": {\"effects\": [{\"id\": \"speed\", \"duration\": 20}]}",
+                "\"food\": {\"effects\": [{\"id\": \"minecraft:speed\", \"duration\": 0}]}",
+                "\"food\": {\"effects\": [{\"id\": \"minecraft:speed\", \"duration\": 20, \"amplifier\": 256}]}",
+                "\"food\": {\"effects\": [{\"id\": \"minecraft:speed\", \"duration\": 20, \"chance\": 1.1}]}");
+        for (int index = 0; index < casos.size(); index++) {
+            Path caseRoot = root.resolve("caso_" + index);
+            Path dir = caseRoot.resolve("content_mod");
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("mod.json"), """
+                    {
+                      "schema": 1,
+                      "id": "content_mod_%s",
+                      "name": "Content Mod",
+                      "version": "0.1.0",
+                      "entrypoint": "main.lua",
+                      "items": [{"id": "racao", "name": "Ração", %s}]
+                    }
+                    """.formatted(index, casos.get(index)), StandardCharsets.UTF_8);
+            Files.writeString(dir.resolve("main.lua"), "return {}\n", StandardCharsets.UTF_8);
+            assertTrue(discover(caseRoot).isEmpty(), "caso de comida inválida deveria ser recusado: " + casos.get(index));
+        }
+
+        Path tooManyRoot = root.resolve("caso_muitos");
+        Path tooManyDir = tooManyRoot.resolve("content_mod");
+        Files.createDirectories(tooManyDir);
+        String effects = java.util.stream.IntStream.range(0, 9)
+                .mapToObj(index -> "{\\\"id\\\":\\\"minecraft:speed\\\",\\\"duration\\\":20}")
+                .collect(java.util.stream.Collectors.joining(","));
+        Files.writeString(tooManyDir.resolve("mod.json"), """
+                {
+                  "schema": 1,
+                  "id": "content_many",
+                  "name": "Content Many",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "items": [{"id": "racao", "name": "Ração", "food": {"effects": [%s]}}]
+                }
+                """.formatted(effects), StandardCharsets.UTF_8);
+        Files.writeString(tooManyDir.resolve("main.lua"), "return {}\n", StandardCharsets.UTF_8);
+        assertTrue(discover(tooManyRoot).isEmpty(), "mais de oito efeitos deveria ser recusado");
+    }
+
+    @Test
     void standardContractExposesFoodAndFuelCapabilities() {
         RuntimeContract contract = RuntimeContract.standard();
         assertEquals("1.0.0", contract.capabilityVersion("registry.item.food"));
+        assertEquals("1.0.0", contract.capabilityVersion("registry.item.food.effects"));
         assertEquals("1.0.0", contract.capabilityVersion("registry.item.fuel"));
     }
 

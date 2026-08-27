@@ -168,6 +168,26 @@ public class NeoForgeBlockGameTest {
                 || !food.canAlwaysEat()) {
             throw new AssertionError("comida declarativa inesperada: " + food);
         }
+        var stack = new net.minecraft.world.item.ItemStack(item);
+        var consumable = stack.get(net.minecraft.core.component.DataComponents.CONSUMABLE);
+        if (consumable == null || Math.abs(consumable.consumeSeconds() - 2.5f) > 0.0001f
+                || consumable.onConsumeEffects().size() != 1) {
+            throw new AssertionError("consumable declarativo inesperado: " + consumable);
+        }
+        var consumeEffect = consumable.onConsumeEffects().getFirst();
+        if (!(consumeEffect instanceof net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect applyEffects)
+                || applyEffects.effects().size() != 1
+                || Math.abs(applyEffects.probability() - 0.75f) > 0.0001f) {
+            throw new AssertionError("efeito de consumo inesperado: " + consumeEffect);
+        }
+        var effect = applyEffects.effects().getFirst();
+        if (!effect.getEffect().equals(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || !effect.isAmbient()
+                || effect.isVisible()) {
+            throw new AssertionError("status effect de comida inesperado: " + effect);
+        }
 
         var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
         if (bridge == null) throw new AssertionError("a bridge nao foi montada");
@@ -178,6 +198,33 @@ public class NeoForgeBlockGameTest {
             }
         } finally {
             bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
+    /** A comida avançada chega ao componente Consumable do NeoForge 1.21.4. */
+    @GameTest(template = EMPTY)
+    public static void efeitosDeComidaDeclarativosChegamAoJogo(GameTestHelper helper) {
+        Item item = BuiltInRegistries.ITEM.getOptional(RATION).orElse(null);
+        var stack = new net.minecraft.world.item.ItemStack(item);
+        var consumable = stack.get(net.minecraft.core.component.DataComponents.CONSUMABLE);
+        if (consumable == null || Math.abs(consumable.consumeSeconds() - 2.5f) > 0.0001f
+                || consumable.onConsumeEffects().size() != 1) {
+            throw new AssertionError("efeitos/duração da comida inesperados: " + consumable);
+        }
+        var consumeEffect = consumable.onConsumeEffects().getFirst();
+        if (!(consumeEffect instanceof net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect applyEffects)
+                || applyEffects.effects().size() != 1
+                || Math.abs(applyEffects.probability() - 0.75f) > 0.0001f) {
+            throw new AssertionError("efeito pós-consumo inesperado: " + consumeEffect);
+        }
+        var effect = applyEffects.effects().getFirst();
+        if (!effect.getEffect().equals(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || !effect.isAmbient()
+                || effect.isVisible()) {
+            throw new AssertionError("status effect de comida inesperado: " + effect);
         }
         helper.succeed();
     }

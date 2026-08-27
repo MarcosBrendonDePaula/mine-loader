@@ -3,6 +3,7 @@ package dev.lualoader.minecraft;
 import dev.lualoader.manifest.ModManifest;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
 import net.minecraft.component.type.FoodComponent;
+import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
@@ -62,7 +63,24 @@ public final class ContentRegistrar {
                         .nutrition(definition.food.nutrition)
                         .saturationModifier((float) definition.food.saturation);
                 if (definition.food.alwaysEdible) food.alwaysEdible();
-                settings = settings.food(food.build());
+                for (ModManifest.FoodEffectDefinition effect : definition.food.effects) {
+                    Identifier effectId = Identifier.tryParse(effect.id);
+                    if (effectId == null) {
+                        throw new IllegalArgumentException("Efeito inválido: " + effect.id);
+                    }
+                    var statusEffect = Registries.STATUS_EFFECT.getEntry(effectId).orElse(null);
+                    if (statusEffect == null) {
+                        throw new IllegalArgumentException("Efeito desconhecido: " + effect.id);
+                    }
+                    food.statusEffect(new StatusEffectInstance(statusEffect, effect.duration,
+                                    effect.amplifier, effect.ambient, effect.showParticles,
+                                    effect.showParticles), (float) effect.chance);
+                }
+                FoodComponent builtFood = food.build();
+                settings = settings.food(new FoodComponent(
+                        builtFood.nutrition(), builtFood.saturation(), builtFood.canAlwaysEat(),
+                        (float) definition.food.consumeSeconds, builtFood.usingConvertsTo(),
+                        builtFood.effects()));
             }
 
             // Ferramenta e armadura sao itens de classes proprias do jogo: uma picareta precisa

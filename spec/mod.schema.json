@@ -923,6 +923,59 @@
         "always_edible": {
           "type": "boolean",
           "default": false
+        },
+        "consume_seconds": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 30,
+          "default": 1.6
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/foodEffect"
+          },
+          "default": []
+        }
+      }
+    },
+    "foodEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "duration"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.-]+:[a-z0-9_/.-]+$"
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120000
+        },
+        "amplifier": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "default": 0
+        },
+        "chance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1
+        },
+        "ambient": {
+          "type": "boolean",
+          "default": false
+        },
+        "show_particles": {
+          "type": "boolean",
+          "default": true
         }
       }
     },

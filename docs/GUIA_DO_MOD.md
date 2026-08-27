@@ -341,13 +341,23 @@ A bridge traduz os mesmos dados para Fabric e NeoForge, sem expor classes intern
     "food": {
       "nutrition": 6,
       "saturation": 0.8,
-      "always_edible": true
+      "always_edible": true,
+      "consume_seconds": 2.5,
+      "effects": [{
+        "id": "minecraft:speed",
+        "duration": 100,
+        "amplifier": 1,
+        "chance": 0.75,
+        "ambient": true,
+        "show_particles": false
+      }]
     },
     "fuel_burn_time": 400
   }],
   "requires": {
     "capabilities": {
       "registry.item.food": "1.0.0",
+      "registry.item.food.effects": "1.0.0",
       "registry.item.fuel": "1.0.0"
     }
   }
@@ -355,11 +365,17 @@ A bridge traduz os mesmos dados para Fabric e NeoForge, sem expor classes intern
 ```
 
 `nutrition` aceita de `0` a `20`, `saturation` é finita e fica entre `0` e `4`, e
-`always_edible` permite comer com a barra cheia. `fuel_burn_time` é contado em ticks, de `0` a
-`32767`; `0` significa que o item não é combustível. Nesta versão, combustível não combina com
-ferramenta ou armadura, e comida fica limitada às propriedades básicas: efeitos, consumo rápido
-customizado e conversão após consumo ainda não fazem parte do contrato comum. Para consultar o
-resultado efectivo de um item já registado, use `ctx.server.fuel_burn_time("mod:item")`.
+`always_edible` permite comer com a barra cheia. `consume_seconds` aceita de `0.05` a `30` segundos
+e controla a duração do consumo completo. `effects` aceita até oito efeitos; cada um exige `id` no
+formato `namespace:path` e `duration` de `1` a `120000` ticks. `amplifier` fica entre `0` e `255`,
+`chance` entre `0` e `1`, `ambient` é falso por padrão e `show_particles` é verdadeiro por padrão.
+O efeito só é aplicado quando o consumo termina, respeitando a probabilidade. `fuel_burn_time` é
+contado em ticks, de `0` a `32767`; `0` significa que o item não é combustível. Nesta versão,
+combustível não combina com ferramenta ou armadura, e comida também não combina com `max_damage`.
+Não há permissão nova para registar conteúdo. O GameTest confere o componente/propriedade que foi
+registrado server-side; isso não é uma promessa sobre pixels, animação visual, FPS ou UX completa
+no cliente. Para consultar o resultado efectivo de um item já registado, use
+`ctx.server.fuel_burn_time("mod:item")`.
 
 ## Consultar o registro
 

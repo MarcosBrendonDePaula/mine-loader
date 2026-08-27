@@ -268,6 +268,22 @@ public final class NeoForgeContentRegistrar {
                             .nutrition(definition.food.nutrition)
                             .saturationModifier((float) definition.food.saturation);
                     if (definition.food.alwaysEdible) food.alwaysEdible();
+                    for (ModManifest.FoodEffectDefinition effect : definition.food.effects) {
+                        ResourceLocation effectId = ResourceLocation.tryParse(effect.id);
+                        if (effectId == null) {
+                            throw new IllegalArgumentException("Efeito inválido: " + effect.id);
+                        }
+                        var effectHolder = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getHolder(
+                                net.minecraft.resources.ResourceKey.create(Registries.MOB_EFFECT, effectId))
+                                .orElse(null);
+                        if (effectHolder == null) {
+                            throw new IllegalArgumentException("Efeito desconhecido: " + effect.id);
+                        }
+                        food.effect(new net.minecraft.world.effect.MobEffectInstance(effectHolder,
+                                        effect.duration, effect.amplifier, effect.ambient,
+                                        effect.showParticles, effect.showParticles),
+                                (float) effect.chance);
+                    }
                     properties = properties.food(food.build());
                 }
 
@@ -279,6 +295,9 @@ public final class NeoForgeContentRegistrar {
                     item = NeoForgeToolMaterial.create(definition.tool, properties);
                 } else if (definition.armor != null) {
                     item = NeoForgeArmorMaterial.create(definition.armor, properties);
+                } else if (definition.food != null) {
+                    item = new NeoForgeFoodItem(properties, definition.food.consumeSeconds,
+                            definition.fuelBurnTime);
                 } else if (definition.fuelBurnTime > 0) {
                     item = new NeoForgeFuelItem(properties, definition.fuelBurnTime);
                 } else {

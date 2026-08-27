@@ -2,8 +2,11 @@ package dev.lualoader.minecraft;
 
 import dev.lualoader.manifest.ModManifest;
 import net.fabricmc.fabric.api.registry.FuelRegistryEvents;
+import net.minecraft.component.type.ConsumableComponent;
 import net.minecraft.component.type.FoodComponent;
+import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.item.Item;
+import net.minecraft.item.consume.ApplyEffectsConsumeEffect;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -62,7 +65,23 @@ public final class ContentRegistrar {
                         .nutrition(definition.food.nutrition)
                         .saturationModifier((float) definition.food.saturation);
                 if (definition.food.alwaysEdible) food.alwaysEdible();
-                settings = settings.food(food.build());
+                ConsumableComponent.Builder consumable = ConsumableComponent.builder()
+                        .consumeSeconds((float) definition.food.consumeSeconds);
+                for (ModManifest.FoodEffectDefinition effect : definition.food.effects) {
+                    Identifier effectId = Identifier.tryParse(effect.id);
+                    if (effectId == null) {
+                        throw new IllegalArgumentException("Efeito inválido: " + effect.id);
+                    }
+                    var statusEffect = Registries.STATUS_EFFECT.getEntry(effectId).orElse(null);
+                    if (statusEffect == null) {
+                        throw new IllegalArgumentException("Efeito desconhecido: " + effect.id);
+                    }
+                    consumable.consumeEffect(new ApplyEffectsConsumeEffect(
+                            new StatusEffectInstance(statusEffect, effect.duration, effect.amplifier,
+                                    effect.ambient, effect.showParticles, effect.showParticles),
+                            (float) effect.chance));
+                }
+                settings = settings.food(food.build(), consumable.build());
             }
             settings.registryKey(RegistryKey.of(RegistryKeys.ITEM, id));
 

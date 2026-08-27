@@ -105,7 +105,7 @@ As permissões incluem `chat.send`, `server.read`, `server.command.register`, `c
 - [x] Largar o loot de outro bloco (`settings.drops_like`)
 - [x] Inflamabilidade e propagação de fogo (`material.flammability`, `material.burn_spread`)
 - [ ] Tipo de bloco além de `generic` — `type` e `base` são declarados e nunca lidos
-- [x] Comida básica — nutrição, saturação e `always_edible`; efeitos e consumo customizado ainda pendentes
+- [x] Comida declarativa — nutrição, saturação, `always_edible`, duração de consumo e efeitos pós-consumo
 - [x] Combustível declarativo e tempo de queima por item
 - [ ] Tipo de receita próprio, com regras de processamento novas
 - [x] Entidade — espécie própria derivada de uma do jogo (`entities`), nas duas plataformas
@@ -116,7 +116,7 @@ As permissões incluem `chat.send`, `server.read`, `server.command.register`, `c
 - [ ] Bioma
 - [ ] Dimensão
 - [ ] Encantamento
-- [ ] Efeito de poção
+- [ ] Efeito de poção independente — efeitos inline de comida já são suportados
 - [ ] Atributo
 - [ ] Profissão de aldeão e trocas
 - [ ] Avanço / conquista
@@ -463,7 +463,7 @@ Antes de acrescentar qualquer capacidade nova, fazer valer o que já foi prometi
 - [x] `ManifestDiagnostics` completo — e um aviso novo para `drops_like` anulado por `drops_nothing`
 - [x] **GameTests rodando no NeoForge** — 23 casos, e no CI junto com os do Fabric
 
-**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 24/24 em cada combinação.
+**Prova:** `examples/autoteste` roda 13/13 nas duas plataformas, e os GameTests 25/25 em cada combinação.
 Os casos `eventos_globais` e `agendador` foram escritos *antes* de olhar o resultado e falharam no
 NeoForge na primeira execução — que é o que os torna prova e não cerimônia.
 

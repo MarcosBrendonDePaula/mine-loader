@@ -192,7 +192,8 @@ As APIs de runtime seguem o mesmo princípio: o manifesto negocia capabilities, 
 | `player.movement.read` | `ctx.player.movement()` | `player.read` | Snapshot com `velocity.x/y/z`, `on_ground`, `sneaking`, `sprinting`, `swimming`, `flying` e `gliding`. |
 | `player.equipment.read` | `ctx.player.equipment()` | `player.read` | Snapshot com `main_hand`, `off_hand`, `head`, `chest`, `legs` e `feet`; cada campo é `{item, count}` e vazio é `minecraft:air`, `0`. |
 | `player.inventory.slot` | `ctx.player.inventory_slot(slot)` e `ctx.player.set_inventory_slot(slot, item, count[, itemSpec])` | `player.inventory` | Slots na faixa comum `0..63`; quantidade `0..64`; quantidade zero limpa e quantidade positiva respeita o stack máximo real. |
-| `registry.item.food` | `items[].food` no `mod.json` | nenhuma nova | Comida básica declarativa; `nutrition` 0..20, `saturation` 0..4 e `always_edible`. |
+| `registry.item.food` | `items[].food` no `mod.json` | nenhuma nova | Comida declarativa básica; `nutrition` 0..20, `saturation` 0..4 e `always_edible`. |
+| `registry.item.food.effects` | `items[].food.consume_seconds` e `items[].food.effects` | nenhuma nova | Duração 0.05..30 segundos e até oito efeitos pós-consumo; `duration` 1..120000, `amplifier` 0..255, `chance` 0..1, `ambient` e `show_particles`. |
 | `registry.item.fuel` | `items[].fuel_burn_time` no `mod.json` | nenhuma nova | Combustível declarativo; tempo entre 0 e 32767 ticks. |
 | `world.item_drop` | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks válidos; quantidade entre 1 e 4096; devolve a quantidade criada. |
 | `world.explode` | `ctx.server.explode(x, y, z, force[, breakBlocks])` | `world.explode` | Coordenadas finitas/limitadas; força `> 0` e `<= 8`; fogo desligado e `breakBlocks` falso por omissão. |
@@ -600,7 +601,16 @@ O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id`
       "food": {
         "nutrition": 6,
         "saturation": 0.8,
-        "always_edible": true
+        "always_edible": true,
+        "consume_seconds": 2.5,
+        "effects": [{
+          "id": "minecraft:speed",
+          "duration": 100,
+          "amplifier": 1,
+          "chance": 0.75,
+          "ambient": true,
+          "show_particles": false
+        }]
       },
       "fuel_burn_time": 400,
       "texture": {
@@ -619,11 +629,11 @@ O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id`
 | `max_damage` | inteiro >= 0 | Maior que zero exige `max_stack_size` igual a 1; caso contrario o manifesto e rejeitado. |
 | `rarity` | `common`, `uncommon`, `rare`, `epic` | Outro valor e rejeitado. |
 | `fire_resistant` | booleano | Item nao queima no lava/fogo. |
-| `food` | objeto opcional | Comida básica: `nutrition` 0..20, `saturation` finita 0..4 e `always_edible`. |
+| `food` | objeto opcional | `nutrition` 0..20, `saturation` finita 0..4, `always_edible`, `consume_seconds` 0.05..30 e até oito `effects`. Cada efeito exige id completo, `duration` 1..120000; `amplifier` 0..255, `chance` 0..1, `ambient` e `show_particles`. |
 | `fuel_burn_time` | inteiro 0..32767 | Tempo de queima em ticks; zero significa que não é combustível. Não combina com ferramenta/armadura. |
 | `texture` | objeto de textura | Sem `path`, o loader usa `fallback`. |
 
-`food` e `fuel_burn_time` são traduzidos para as propriedades da versão em execução e são suportados nos quatro runtimes. A v1 não inclui efeitos de poção, consumo rápido customizado ou conversão após consumo. Um item pode ser simultaneamente comida e combustível, mas não pode combinar estas propriedades com `tool`, `armor` ou `max_damage` quando a validação exigir uma classe incompatível.
+`food` e `fuel_burn_time` são traduzidos para as propriedades/componentes da versão em execução e são suportados nos quatro runtimes. `consume_seconds` controla o consumo completo, e `effects` são aplicados quando a comida termina de ser consumida, respeitando a probabilidade declarada. A leitura dos componentes em GameTest prova o registro e a tradução server-side; não prova pixels, animações, FPS ou UX completa no cliente. Um item pode ser simultaneamente comida e combustível, mas não pode combinar estas propriedades com `tool`, `armor` ou `max_damage` quando a validação exigir uma classe incompatível.
 
 ## Especies declaradas
 

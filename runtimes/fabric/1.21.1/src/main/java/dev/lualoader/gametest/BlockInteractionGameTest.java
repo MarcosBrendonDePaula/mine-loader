@@ -142,8 +142,20 @@ public class BlockInteractionGameTest implements FabricGameTest {
                 .get(net.minecraft.component.DataComponentTypes.FOOD);
         if (food == null || food.nutrition() != 6
                 || Math.abs(food.saturation() - (6 * 0.8f * 2.0f)) > 0.0001f
-                || !food.canAlwaysEat()) {
+                || !food.canAlwaysEat()
+                || Math.abs(food.eatSeconds() - 2.5f) > 0.0001f
+                || food.effects().size() != 1) {
             throw new AssertionError("comida declarativa inesperada: " + food);
+        }
+        var effectEntry = food.effects().getFirst();
+        var effect = effectEntry.effect();
+        if (!effect.getEffectType().equals(net.minecraft.entity.effect.StatusEffects.SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || Math.abs(effectEntry.probability() - 0.75f) > 0.0001f
+                || !effect.isAmbient()
+                || effect.shouldShowParticles()) {
+            throw new AssertionError("efeito de comida inesperado: " + effectEntry);
         }
 
         var bridge = LuaLoaderMod.gameBridge();
@@ -155,6 +167,28 @@ public class BlockInteractionGameTest implements FabricGameTest {
             }
         } finally {
             bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void declarativeFoodEffectsReachTheGame(TestContext context) {
+        var item = net.minecraft.registry.Registries.ITEM.get(RATION);
+        var food = new net.minecraft.item.ItemStack(item)
+                .get(net.minecraft.component.DataComponentTypes.FOOD);
+        if (food == null || Math.abs(food.eatSeconds() - 2.5f) > 0.0001f
+                || food.effects().size() != 1) {
+            throw new AssertionError("efeitos/duração da comida inesperados: " + food);
+        }
+        var entry = food.effects().getFirst();
+        var effect = entry.effect();
+        if (!effect.getEffectType().equals(net.minecraft.entity.effect.StatusEffects.SPEED)
+                || effect.getDuration() != 100
+                || effect.getAmplifier() != 1
+                || Math.abs(entry.probability() - 0.75f) > 0.0001f
+                || !effect.isAmbient()
+                || effect.shouldShowParticles()) {
+            throw new AssertionError("efeito pós-consumo inesperado: " + entry);
         }
         context.complete();
     }

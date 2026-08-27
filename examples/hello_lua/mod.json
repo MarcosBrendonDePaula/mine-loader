@@ -8,6 +8,13 @@
     "Minecraft Lua Loader"
   ],
   "entrypoint": "main.lua",
+  "requires": {
+    "capabilities": {
+      "registry.item.food": "1.0.0",
+      "registry.item.food.effects": "1.0.0",
+      "registry.item.fuel": "1.0.0"
+    }
+  },
   "permissions": [
     "chat.send",
     "player.read",
