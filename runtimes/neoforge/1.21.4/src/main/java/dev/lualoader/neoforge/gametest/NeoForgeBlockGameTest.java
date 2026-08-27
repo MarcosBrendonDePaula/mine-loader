@@ -34,6 +34,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public class NeoForgeBlockGameTest {
     private static final ResourceLocation RUBY_BLOCK =
             ResourceLocation.fromNamespaceAndPath("hello_lua", "ruby_block");
+    private static final ResourceLocation RATION =
+            ResourceLocation.fromNamespaceAndPath("hello_lua", "racao");
     private static final String EMPTY = "empty";
 
     /** O bloco declarado no manifesto chegou ao registro do jogo, e é o do loader. */
@@ -146,6 +148,34 @@ public class NeoForgeBlockGameTest {
             }
             bridge.strikeLightning(absoluta.getX() + 0.5, absoluta.getY() + 1.0,
                     absoluta.getZ() + 0.5);
+        } finally {
+            bridge.setCurrentLevel(null);
+        }
+        helper.succeed();
+    }
+
+    /** As propriedades declarativas de comida e combustível chegam ao jogo real. */
+    @GameTest(template = EMPTY)
+    public static void comidaECombustivelDeclarativosChegamAoJogo(GameTestHelper helper) {
+        Item item = BuiltInRegistries.ITEM.getOptional(RATION).orElse(null);
+        if (item == null || item == net.minecraft.world.item.Items.AIR) {
+            throw new AssertionError("item de ração nao foi registrado: " + RATION);
+        }
+        var food = new net.minecraft.world.item.ItemStack(item)
+                .get(net.minecraft.core.component.DataComponents.FOOD);
+        if (food == null || food.nutrition() != 6
+                || Math.abs(food.saturation() - (6 * 0.8f * 2.0f)) > 0.0001f
+                || !food.canAlwaysEat()) {
+            throw new AssertionError("comida declarativa inesperada: " + food);
+        }
+
+        var bridge = dev.lualoader.neoforge.NeoForgeLuaLoader.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentLevel(helper.getLevel());
+        try {
+            if (bridge.fuelBurnTime(RATION.toString()) != 400) {
+                throw new AssertionError("tempo de combustível inesperado para " + RATION);
+            }
         } finally {
             bridge.setCurrentLevel(null);
         }

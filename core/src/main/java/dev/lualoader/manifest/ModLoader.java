@@ -480,7 +480,19 @@ public final class ModLoader {
     private void validateToolAndArmor(ModManifest.ItemEntryDefinition item) {
         require(item.tool == null || item.armor == null,
                 "item " + item.id + " nao pode ser ferramenta e armadura ao mesmo tempo");
-
+        if (item.food != null) {
+            require(item.tool == null && item.armor == null && item.maxDamage == 0,
+                    "comida " + item.id + " nao pode ser ferramenta, armadura ou item com durabilidade");
+            require(item.food.nutrition >= 0 && item.food.nutrition <= 20,
+                    "nutrition de comida em " + item.id + " deve estar entre 0 e 20");
+            require(Double.isFinite(item.food.saturation)
+                            && item.food.saturation >= 0 && item.food.saturation <= 4,
+                    "saturation de comida em " + item.id + " deve estar entre 0 e 4");
+        }
+        require(item.fuelBurnTime >= 0 && item.fuelBurnTime <= 32767,
+                "fuel_burn_time de item deve estar entre 0 e 32767: " + item.id);
+        require(item.fuelBurnTime == 0 || (item.tool == null && item.armor == null),
+                "combustível " + item.id + " não pode ser ferramenta ou armadura nesta versão do contrato");
         if (item.tool != null) {
             String type = item.tool.type == null
                     ? ""

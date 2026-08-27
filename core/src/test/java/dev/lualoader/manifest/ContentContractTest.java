@@ -128,6 +128,59 @@ class ContentContractTest {
     }
 
     @Test
+    void foodAndFuelArePartOfTheItemContract(@TempDir Path root) throws IOException {
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "content_mod",
+                  "name": "Content Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "items": [{
+                    "id": "racao",
+                    "name": "Ração",
+                    "food": {"nutrition": 6, "saturation": 0.8, "always_edible": true},
+                    "fuel_burn_time": 400
+                  }]
+                }
+                """);
+
+        var item = discover(root).getFirst().manifest().items.getFirst();
+        assertNotNull(item.food);
+        assertEquals(6, item.food.nutrition);
+        assertEquals(0.8, item.food.saturation, 0.0001);
+        assertTrue(item.food.alwaysEdible);
+        assertEquals(400, item.fuelBurnTime);
+    }
+
+    @Test
+    void invalidFoodAndFuelContractsAreRejected(@TempDir Path root) throws IOException {
+        writeMod(root, """
+                {
+                  "schema": 1,
+                  "id": "content_mod",
+                  "name": "Content Mod",
+                  "version": "0.1.0",
+                  "entrypoint": "main.lua",
+                  "items": [{
+                    "id": "bad_food",
+                    "name": "Bad Food",
+                    "food": {"nutrition": 21},
+                    "fuel_burn_time": 32768
+                  }]
+                }
+                """);
+        assertTrue(discover(root).isEmpty(), "limites de comida e combustível deveriam ser rejeitados");
+    }
+
+    @Test
+    void standardContractExposesFoodAndFuelCapabilities() {
+        RuntimeContract contract = RuntimeContract.standard();
+        assertEquals("1.0.0", contract.capabilityVersion("registry.item.food"));
+        assertEquals("1.0.0", contract.capabilityVersion("registry.item.fuel"));
+    }
+
+    @Test
     void invalidItemContractsAreRejected(@TempDir Path root) throws IOException {
         // Durabilidade exige stack unitário; o manifesto abaixo viola isso.
         writeMod(root, """

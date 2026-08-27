@@ -720,6 +720,12 @@ public final class ModManifest {
         /** Faz do item uma peca de armadura. Opcional. */
         public ArmorDefinition armor;
 
+        /** Torna o item comestível com propriedades neutras do contrato. Opcional. */
+        public FoodDefinition food;
+
+        /** Tempo de queima em ticks; zero significa que o item não é combustível. */
+        public int fuelBurnTime = 0;
+
         /**
          * Tags do jogo ou proprias em que o item entra.
          *
@@ -727,6 +733,18 @@ public final class ModManifest {
          * sintaxe em um e nao deveria reaprender no outro.
          */
         public List<String> tags = new ArrayList<>();
+    }
+
+    /** Propriedades de comida independentes das classes FoodComponent/FoodProperties. */
+    public static final class FoodDefinition {
+        /** Pontos de fome restaurados; um ponto equivale a meia unidade visual. */
+        public int nutrition = 1;
+
+        /** Modificador de saturação, limitado pelo loader para manter o contrato previsível. */
+        public double saturation = 0.6;
+
+        /** Permite comer mesmo com a barra de fome cheia. */
+        public boolean alwaysEdible = false;
     }
 
     /**

@@ -19,6 +19,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public class BlockInteractionGameTest implements FabricGameTest {
     private static final Identifier RUBY_BLOCK = Identifier.of("hello_lua", "ruby_block");
+    private static final Identifier RATION = Identifier.of("hello_lua", "racao");
 
     @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
     public void declarativeBlockIsRegistered(TestContext context) {
@@ -125,6 +126,33 @@ public class BlockInteractionGameTest implements FabricGameTest {
             }
             bridge.strikeLightning(absolute.getX() + 0.5, absolute.getY() + 1.0,
                     absolute.getZ() + 0.5);
+        } finally {
+            bridge.setCurrentWorld(null);
+        }
+        context.complete();
+    }
+
+    @GameTest(templateName = FabricGameTest.EMPTY_STRUCTURE)
+    public void declarativeFoodAndFuelReachTheGame(TestContext context) {
+        var item = net.minecraft.registry.Registries.ITEM.get(RATION);
+        if (item == null || item == net.minecraft.item.Items.AIR) {
+            throw new AssertionError("item de ração não foi registrado: " + RATION);
+        }
+        var food = new net.minecraft.item.ItemStack(item)
+                .get(net.minecraft.component.DataComponentTypes.FOOD);
+        if (food == null || food.nutrition() != 6
+                || Math.abs(food.saturation() - (6 * 0.8f * 2.0f)) > 0.0001f
+                || !food.canAlwaysEat()) {
+            throw new AssertionError("comida declarativa inesperada: " + food);
+        }
+
+        var bridge = LuaLoaderMod.gameBridge();
+        if (bridge == null) throw new AssertionError("a bridge nao foi montada");
+        bridge.setCurrentWorld(context.getWorld());
+        try {
+            if (bridge.fuelBurnTime(RATION.toString()) != 400) {
+                throw new AssertionError("tempo de combustível inesperado para " + RATION);
+            }
         } finally {
             bridge.setCurrentWorld(null);
         }

@@ -1,6 +1,8 @@
 package dev.lualoader.minecraft;
 
 import dev.lualoader.manifest.ModManifest;
+import net.fabricmc.fabric.api.registry.FuelRegistryEvents;
+import net.minecraft.component.type.FoodComponent;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
@@ -55,6 +57,13 @@ public final class ContentRegistrar {
             if (definition.fireResistant) {
                 settings = settings.fireproof();
             }
+            if (definition.food != null) {
+                FoodComponent.Builder food = new FoodComponent.Builder()
+                        .nutrition(definition.food.nutrition)
+                        .saturationModifier((float) definition.food.saturation);
+                if (definition.food.alwaysEdible) food.alwaysEdible();
+                settings = settings.food(food.build());
+            }
             settings.registryKey(RegistryKey.of(RegistryKeys.ITEM, id));
 
             // Ferramenta e armadura sao itens de classes proprias do jogo: uma picareta precisa
@@ -71,6 +80,10 @@ public final class ContentRegistrar {
                 item = new DeclarativeItem(settings);
             }
             Registry.register(Registries.ITEM, id, item);
+            if (definition.fuelBurnTime > 0) {
+                FuelRegistryEvents.BUILD.register((builder, context) ->
+                        builder.add(item, definition.fuelBurnTime));
+            }
             items.put(id, item);
             logger.info("Lua Loader registrou item {} ({})", id, definition.name);
         }

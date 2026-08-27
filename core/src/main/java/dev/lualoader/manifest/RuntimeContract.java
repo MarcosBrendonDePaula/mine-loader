@@ -62,6 +62,8 @@ public final class RuntimeContract {
         capabilities.put("inventory.block.read", "1.0.0");
         capabilities.put("inventory.block.write", "1.0.0");
         capabilities.put("registry.query", "1.0.0");
+        capabilities.put("registry.item.food", "1.0.0");
+        capabilities.put("registry.item.fuel", "1.0.0");
         capabilities.put("events.lifecycle", "1.0.0");
         capabilities.put("scheduler.after", "1.0.0");
         capabilities.put("scheduler.every", "1.0.0");

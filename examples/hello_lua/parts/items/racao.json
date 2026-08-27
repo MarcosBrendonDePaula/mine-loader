@@ -1,0 +1,12 @@
+{
+  "id": "racao",
+  "name": "Ração",
+  "max_stack_size": 64,
+  "texture": {"fallback": "minecraft:item/bread"},
+  "food": {
+    "nutrition": 6,
+    "saturation": 0.8,
+    "always_edible": true
+  },
+  "fuel_burn_time": 400
+}

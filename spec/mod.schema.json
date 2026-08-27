@@ -877,6 +877,15 @@
           "type": "boolean",
           "default": false
         },
+        "food": {
+          "$ref": "#/$defs/food"
+        },
+        "fuel_burn_time": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32767,
+          "default": 0
+        },
         "texture": {
           "$ref": "#/$defs/texture"
         },
@@ -892,6 +901,28 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "food": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nutrition": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 1
+        },
+        "saturation": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4,
+          "default": 0.6
+        },
+        "always_edible": {
+          "type": "boolean",
+          "default": false
         }
       }
     },

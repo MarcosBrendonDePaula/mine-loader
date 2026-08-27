@@ -116,7 +116,15 @@ objectos da plataforma ou permite escolher fonte, fogo ou modo interno de intera
 **Largar item solto — fechado.** `ctx.server.drop_item(item, x, y, z, count)` cria entidades de item
 em stacks válidos, com limite de 4096 itens por chamada, e exige `entity.spawn`.
 
-**Bioma e nível de luz** são legíveis por `biome_at` e `light_at`. A luz volta separada por origem
+**Comida e combustível declarativos — fechados.** Um item em `items` pode declarar `food` com
+`nutrition` de `0` a `20`, `saturation` finita de `0` a `4` e `always_edible`, além de
+`fuel_burn_time` de `0` a `32767` ticks. O item pode ser comida e combustível ao mesmo tempo, mas
+combustível não combina com ferramenta ou armadura, e comida não combina com durabilidade, ferramenta
+ou armadura. A v1 não inclui efeitos de poção, consumo rápido customizado ou conversão após consumo.
+Não há permissão nova; `registry.item.food` e `registry.item.fuel` são capabilities de negociação.
+
+**Bioma e nível de luz** são legíveis por `biome_at` e `light_at`.
+ A luz volta separada por origem
 — bloco, céu e total —, porque é a luz de **bloco** que decide se um monstro nasce: um lugar
 iluminado só pelo sol tem quinze de total ao meio-dia e continua escuro à noite.
 
@@ -231,9 +239,9 @@ opcional. Sem isso não dá para reproduzir filtro por slot como os módulos de 
 respeitar máquina com entrada e saída separadas: inserir sem dizer onde pode encher o slot de saída.
 
 **Evento global de quebra — fechado.** `mod.on("block_broken", callback)` recebe quebras iniciadas
-por jogador para blocos vanilla e declarativos, com snapshot de id, posição, face, mão, jogador e
-drops. `false` cancela a quebra. O hook não cobre explosões, pistões, substituições de script ou outras
-remoções indirectas; o `behavior.on_broken` de bloco declarativo continua a ser o caminho específico
+por jogador para blocos vanilla e declarativos, com snapshot de id, posição e variante, além do
+jogador. `false` cancela a quebra. O hook não cobre explosões, pistões, substituições de script ou
+outras remoções indirectas; o `behavior.on_broken` de bloco declarativo continua a ser o caminho específico
 do comportamento e não duplica o callback global do próprio mod.
 
 ### Comportamento

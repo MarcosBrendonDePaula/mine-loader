@@ -1,6 +1,8 @@
 package dev.lualoader.minecraft;
 
 import dev.lualoader.manifest.ModManifest;
+import net.fabricmc.fabric.api.registry.FuelRegistry;
+import net.minecraft.component.type.FoodComponent;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
@@ -55,6 +57,13 @@ public final class ContentRegistrar {
             if (definition.fireResistant) {
                 settings = settings.fireproof();
             }
+            if (definition.food != null) {
+                FoodComponent.Builder food = new FoodComponent.Builder()
+                        .nutrition(definition.food.nutrition)
+                        .saturationModifier((float) definition.food.saturation);
+                if (definition.food.alwaysEdible) food.alwaysEdible();
+                settings = settings.food(food.build());
+            }
 
             // Ferramenta e armadura sao itens de classes proprias do jogo: uma picareta precisa
             // ser PickaxeItem para quebrar pedra rapido, e nao um item com dano declarado. Por isso
@@ -70,6 +79,9 @@ public final class ContentRegistrar {
                 item = new DeclarativeItem(settings);
             }
             Registry.register(Registries.ITEM, id, item);
+            if (definition.fuelBurnTime > 0) {
+                FuelRegistry.INSTANCE.add(item, definition.fuelBurnTime);
+            }
             items.put(id, item);
             logger.info("Lua Loader registrou item {} ({})", id, definition.name);
         }

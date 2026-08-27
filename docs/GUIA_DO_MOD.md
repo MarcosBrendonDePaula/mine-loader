@@ -327,6 +327,40 @@ exige `player.read` e `player.equipment.read`; leitura e escrita de slots exigem
 bridge recusa índices que não existam no inventário real e também recusa quantidade acima do stack
 máximo do item.
 
+### Comida e combustível declarativos
+
+Para um item próprio ser comestível ou alimentar uma fornalha, declare as propriedades no `mod.json`.
+A bridge traduz os mesmos dados para Fabric e NeoForge, sem expor classes internas ao Lua.
+
+```json
+{
+  "items": [{
+    "id": "racao",
+    "name": "Ração",
+    "texture": {"fallback": "minecraft:item/bread"},
+    "food": {
+      "nutrition": 6,
+      "saturation": 0.8,
+      "always_edible": true
+    },
+    "fuel_burn_time": 400
+  }],
+  "requires": {
+    "capabilities": {
+      "registry.item.food": "1.0.0",
+      "registry.item.fuel": "1.0.0"
+    }
+  }
+}
+```
+
+`nutrition` aceita de `0` a `20`, `saturation` é finita e fica entre `0` e `4`, e
+`always_edible` permite comer com a barra cheia. `fuel_burn_time` é contado em ticks, de `0` a
+`32767`; `0` significa que o item não é combustível. Nesta versão, combustível não combina com
+ferramenta ou armadura, e comida fica limitada às propriedades básicas: efeitos, consumo rápido
+customizado e conversão após consumo ainda não fazem parte do contrato comum. Para consultar o
+resultado efectivo de um item já registado, use `ctx.server.fuel_burn_time("mod:item")`.
+
 ## Consultar o registro
 
 ```lua

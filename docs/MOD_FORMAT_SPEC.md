@@ -192,6 +192,8 @@ As APIs de runtime seguem o mesmo princípio: o manifesto negocia capabilities, 
 | `player.movement.read` | `ctx.player.movement()` | `player.read` | Snapshot com `velocity.x/y/z`, `on_ground`, `sneaking`, `sprinting`, `swimming`, `flying` e `gliding`. |
 | `player.equipment.read` | `ctx.player.equipment()` | `player.read` | Snapshot com `main_hand`, `off_hand`, `head`, `chest`, `legs` e `feet`; cada campo é `{item, count}` e vazio é `minecraft:air`, `0`. |
 | `player.inventory.slot` | `ctx.player.inventory_slot(slot)` e `ctx.player.set_inventory_slot(slot, item, count[, itemSpec])` | `player.inventory` | Slots na faixa comum `0..63`; quantidade `0..64`; quantidade zero limpa e quantidade positiva respeita o stack máximo real. |
+| `registry.item.food` | `items[].food` no `mod.json` | nenhuma nova | Comida básica declarativa; `nutrition` 0..20, `saturation` 0..4 e `always_edible`. |
+| `registry.item.fuel` | `items[].fuel_burn_time` no `mod.json` | nenhuma nova | Combustível declarativo; tempo entre 0 e 32767 ticks. |
 | `world.item_drop` | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks válidos; quantidade entre 1 e 4096; devolve a quantidade criada. |
 | `world.explode` | `ctx.server.explode(x, y, z, force[, breakBlocks])` | `world.explode` | Coordenadas finitas/limitadas; força `> 0` e `<= 8`; fogo desligado e `breakBlocks` falso por omissão. |
 | `world.lightning` | `ctx.server.strike_lightning(x, y, z)` | `world.lightning` | Cria um raio server-side em coordenadas finitas e limitadas. |
@@ -595,6 +597,12 @@ O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id`
       "max_damage": 0,
       "rarity": "rare",
       "fire_resistant": false,
+      "food": {
+        "nutrition": 6,
+        "saturation": 0.8,
+        "always_edible": true
+      },
+      "fuel_burn_time": 400,
       "texture": {
         "source": "local",
         "path": "assets/hello_lua/textures/item/ruby.png",
@@ -611,7 +619,11 @@ O campo `items` declara itens que nao pertencem a um bloco. Cada item exige `id`
 | `max_damage` | inteiro >= 0 | Maior que zero exige `max_stack_size` igual a 1; caso contrario o manifesto e rejeitado. |
 | `rarity` | `common`, `uncommon`, `rare`, `epic` | Outro valor e rejeitado. |
 | `fire_resistant` | booleano | Item nao queima no lava/fogo. |
+| `food` | objeto opcional | Comida básica: `nutrition` 0..20, `saturation` finita 0..4 e `always_edible`. |
+| `fuel_burn_time` | inteiro 0..32767 | Tempo de queima em ticks; zero significa que não é combustível. Não combina com ferramenta/armadura. |
 | `texture` | objeto de textura | Sem `path`, o loader usa `fallback`. |
+
+`food` e `fuel_burn_time` são traduzidos para as propriedades da versão em execução e são suportados nos quatro runtimes. A v1 não inclui efeitos de poção, consumo rápido customizado ou conversão após consumo. Um item pode ser simultaneamente comida e combustível, mas não pode combinar estas propriedades com `tool`, `armor` ou `max_damage` quando a validação exigir uma classe incompatível.
 
 ## Especies declaradas
 

@@ -34,6 +34,9 @@
   "items": [
     {
       "$import": "parts/items/ruby.json"
+    },
+    {
+      "$import": "parts/items/racao.json"
     }
   ],
   "blocks": [

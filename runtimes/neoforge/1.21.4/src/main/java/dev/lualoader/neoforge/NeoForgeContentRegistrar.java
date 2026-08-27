@@ -9,6 +9,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -264,6 +265,13 @@ public final class NeoForgeContentRegistrar {
 
                 if (definition.maxDamage > 0) properties = properties.durability(definition.maxDamage);
                 if (definition.fireResistant) properties = properties.fireResistant();
+                if (definition.food != null) {
+                    FoodProperties.Builder food = new FoodProperties.Builder()
+                            .nutrition(definition.food.nutrition)
+                            .saturationModifier((float) definition.food.saturation);
+                    if (definition.food.alwaysEdible) food.alwaysEdible();
+                    properties = properties.food(food.build());
+                }
                 properties = properties.setId(
                         net.minecraft.resources.ResourceKey.create(Registries.ITEM, id));
 
@@ -275,6 +283,8 @@ public final class NeoForgeContentRegistrar {
                     item = NeoForgeToolMaterial.create(definition.tool, properties);
                 } else if (definition.armor != null) {
                     item = NeoForgeArmorMaterial.create(definition.armor, properties);
+                } else if (definition.fuelBurnTime > 0) {
+                    item = new NeoForgeFuelItem(properties, definition.fuelBurnTime);
                 } else {
                     item = new Item(properties);
                 }

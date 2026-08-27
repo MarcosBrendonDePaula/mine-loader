@@ -30,6 +30,8 @@ A mesma API Lua é carregada nos quatro runtimes mantidos: Fabric 1.21.1, Fabric
 | `ctx.server.drop_item(item, x, y, z, count)` | `entity.spawn` | Cria itens soltos em stacks, devolvendo a quantidade criada; máximo 4096 por chamada | quatro runtimes |
 | `ctx.server.explode(x, y, z, force[, breakBlocks])` | `world.explode` | Explosão server-side; força `> 0` e `<= 8`, fogo sempre desactivado e blocos intactos por padrão | quatro runtimes |
 | `ctx.server.strike_lightning(x, y, z)` | `world.lightning` | Convoca um raio server-side em coordenadas finitas e limitadas | quatro runtimes |
+| `items[].food` no `mod.json` | `registry.item.food` | Torna um item declarativo com nutrição, saturação e `always_edible` | quatro runtimes |
+| `items[].fuel_burn_time` no `mod.json` | `registry.item.fuel` | Regista tempo de queima em ticks para o item declarado | quatro runtimes |
 | `mod.every(ticks, callback)` / `mod.cancel(id)` | `scheduler.every` | Tarefa recorrente com ID lógico; `false` no callback ou cancelamento encerra | core e runtimes |
 | `mod.keybind(id, callback)` | `client.input.register` | Callback server-side para tecla declarada no manifesto | quatro runtimes |
 | `mod.camera(id, definição)` | `client.camera.register` e `client.camera.virtual` | Câmera lógica ortográfica, publicada como catálogo S2C versionado; o bridge gere a textura | quatro runtimes |
@@ -158,6 +160,8 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
       "world.block_state.read": "1.0.0",
       "world.redstone.read": "1.0.0",
       "world.explode": "1.0.0",
+      "registry.item.food": "1.0.0",
+      "registry.item.fuel": "1.0.0",
       "player.equipment.read": "1.0.0",
       "player.inventory.slot": "1.0.0"
     }
@@ -168,6 +172,31 @@ O manifesto usa `requires` para declarar o contrato mínimo do runtime. As vers�
 `domains` agrupa áreas da API; `capabilities` é mais preciso e identifica operações individuais. Todos os requisitos são obrigatórios nesta primeira versão. O loader valida-os antes de registar conteúdo ou executar Lua e recusa o mod se o nome for desconhecido, a versão mínima for superior ou a versão estiver malformada.
 
 `requires` não substitui `dependencies`. `dependencies` aponta para outro mod, controla ordem de carga e autoriza `mod.require`; `requires` apenas negocia o perfil de APIs que o runtime já entrega.
+
+## Comida e combustível declarativos
+
+Itens independentes podem declarar propriedades de comida e combustível directamente no manifesto. A bridge traduz os mesmos dados para os componentes/propriedades da versão em execução; nenhum `FoodComponent`, `FoodProperties`, `FuelRegistry` ou `ItemStack` atravessa para o core ou para Lua. A configuração não altera itens vanilla nem itens registados por outro mod.
+
+```json
+{
+  "items": [{
+    "id": "racao",
+    "name": "Ração",
+    "food": {
+      "nutrition": 6,
+      "saturation": 0.8,
+      "always_edible": true
+    },
+    "fuel_burn_time": 400
+  }]
+}
+```
+
+`food.nutrition` aceita de `0` a `20` pontos de fome; `food.saturation` aceita números finitos de `0` a `4`; e `food.always_edible` permite o consumo com a barra cheia. A primeira versão fecha a comida básica e não promete efeitos de poção, consumo rápido customizado ou conversão após consumo, porque esses campos não têm a mesma representação nos quatro alvos mantidos. `fuel_burn_time` aceita de `0` a `32767` ticks, em que `0` significa que o item não é combustível. Nesta versão, um item combustível não pode ser ferramenta ou armadura, embora possa também ser comida.
+
+Não existe permissão adicional: registar conteúdo é parte da carga declarativa, como itens, ferramentas e armaduras já existentes. Um mod que precise garantir a presença da API pode declarar `registry.item.food: 1.0.0` e/ou `registry.item.fuel: 1.0.0` em `requires.capabilities`. A consulta Lua já existente `ctx.server.fuel_burn_time("mod:item")` devolve o tempo efectivo de queima depois de o registro estar pronto.
+
+A separação entre dados comuns e detalhes de consumo segue a forma como Fabric modela comida através de FoodComponent e registra combustíveis por uma API de fuel [9] [10], enquanto NeoForge 1.21.1 usa FoodProperties em Item.Properties [11].
 
 | Campo | Exemplo | Significado |
 |---|---|---|
@@ -229,7 +258,8 @@ Dimensões novas, portais e worldgen são outra etapa. Criar uma dimensão exige
 
 ## Próximas APIs priorizadas
 
-As APIs de `drop_item`, efeitos activos, movimento, tarefas recorrentes, quebra global, explosão, raio, equipamento e slots fazem parte da expansão útil actual. O drop cria entidades limitadas; efeitos, movimento e equipamento devolvem snapshots neutros; slots têm escrita explícita e limitada; e `block_broken` só observa a acção directa de um jogador. A evolução seguinte deve focar eventos de mundo, transferência por face, fluidos e energia com unidades próprias do loader, não `FluidStack`, `IItemHandler` ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
+As APIs de `drop_item`, efeitos activos, movimento, tarefas recorrentes, quebra global, explosão, raio, equipamento, slots, comida declarativa e combustível fazem parte da expansão útil actual.
+ O drop cria entidades limitadas; efeitos, movimento e equipamento devolvem snapshots neutros; slots têm escrita explícita e limitada; e `block_broken` só observa a acção directa de um jogador. A evolução seguinte deve focar eventos de mundo, transferência por face, fluidos e energia com unidades próprias do loader, não `FluidStack`, `IItemHandler` ou classes equivalentes. Waypoints, teleporte entre dimensões e worldgen limitado devem nascer como contratos próprios, não como aliases de APIs internas.
 
 Networking declarativo deve usar payloads pequenos e versionados, schema fechado, direção explícita, limite de tamanho e validação no servidor. Expor `send_packet` com bytes arbitrários seria incompatível com a sandbox [2]. Data components devem ser expostos somente como dados imutáveis e portáveis para itens declarados, não como o mapa inteiro de componentes internos [8].
 
@@ -261,8 +291,14 @@ A implementação não promove automaticamente capabilities visuais experimentai
 
 [5]: https://docs.neoforged.net/docs/datastorage/attachments/ "NeoForge Documentation — Data Attachments"
 
-[6]: https://docs.neoforged.net/docs/resources/ "NeoForge Documentation — Resources"
+[6]: https://docs.fabricmc.net/develop/recipes "Fabric Documentation — Recipes"
 
 [7]: https://docs.fabricmc.net/develop/data-generation/features "Fabric Documentation — Feature Generation"
 
 [8]: https://docs.neoforged.net/docs/items/datacomponents "NeoForge Documentation — Data Components"
+
+[9]: https://docs.fabricmc.net/develop/items/food "Fabric Documentation — Food Items"
+
+[10]: https://docs.fabricmc.net/develop/items/first-item "Fabric Documentation — Creating Your First Item"
+
+[11]: https://docs.neoforged.net/docs/1.21.1/items/ "NeoForge Documentation 1.21.1 — Items"
