@@ -168,6 +168,31 @@ O log fica em `build/servidor-<plataforma>.log`. Se o `grep` reclamar de arquivo
   tiquando. O sintoma é uma lógica que "não roda" com tudo aparentemente configurado, e custou uma
   investigação inteira. Monte a verificação perto de 0,0; ler bloco distante também paga
   carregamento de chunk, caro o bastante para estourar o orçamento de 20 ms.
+- **O mundo do servidor sobrevive ao reinício, e um teste que falha no meio deixa lixo nele.** Um
+  caso que estoura o orçamento antes de desmontar deixa os blocos onde estavam, e a rodada seguinte
+  os encontra. O sintoma não se parece com a causa: uma rede de cinco canos foi vista com vinte e
+  seis nós, e a falha apareceu num caso que não tinha nada a ver com o que quebrou. Ao investigar
+  contagem estranha de rede, **limpe a área antes de acreditar no número**.
+- **`fill` do console falha sem jogador, e a mensagem não diz isso.** Ela é `That position is not
+  loaded` — o chunk não está carregado porque não há ninguém por perto. `forceload add <x1> <z1>
+  <x2> <z2>` antes do `fill` resolve, e é como se limpa a área de testes entre rodadas:
+
+  ```bash
+  tools/servidor-dirigivel.sh cmd "forceload add -2 -2 110 12"
+  tools/servidor-dirigivel.sh cmd "fill -2 99 -2 110 101 12 air"
+  ```
+- **`ln -s` no Git Bash do Windows cria uma cópia, não um link.** Apontar `run/mods-lua/<mod>` para
+  uma pasta fora do repositório assim produz um retrato congelado: o servidor carrega a versão do
+  momento do comando, e toda edição posterior é invisível. O sintoma é o mesmo de "o servidor não
+  recarregou" -- o teste que você acabou de escrever não aparece na lista --, mas a correção é
+  outra. Use um junction:
+
+  ```powershell
+  New-Item -ItemType Junction -Path "<repo>/run/mods-lua/<mod>" -Target "<origem>"
+  ```
+- **Ao matar servidor órfão por PID, não mate o cliente junto.** Um comando que mata todo `java.exe`
+  que não seja o `GradleDaemon` derruba o jogo que estiver aberto. Pare o servidor pelo script, e
+  confira a linha de comando do processo antes de matar por PID.
 - **O seletor `@e` do console não enxerga entidades em todo servidor.** Para contar o que caiu no
   chão, use `entities_near` pela API do loader — é o caminho que um mod usaria, e responde.
 - **Um servidor órfão segura a porta e o mundo.** `parar` antes de `iniciar`, sempre. O script

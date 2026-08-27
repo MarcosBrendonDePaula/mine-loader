@@ -41,6 +41,11 @@ class ServerReadAndReloadTest {
         public String worldName() {
             return "minecraft:the_nether";
         }
+
+        @Override
+        public int fuelBurnTime(String item) {
+            return "minecraft:coal".equals(item) ? 1600 : 0;
+        }
     }
 
     private ModLoader.LoadedMod writeMod(Path root, String permissions, String lua) throws IOException {
@@ -82,6 +87,45 @@ class ServerReadAndReloadTest {
                 "hora 13000",
                 "mundo minecraft:the_nether"
         ), bridge.calls);
+    }
+
+    @Test
+    void scriptCanAskHowLongAnItemBurns(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        // Quem responde e o jogo. Um mod que precisa de combustivel -- uma rede logistica com
+        // gerador -- escreveria a propria tabela de carvao e tabua, e ela nasceria errada no
+        // primeiro modpack: o combustivel de outro mod nao estaria nela.
+        runtime.load(writeMod(root, "\"chat.send\", \"server.read\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.broadcast("carvao " .. ctx.server.fuel_burn_time("minecraft:coal"))
+                    ctx.server.broadcast("pedra " .. ctx.server.fuel_burn_time("minecraft:stone"))
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+
+        // Zero, e nao nil: "nao queima" e uma resposta, e devolver nil faria toda conta precisar de
+        // um `or 0` antes de somar.
+        assertEquals(List.of("carvao 1600", "pedra 0"), bridge.calls);
+    }
+
+    @Test
+    void askingHowLongAnItemBurnsNeedsServerRead(@TempDir Path root) throws IOException {
+        RecordingBridge bridge = new RecordingBridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        runtime.load(writeMod(root, "\"chat.send\"", """
+                mod.on("server_started", function(ctx)
+                    ctx.server.broadcast("carvao " .. ctx.server.fuel_burn_time("minecraft:coal"))
+                end)
+                """));
+
+        runtime.triggerAll("server_started", null);
+        assertTrue(bridge.calls.isEmpty(), "perguntar o combustivel exige server.read");
     }
 
     @Test

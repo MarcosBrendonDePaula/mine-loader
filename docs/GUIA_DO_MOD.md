@@ -296,6 +296,73 @@ ctx.server.entity_types({ namespace = "minecraft" })
 
 As tres aceitam o mesmo filtro e o mesmo teto -- sem limite declarado, 256; o maximo e 4096.
 
+## Uma tela que se atualiza sozinha
+
+`mod.after` agenda uma funcao para daqui a N tiques. **A tarefa lembra de quem a agendou**: se ela
+nasceu dentro de um evento de jogador -- um clique de tela, um comando --, `ctx.player` volta a
+valer dentro dela. E o que permite uma maquina ter numero que anda.
+
+```lua
+local INTERVALO = 1   -- um tique; a tela do jogo anda assim
+
+local function acompanhar(ctx, estado, geracao)
+    mod.after(INTERVALO, function(depois)
+        -- Para quando a tela fecha, e quando outra abertura tomou o lugar desta.
+        if not estado.aberta or estado.geracao ~= geracao then return end
+        if depois.player == nil then return end
+
+        depois.player.update_screen(desenhar(depois, estado))
+        acompanhar(depois, estado, geracao)
+    end)
+end
+```
+
+Tres coisas que precisam estar no laco, e cuja falta nao da erro nenhum:
+
+- **Parar quando a tela fecha.** O evento de tela com `ctx.ui.action == "close"` e quem apaga a
+  marca. Sem isso, cada abertura deixa uma tarefa viva pelo resto da sessao.
+- **Uma geracao por abertura.** Reabrir antes de o laco anterior perceber que fechou daria duas
+  tarefas correndo juntas sobre a mesma tela.
+- **Conferir `depois.player`.** Ele e nulo quando a tarefa nao veio de um jogador, e quando o
+  jogador saiu do servidor.
+
+**O que custa por volta e o envio da tela**, e nao ler os dados. Se a tela mostra algo que exige
+varredura -- uma rede de blocos, por exemplo --, guarde o resultado e refaca-o **por evento**, e nao
+a cada volta: um cache por tempo erra dos dois lados, curto demais nao economiza e longo demais
+mostra o que nao existe mais.
+
+## Perguntar ao jogo
+
+Quatro perguntas que o proprio jogo responde. Todas exigem `server.read`, **nenhuma consome nada** e
+todas valem para o conteudo de qualquer mod instalado -- e essa e a razao de existirem: uma tabela
+escrita dentro do mod saberia so o que o autor dele conhecia, e nasceria errada no primeiro modpack.
+
+```lua
+-- O que sai de um arranjo de bancada 3x3.
+local saida = ctx.server.crafting_result({
+    "minecraft:oak_planks", "minecraft:oak_planks", "minecraft:oak_planks",
+    "minecraft:oak_planks", nil,                    "minecraft:oak_planks",
+    "minecraft:oak_planks", "minecraft:oak_planks", "minecraft:oak_planks",
+})
+-- saida = { item = "minecraft:chest", count = 4 }, ou nil quando o arranjo nao faz nada
+
+-- Como se faz um item, e o que se faz com ele.
+local receitas = ctx.server.recipes_for("minecraft:chest")
+local usos     = ctx.server.recipes_using("minecraft:oak_planks")
+
+-- Por quantos tiques um item queima numa fornalha.
+local tiques = ctx.server.fuel_burn_time("minecraft:coal")   -- 1600
+local nada   = ctx.server.fuel_burn_time("minecraft:stone")  -- 0
+```
+
+**Nil e cadeia vazia sao a mesma coisa** nos nove slots de `crafting_result`: exigir a distincao
+faria toda tela preencher os buracos com `""`.
+
+**`fuel_burn_time` devolve zero, e nao nil**, quando o item nao queima. "Nao queima" e uma resposta,
+e devolver nil faria toda conta precisar de um `or 0` antes de somar. O numero e o mesmo que a
+fornalha usa, entao o combustivel que outro mod registrou tambem conta -- e um gerador escrito em
+Lua aceita carvao, tabua e a vara de blaze sem listar nenhum deles.
+
 ## Entidade e item com dados
 
 `spawn_entity` e `give_item` aceitam uma tabela com o que o mod quer declarar. Sem ela, nasce a

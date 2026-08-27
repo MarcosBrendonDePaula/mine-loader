@@ -251,6 +251,17 @@ public abstract class TestBridge implements GameBridge {
         return null;
     }
 
+    /**
+     * Nenhum item queima, por padrao.
+     *
+     * <p>Zero e a resposta honesta de um duble que nao tem fornalha: o teste que precisa de
+     * combustivel sobrescreve e diz quanto, e assim o numero fica escrito no proprio teste.
+     */
+    @Override
+    public int fuelBurnTime(String item) {
+        return 0;
+    }
+
     /** O arranjo sem as linhas e colunas vazias das bordas, em ordem de leitura. */
     private static java.util.List<String> recorta(java.util.List<String> items) {
         String[][] grade = new String[3][3];

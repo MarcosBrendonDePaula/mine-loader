@@ -57,8 +57,26 @@ public final class ObjModels {
     private ObjModels() {
     }
 
+    /**
+     * Os arquivos ja lidos, por caminho, no estado em que saem do disco e cabem num bloco.
+     *
+     * <p><b>Um OBJ e um catalogo, e cada peca do bloco pede o mesmo arquivo.</b> O cano tem miolo,
+     * manga e placa, cada um com o recorte que lhe cabe, e todos apontam para {@code cano.obj} --
+     * dez blocos vezes as pecas de cada um davam dezenas de leituras e analises do mesmo texto de
+     * milhares de linhas, toda vez que o jogo carrega os recursos.
+     *
+     * <p>Guarda o modelo <b>antes</b> do recorte: e o que todas as pecas tem em comum. Depois dele
+     * cada uma segue seu caminho, e guardar o resultado nao serviria a mais ninguem.
+     */
+    private static final java.util.Map<Identifier, ObjModel> LIDOS = new java.util.HashMap<>();
+
     public static void register() {
-        ModelLoadingPlugin.register(plugin -> plugin.resolveModel().register(ObjModels::resolve));
+        ModelLoadingPlugin.register(plugin -> {
+            // A cada carregamento de recursos, e nao uma vez so: trocar de resource pack troca o
+            // arquivo, e um cache que sobrevive a isso desenha o modelo do pack anterior.
+            LIDOS.clear();
+            plugin.resolveModel().register(ObjModels::resolve);
+        });
     }
 
     /**
@@ -99,13 +117,11 @@ public final class ObjModels {
                     .forEach(elemento -> grupos.add(elemento.getAsString()));
         }
 
-        try (var stream = resource.get().getInputStream();
-             var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-
+        try {
             // Escala primeiro, recorte depois. Ao contrario, cada peca seria escalada pela propria
             // caixa e sairia de tamanho diferente e fora do lugar -- o miolo no centro e a manga a
             // metros dali.
-            ObjModel model = ObjModel.read(reader).normalized().filtered(grupos);
+            ObjModel model = read(objId, resource.get()).filtered(grupos);
             // O recorte por regiao vem antes de duplicar as faces: dobrar primeiro so faria o
             // recorte percorrer o dobro do trabalho para chegar ao mesmo resultado.
             if (declaracao.has("lua_obj_clip")) {
@@ -152,6 +168,26 @@ public final class ObjModels {
             LuaLoaderClient.LOGGER.warn("Malha {} nao pode ser lida, usando a reserva: {}",
                     objId, error.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * O arquivo ja normalizado, do cache ou do disco.
+     *
+     * <p>Guarda ate a falha: um arquivo ilegivel seria reaberto e reanalisado por cada peca que o
+     * declara, e cada uma registraria o mesmo aviso -- dezenas de linhas iguais no log para um
+     * problema so.
+     */
+    private static ObjModel read(Identifier objId, net.minecraft.resource.Resource resource)
+            throws IOException {
+        ObjModel cached = LIDOS.get(objId);
+        if (cached != null) return cached;
+
+        try (var stream = resource.getInputStream();
+             var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+            ObjModel model = ObjModel.read(reader).normalized();
+            LIDOS.put(objId, model);
+            return model;
         }
     }
 
@@ -261,9 +297,10 @@ public final class ObjModels {
      * conhece o formato. Aqui se faz o mesmo com o equivalente do Fabric -- a ideia e a mesma, o
      * codigo e o daqui.
      *
-     * <p>A <b>normal</b> e a da geometria, calculada por face, e nao a direcao do cubo mais
-     * parecida. E ela que da volume ao desenho: aproximar para um dos seis lados achata a malha na
-     * iluminacao, e um cano redondo passa a parecer uma caixa.
+     * <p>A <b>normal</b> e a que o arquivo declara por vertice, e so na falta dela a da geometria.
+     * E ela que da volume ao desenho: a normal da face descreve a quina do triangulo, e um cano
+     * redondo iluminado assim aparece como o prisma de doze lados que ele e. O leitor do NeoForge
+     * faz a mesma escolha, e so recalcula quando o indice de normal falta.
      */
     private static Mesh meshOf(ObjModel model, Sprite sprite, float uvScale) {
         // Sem renderizador registrado nao ha como emitir, e o modelo fica sem quads. So acontece
@@ -277,20 +314,18 @@ public final class ObjModels {
         Renderer renderer = RendererAccess.INSTANCE.getRenderer();
 
         /*
-         * Sem sombreamento difuso, e sem oclusao de ambiente.
+         * Com sombreamento difuso, e sem oclusao de ambiente.
          *
-         * As duas contas partem do principio de que a face esta encostada na parede do cubo -- e
-         * numa malha ela fica no meio do bloco. Pior: desenhar cada face tambem pelo avesso
-         * (`double_sided`) cria faces com a normal apontando para dentro, e o difuso as ilumina
-         * como se estivessem viradas para o lado errado. Elas ficam PRETAS, e sao justamente as que
-         * aparecem de certos angulos.
+         * O difuso ja esteve desligado aqui, atribuido as faces pretas, e ler o Indigo desmentiu
+         * isso: `normalShade` e a media dos fatores por eixo ponderada pela normal, entre 0,5 e 1 --
+         * ela nao produz preto nenhum, nem para uma normal apontando para dentro. Desligar so
+         * achatava o volume, que e justamente o que a normal do arquivo tem a oferecer.
          *
-         * E a diferenca entre as duas plataformas: o caminho vanilla do NeoForge sombreia pela
-         * direcao do quad, e o renderizador do Fabric pela normal do vertice. O mesmo modelo saia
-         * bem la e preto aqui.
+         * A oclusao de ambiente continua desligada, e por um motivo diferente: ela supoe a face
+         * encostada na parede do cubo e escurece pelos vizinhos, e numa malha a face fica no meio do
+         * bloco.
          */
         RenderMaterial material = renderer.materialFinder()
-                .disableDiffuse(true)
                 .ambientOcclusion(TriState.FALSE)
                 .find();
 
@@ -301,7 +336,16 @@ public final class ObjModels {
             List<ObjModel.Vertex> vertices = face.vertices();
             if (vertices.size() < 3) continue;
 
-            float[] normal = normalOf(vertices.get(0), vertices.get(1), vertices.get(2));
+            float[] inset = insetOf(vertices);
+
+            // A da geometria e a reserva: vale quando o arquivo nao traz `vn`, e e por face.
+            float[] faceNormal = normalOf(vertices.get(0), vertices.get(1), vertices.get(2));
+
+            // O lado do cubo para onde a face olha, pela normal -- a mesma conta do leitor do
+            // NeoForge, que a tira do PRIMEIRO vertice e nao de uma media. Declarar isto e o que
+            // permite ao renderizador tratar uma placa colada na parede como face daquele lado; sem
+            // declarar, ele deduz por conta propria e as duas plataformas divergem na deducao.
+            emitter.nominalFace(Direction.getFacing(faceNormal[0], faceNormal[1], faceNormal[2]));
 
             for (int index = 0; index < 4; index++) {
                 // Triangulo vira quad com o ultimo vertice repetido: o jogo desenha quads, e
@@ -309,9 +353,9 @@ public final class ObjModels {
                 ObjModel.Vertex vertex = vertices.get(Math.min(index, vertices.size() - 1));
 
                 emitter.pos(index,
-                        (float) (vertex.x() / 16.0),
-                        (float) (vertex.y() / 16.0),
-                        (float) (vertex.z() / 16.0));
+                        (float) ((vertex.x() + inset[0]) / 16.0),
+                        (float) ((vertex.y() + inset[1]) / 16.0),
+                        (float) ((vertex.z() + inset[2]) / 16.0));
 
                 // Em torno do centro: 0,75 usa os doze dezesseis avos do meio da imagem.
                 emitter.uv(index,
@@ -319,7 +363,12 @@ public final class ObjModels {
                         0.5f + ((float) vertex.v() - 0.5f) * uvScale);
 
                 emitter.color(index, -1);
-                emitter.normal(index, normal[0], normal[1], normal[2]);
+                if (vertex.hasNormal()) {
+                    emitter.normal(index,
+                            (float) vertex.nx(), (float) vertex.ny(), (float) vertex.nz());
+                } else {
+                    emitter.normal(index, faceNormal[0], faceNormal[1], faceNormal[2]);
+                }
             }
 
             // Sem cullFace: uma malha nao garante que a face cubra exatamente um lado do bloco -- a
@@ -332,6 +381,57 @@ public final class ObjModels {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Quanto recuar a face para dentro do bloco, por eixo, em dezesseis avos.
+     *
+     * <p><b>E o que tira as faces pretas, e a causa e do renderizador.</b> Quando um quad e coplanar
+     * com o proprio lado de luz -- todos os vertices em 0 ou em 16 num eixo --, o Indigo le a luz do
+     * bloco <b>vizinho</b> em vez da do proprio bloco ({@code AbstractBlockRenderContext
+     * .flatBrightness}). A ponta da manga de um cano encosta exatamente na borda, e o vizinho e o
+     * cano seguinte ou o bau: bloco solido, luz zero, face preta. De outros angulos a mesma peca
+     * aparece normal, que e o que fazia o defeito parecer aleatorio.
+     *
+     * <p>O caminho vanilla, por onde o NeoForge desenha, nao faz essa leitura do vizinho -- e por
+     * isso a correcao mora <b>so aqui</b>. Ja se tentou uma vez igualar as duas plataformas mexendo
+     * nas duas, e o lado que estava bom quebrou junto.
+     *
+     * <p>Um centesimo de dezesseis avo e um oitocentesimo de bloco: bem acima do
+     * {@code EPS_MIN = 0.0001} com que o Indigo decide a coplanaridade, e pequeno demais para abrir
+     * fresta visivel entre dois canos encostados.
+     *
+     * <p>Decide pela <b>posicao</b>, e nao pela normal: com {@code double_sided} a mesma parede
+     * existe olhando para os dois lados, e as duas copias precisam sair da borda.
+     */
+    private static float[] insetOf(List<ObjModel.Vertex> vertices) {
+        return new float[]{
+                insetOnAxis(vertices, 0),
+                insetOnAxis(vertices, 1),
+                insetOnAxis(vertices, 2)};
+    }
+
+    /** Um decimo de milimetro de bloco, no eixo em que a face encosta na borda. */
+    private static final float INSET = 0.02f;
+
+    private static float insetOnAxis(List<ObjModel.Vertex> vertices, int axis) {
+        boolean atMin = true;
+        boolean atMax = true;
+
+        for (ObjModel.Vertex vertex : vertices) {
+            double value = switch (axis) {
+                case 0 -> vertex.x();
+                case 1 -> vertex.y();
+                default -> vertex.z();
+            };
+            atMin &= value <= INSET / 2;
+            atMax &= value >= 16 - INSET / 2;
+            if (!atMin && !atMax) return 0;
+        }
+
+        if (atMin) return INSET;
+        if (atMax) return -INSET;
+        return 0;
     }
 
     /**

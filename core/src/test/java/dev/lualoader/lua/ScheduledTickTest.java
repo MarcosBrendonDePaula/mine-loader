@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -33,9 +34,17 @@ class ScheduledTickTest {
     private static final class Bridge extends TestBridge {
         final List<String> calls = new ArrayList<>();
 
+        /** Quem esta no servidor. Vazio por padrao, como no dublê base. */
+        final List<String> online = new ArrayList<>();
+
         @Override
         public void broadcast(String message) {
             calls.add("broadcast:" + message);
+        }
+
+        @Override
+        public List<String> onlinePlayers() {
+            return online;
         }
     }
 
@@ -192,5 +201,81 @@ class ScheduledTickTest {
                 "broadcast:passei por 3"), bridge.calls);
         // Dois agendamentos, e nao tres: o ultimo passo chegou ao destino e parou.
         assertEquals(List.of("1,64,0,4", "2,64,0,4"), bridge.scheduledTicks);
+    }
+
+    /**
+     * Uma tarefa agendada dentro de um evento de jogador continua sabendo quem e ele.
+     *
+     * <p><b>O defeito que isto tranca falhava em silencio.</b> Uma tela que se atualiza sozinha --
+     * qualquer maquina com numero que anda -- agenda uma tarefa e chama {@code ctx.player
+     * .update_screen} de dentro dela. Sem o jogador, {@code ctx.player} chegava nulo, o script
+     * desistia na primeira volta, e nada aparecia no log: desistir e o comportamento correto de
+     * quem confere antes de usar. A tela abria com os valores certos e nunca mais se movia.
+     */
+    @Test
+    void scheduledTaskKeepsThePlayerThatScheduledIt(@TempDir Path root) throws IOException {
+        Bridge bridge = new Bridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        dev.lualoader.platform.TestPlayer player = new dev.lualoader.platform.TestPlayer();
+        bridge.online.add(player.name());
+
+        runtime.load(writeMod(root, "\"player.menu\"", SEM_BEHAVIOR, """
+                mod.screen("painel", function(ctx)
+                    mod.after(1, function(depois)
+                        if depois.player == nil then return end
+                        depois.player.update_screen({ width = 100, height = 100,
+                                                     elements = {} })
+                    end)
+                end)
+                """));
+
+        player.openScreen("painel", "{\"elements\":[]}");
+        runtime.triggerScreenEvent("canos:painel", "botao", "click", "", player);
+
+        // Antes do tique nada mudou; e a tarefa que atualiza.
+        player.screenJson = "antigo";
+        runtime.advanceScheduler();
+
+        assertNotEquals("antigo", player.screenJson,
+                "a tarefa agendada deveria ter alcancado o jogador que a agendou");
+    }
+
+    /**
+     * Um jogador que saiu nao recebe a tarefa que agendou.
+     *
+     * <p>O handle continua existindo e nao fala com ninguem. Entregar a tarefa assim mesmo seria,
+     * na melhor das hipoteses, trabalho perdido -- e no pior, um script achando que falou com
+     * alguem que nao esta la.
+     */
+    @Test
+    void aPlayerThatLeftDoesNotGetTheTask(@TempDir Path root) throws IOException {
+        Bridge bridge = new Bridge();
+        LuaRuntime runtime = new LuaRuntime(LoggerFactory.getLogger("test"));
+        runtime.attach(bridge);
+
+        dev.lualoader.platform.TestPlayer player = new dev.lualoader.platform.TestPlayer();
+        bridge.online.add(player.name());
+
+        runtime.load(writeMod(root, "\"player.menu\"", SEM_BEHAVIOR, """
+                mod.screen("painel", function(ctx)
+                    mod.after(1, function(depois)
+                        if depois.player == nil then return end
+                        depois.player.update_screen({ width = 100, height = 100,
+                                                     elements = {} })
+                    end)
+                end)
+                """));
+
+        player.openScreen("painel", "{}");
+        runtime.triggerScreenEvent("canos:painel", "botao", "click", "", player);
+
+        bridge.online.clear();
+        player.screenJson = "antigo";
+        runtime.advanceScheduler();
+
+        assertEquals("antigo", player.screenJson,
+                "quem saiu do servidor nao deveria receber a atualizacao");
     }
 }

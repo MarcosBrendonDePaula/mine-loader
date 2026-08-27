@@ -34,8 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * mod que não recebe de funil não é um baú.
  */
 public class DeclarativeBlockEntity extends BlockEntity implements SidedInventory,
-        NamedScreenHandlerFactory,
-        net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory<BlockPos> {
+        NamedScreenHandlerFactory {
     private static final String DATA_KEY = "lua_data";
     private static final String ITEMS_KEY = "lua_items";
 
@@ -209,13 +208,22 @@ public class DeclarativeBlockEntity extends BlockEntity implements SidedInventor
         return getCachedState().getBlock().getName();
     }
 
-    /**
-     * O unico dado que o cliente precisa: qual bloco. O desenho ele acha no manifesto que ja tem.
+    /*
+     * **Fabrica comum, e nao estendida.** Esta classe ja foi `ExtendedScreenHandlerFactory`, e o
+     * Fabric recusa a combinacao: uma fabrica estendida exige um `ExtendedScreenHandlerType`, e o
+     * que `createMenu` devolve sao os tipos do proprio jogo -- `GENERIC_9X1` e companhia. O
+     * resultado era uma excecao no servidor a cada clique, e o bloco simplesmente nao abria:
+     *
+     *     Non-extended screen handler minecraft:generic_9x1
+     *     must not be opened with an ExtendedScreenHandlerFactory!
+     *
+     * O dado estendido tambem nao servia a ninguem -- era a posicao do bloco, e `createMenu` ja
+     * recebe `this`. Quem precisa mandar dado proprio para o cliente e `DeclaredMenus`, que tem o
+     * tipo estendido dele.
+     *
+     * **Nenhum teste pegava isto**, e vale saber por que: a suite mexe no inventario pela API, sem
+     * nunca abrir a janela. Quem descobriu foi quem clicou no bloco no jogo.
      */
-    @Override
-    public BlockPos getScreenOpeningData(net.minecraft.server.network.ServerPlayerEntity player) {
-        return getPos();
-    }
 
     @Nullable
     @Override

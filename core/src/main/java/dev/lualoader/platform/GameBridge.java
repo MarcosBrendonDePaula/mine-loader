@@ -256,6 +256,19 @@ public interface GameBridge {
     String craftingResult(java.util.List<String> items);
 
     /**
+     * Por quantos tiques aquele item queima numa fornalha, ou zero quando ele nao e combustivel.
+     *
+     * <p><b>Quem decide e o jogo, e nao uma tabela escrita aqui.</b> Um mod que precisa de
+     * combustivel -- uma rede logistica com gerador, uma maquina propria -- teria que listar carvao,
+     * carvao vegetal, tabua, vara de blaze e tudo o mais, e a lista nasceria errada no primeiro
+     * modpack: o combustivel de outro mod nao estaria nela, e o sintoma seria um item que o jogador
+     * sabe que queima sendo recusado sem explicacao.
+     *
+     * <p>E uma pergunta: nada e consumido, e quem tira do inventario e o script.
+     */
+    int fuelBurnTime(String item);
+
+    /**
      * Itens que um bloco ou uma entidade pode derrubar.
      *
      * <p>É a terceira pergunta de um catálogo, e para boa parte do jogo é a verdadeira: minério,
@@ -547,6 +560,11 @@ public interface GameBridge {
 
         @Override
         public String craftingResult(java.util.List<String> items) {
+            throw new BridgeException("nenhuma plataforma conectada");
+        }
+
+        @Override
+        public int fuelBurnTime(String item) {
             throw new BridgeException("nenhuma plataforma conectada");
         }
 

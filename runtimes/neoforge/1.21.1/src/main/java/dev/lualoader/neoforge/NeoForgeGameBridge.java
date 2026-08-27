@@ -1377,4 +1377,28 @@ public class NeoForgeGameBridge implements GameBridge {
                 net.minecraft.resources.ResourceLocation.tryParse(id);
         return parsed == null ? null : registrar.declaredEntity(parsed);
     }
+
+    /**
+     * Por quantos tiques o item queima, perguntado ao proprio jogo.
+     *
+     * <p>O NeoForge deixa o proprio item responder -- e assim que um mod registra um combustivel
+     * proprio --, e por isso a pergunta vai para a pilha e nao para um mapa. O resultado e o mesmo
+     * que a fornalha usaria.
+     */
+    @Override
+    public int fuelBurnTime(String item) {
+        String limpo = item == null ? "" : item.trim();
+        if (limpo.isEmpty()) return 0;
+
+        ResourceLocation parsed = parse(limpo);
+        if (!BuiltInRegistries.ITEM.containsKey(parsed)) {
+            throw new BridgeException("item desconhecido: " + item);
+        }
+
+        // Exige mundo pela mesma razao das outras: e a fase em que o registro esta pronto.
+        requireLevel();
+        int tiques = new ItemStack(BuiltInRegistries.ITEM.get(parsed))
+                .getBurnTime(net.minecraft.world.item.crafting.RecipeType.SMELTING);
+        return Math.max(tiques, 0);
+    }
 }

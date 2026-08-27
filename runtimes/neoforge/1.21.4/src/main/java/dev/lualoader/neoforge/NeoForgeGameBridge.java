@@ -1368,4 +1368,22 @@ public class NeoForgeGameBridge implements GameBridge {
                 net.minecraft.resources.ResourceLocation.tryParse(id);
         return parsed == null ? null : registrar.declaredEntity(parsed);
     }
+
+    @Override
+    public int fuelBurnTime(String item) {
+        String limpo = item == null ? "" : item.trim();
+        if (limpo.isEmpty()) return 0;
+
+        ResourceLocation parsed = parse(limpo);
+        if (!BuiltInRegistries.ITEM.containsKey(parsed)) {
+            throw new BridgeException("item desconhecido: " + item);
+        }
+
+        // Exige mundo pela mesma razao das outras: e a fase em que o registro esta pronto.
+        // Desde a 1.21.2 o combustivel vive numa tabela do mundo, nao num mapa estatico.
+        var level = requireLevel();
+        int tiques = new ItemStack(BuiltInRegistries.ITEM.getOptional(parsed).orElseThrow())
+                .getBurnTime(net.minecraft.world.item.crafting.RecipeType.SMELTING, level.fuelValues());
+        return Math.max(tiques, 0);
+    }
 }

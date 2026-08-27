@@ -50,6 +50,19 @@ public final class NeoForgeObjModels {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath("lua_loader", "obj");
 
+    /**
+     * Os arquivos ja lidos, por caminho, no estado em que saem do disco e cabem num bloco.
+     *
+     * <p><b>Um OBJ e um catalogo, e cada peca do bloco pede o mesmo arquivo.</b> O cano tem miolo,
+     * manga e placa, cada um com o recorte que lhe cabe, e todos apontam para {@code cano.obj} --
+     * dez blocos vezes as pecas de cada um davam dezenas de leituras e analises do mesmo texto de
+     * milhares de linhas, toda vez que o jogo carrega os recursos.
+     *
+     * <p>Guarda o modelo <b>antes</b> do recorte: e o que todas as pecas tem em comum.
+     */
+    private static final java.util.Map<ResourceLocation, ObjModel> LIDOS =
+            new java.util.HashMap<>();
+
     public static void install(IEventBus modBus) {
         // O tipo escrito por extenso, e nao uma referencia de metodo: o compilador nao infere o
         // generico de IGeometryLoader a partir dela, e a mensagem que sai nao aponta para a causa.
@@ -58,6 +71,11 @@ public final class NeoForgeObjModels {
 
         modBus.addListener((ModelEvent.RegisterGeometryLoaders event) ->
                 event.register(ID, leitor));
+
+        // Assados os modelos, ninguem mais pede o texto do arquivo -- e segurar a analise de todos
+        // eles seria pagar memoria pelo resto da sessao. Limpar aqui tambem e o que faz uma troca
+        // de resource pack reler: um cache que sobrevive a ela desenha o modelo do pack anterior.
+        modBus.addListener((ModelEvent.BakingCompleted event) -> LIDOS.clear());
     }
 
     /**
@@ -141,12 +159,10 @@ public final class NeoForgeObjModels {
                 return new ObjBakedModel(List.of(), sprite, transforms);
             }
 
-            try (var stream = resource.get().open();
-                 var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-
+            try {
                 // Escala primeiro, recorte depois -- a mesma ordem do outro adaptador. Ao
                 // contrario, cada peca seria escalada pela propria caixa e sairia fora do lugar.
-                ObjModel model = ObjModel.read(reader).normalized().filtered(groups);
+                ObjModel model = read(objId, resource.get()).filtered(groups);
                 // Recorte antes de duplicar, como no outro adaptador: dobrar primeiro so faria o
                 // recorte percorrer o dobro do trabalho.
                 if (clip != null) {
@@ -175,6 +191,26 @@ public final class NeoForgeObjModels {
     }
 
     /**
+     * O arquivo ja normalizado, do cache ou do disco.
+     *
+     * <p>Guarda ate a falha: um arquivo ilegivel seria reaberto e reanalisado por cada peca que o
+     * declara, e cada uma registraria o mesmo aviso -- dezenas de linhas iguais no log para um
+     * problema so.
+     */
+    private static ObjModel read(ResourceLocation objId, net.minecraft.server.packs.resources.Resource resource)
+            throws java.io.IOException {
+        ObjModel cached = LIDOS.get(objId);
+        if (cached != null) return cached;
+
+        try (var stream = resource.open();
+             var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+            ObjModel model = ObjModel.read(reader).normalized();
+            LIDOS.put(objId, model);
+            return model;
+        }
+    }
+
+    /**
      * Uma face da malha virando um quad do jogo.
      *
      * <p>Mesma conversão do adaptador Fabric, e precisa continuar sendo: o formato do vértice é o
@@ -190,20 +226,29 @@ public final class NeoForgeObjModels {
         ObjModel.Vertex c = vertices.get(2);
         ObjModel.Vertex d = vertices.size() > 3 ? vertices.get(3) : c;
 
-        Direction direction = dominantSide(a, b, c);
-        int normal = packNormal(direction);
+        // A da geometria e a reserva: vale quando o arquivo nao traz `vn`, e e por face.
+        double[] faceNormal = faceNormal(a, b, c);
+
+        // O lado do cubo sai da normal do PRIMEIRO vertice, e nao de uma media -- e o que o leitor
+        // de OBJ do NeoForge faz. Ele so decide a iluminacao por lado; o volume vem da normal por
+        // vertice, logo abaixo.
+        ObjModel.Vertex first = vertices.get(0);
+        Direction direction = first.hasNormal()
+                ? Direction.getNearest((float) first.nx(), (float) first.ny(), (float) first.nz())
+                : Direction.getNearest((float) faceNormal[0], (float) faceNormal[1],
+                        (float) faceNormal[2]);
 
         int[] data = new int[32];
-        putVertex(data, 0, a, sprite, normal, uvScale);
-        putVertex(data, 8, b, sprite, normal, uvScale);
-        putVertex(data, 16, c, sprite, normal, uvScale);
-        putVertex(data, 24, d, sprite, normal, uvScale);
+        putVertex(data, 0, a, sprite, faceNormal, uvScale);
+        putVertex(data, 8, b, sprite, faceNormal, uvScale);
+        putVertex(data, 16, c, sprite, faceNormal, uvScale);
+        putVertex(data, 24, d, sprite, faceNormal, uvScale);
 
         return new BakedQuad(data, -1, direction, sprite, true);
     }
 
     private static void putVertex(int[] data, int offset, ObjModel.Vertex vertex,
-                                  TextureAtlasSprite sprite, int normal, float uvScale) {
+                                  TextureAtlasSprite sprite, double[] faceNormal, float uvScale) {
         // As coordenadas do modelo estao em dezesseis avos, e o jogo desenha o bloco de 0 a 1.
         data[offset] = Float.floatToRawIntBits((float) (vertex.x() / 16.0));
         data[offset + 1] = Float.floatToRawIntBits((float) (vertex.y() / 16.0));
@@ -216,11 +261,21 @@ public final class NeoForgeObjModels {
         data[offset + 4] = Float.floatToRawIntBits(sprite.getU(u));
         data[offset + 5] = Float.floatToRawIntBits(sprite.getV(v));
         data[offset + 6] = 0;
-        data[offset + 7] = normal;
+        // A normal do arquivo quando existe: e ela que faz um cano parecer redondo em vez de
+        // facetado. A da face e a reserva, e era o que este adaptador usava para todo vertice.
+        data[offset + 7] = vertex.hasNormal()
+                ? packNormal(vertex.nx(), vertex.ny(), vertex.nz())
+                : packNormal(faceNormal[0], faceNormal[1], faceNormal[2]);
     }
 
-    /** O lado do bloco para o qual a face aponta, usado pelo jogo para iluminar. */
-    private static Direction dominantSide(ObjModel.Vertex a, ObjModel.Vertex b, ObjModel.Vertex c) {
+    /**
+     * A normal da face, pela geometria, normalizada.
+     *
+     * <p>Mesma conta do adaptador Fabric, e precisa continuar sendo: e a reserva para o arquivo que
+     * nao declara {@code vn}, e uma reserva diferente em cada lado daria o mesmo modelo com luzes
+     * diferentes.
+     */
+    private static double[] faceNormal(ObjModel.Vertex a, ObjModel.Vertex b, ObjModel.Vertex c) {
         double ux = b.x() - a.x(), uy = b.y() - a.y(), uz = b.z() - a.z();
         double vx = c.x() - a.x(), vy = c.y() - a.y(), vz = c.z() - a.z();
 
@@ -228,16 +283,16 @@ public final class NeoForgeObjModels {
         double ny = uz * vx - ux * vz;
         double nz = ux * vy - uy * vx;
 
-        double ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
-        if (ay >= ax && ay >= az) return ny >= 0 ? Direction.UP : Direction.DOWN;
-        if (ax >= az) return nx >= 0 ? Direction.EAST : Direction.WEST;
-        return nz >= 0 ? Direction.SOUTH : Direction.NORTH;
+        double size = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (size < 1.0e-6) return new double[]{0, 1, 0};
+        return new double[]{nx / size, ny / size, nz / size};
     }
 
-    private static int packNormal(Direction direction) {
-        int x = (int) (direction.getStepX() * 127) & 0xFF;
-        int y = (int) (direction.getStepY() * 127) & 0xFF;
-        int z = (int) (direction.getStepZ() * 127) & 0xFF;
+    /** A normal no formato do vertice: tres bytes com sinal, um por eixo. */
+    private static int packNormal(double nx, double ny, double nz) {
+        int x = (int) (nx * 127) & 0xFF;
+        int y = (int) (ny * 127) & 0xFF;
+        int z = (int) (nz * 127) & 0xFF;
         return x | (y << 8) | (z << 16);
     }
 

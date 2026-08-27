@@ -371,7 +371,12 @@ public final class LuaRuntime {
             if (script == null) continue;
             try {
                 script.budget().start();
-                task.callback().call(context(script.mod(), null, null));
+                // **Confere que ele ainda esta no servidor.** Um jogador que saiu deixa um handle
+                // que nao fala com ninguem, e uma tela atualizada para quem nao esta la seria, na
+                // melhor das hipoteses, trabalho perdido.
+                PlayerHandle dono = task.player();
+                if (dono != null && !bridge.onlinePlayers().contains(dono.name())) dono = null;
+                task.callback().call(context(script.mod(), dono, null));
             } catch (LuaError error) {
                 logger.error("Erro Lua em tarefa agendada do mod {}: {}", task.modId(), error.getMessage());
             } catch (BridgeException error) {
@@ -1038,7 +1043,7 @@ public final class LuaRuntime {
                     throw new LuaError("limite de " + MAX_SCHEDULED + " tarefas agendadas atingido");
                 }
                 scheduled.add(new ScheduledTask(mod.manifest().id, currentTick + ticks,
-                        (LuaFunction) args.arg(2)));
+                        (LuaFunction) args.arg(2), actingPlayer));
                 return LuaValue.NIL;
             }
         });
@@ -2117,6 +2122,18 @@ public final class LuaRuntime {
                 saida.set("item", LuaValue.valueOf(resultado.substring(0, corte)));
                 saida.set("count", LuaValue.valueOf(Integer.parseInt(resultado.substring(corte + 1))));
                 return saida;
+            }
+        });
+        // Por quantos tiques um item queima. Quem responde e o jogo, com o mapa que a fornalha
+        // usa -- inclusive o combustivel que outro mod registrou. Uma tabela escrita no mod
+        // nasceria errada no primeiro modpack.
+        serverApi.set("fuel_burn_time", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                requirePermission(mod.manifest(), "server.read");
+                if (args.narg() < 1) throw new LuaError("fuel_burn_time exige o id de um item");
+                String item = requireIdentifier(args.arg(1).tojstring());
+                return LuaValue.valueOf(bridge.fuelBurnTime(item));
             }
         });
         serverApi.set("spawn_entity", new VarArgFunction() {
@@ -3289,7 +3306,16 @@ public final class LuaRuntime {
         }
     }
 
+    /**
+     * O jogador do callback que esta correndo agora, ou {@code null}.
+     *
+     * <p>Existe para o {@code mod.after} saber a quem a tarefa pertence sem que o script precise
+     * dizer. E preenchido ao montar o contexto, que e por onde todo callback passa.
+     */
+    private PlayerHandle actingPlayer;
+
     private LuaTable context(ModLoader.LoadedMod mod, PlayerHandle player, BlockEventData block) {
+        this.actingPlayer = player;
         LuaTable context = createLogApi(mod.manifest().id);
         context.set("time", LuaValue.valueOf(System.currentTimeMillis()));
         // O mesmo estado alcancado por mod.state, para o callback nao precisar do global.
@@ -3676,8 +3702,20 @@ public final class LuaRuntime {
     private record RegisteredCommand(String modId, LuaFunction callback) {
     }
 
-    /** Tarefa agendada por {@code mod.after}. */
-    private record ScheduledTask(String modId, long dueTick, LuaFunction callback) {
+    /**
+     * Tarefa agendada por {@code mod.after}.
+     *
+     * <p><b>Ela lembra de quem a agendou.</b> Uma tarefa criada dentro de um evento de jogador --
+     * um clique de tela, um comando -- continua o que aquele jogador comecou, e sem o jogador de
+     * volta ela nao consegue falar com ele: {@code ctx.player} chegava nulo, e um script que
+     * atualiza a propria tela desistia na primeira volta. Sem erro nenhum no log, porque desistir
+     * e o comportamento correto de quem checa antes de usar.
+     *
+     * <p>{@code null} quando ninguem a agendou -- um tique de mundo, o arranque do servidor --, e
+     * ai {@code ctx.player} continua nulo, como sempre foi.
+     */
+    private record ScheduledTask(String modId, long dueTick, LuaFunction callback,
+                                 PlayerHandle player) {
     }
 
     /** Uma lista de textos como tabela Lua indexada a partir de um. */

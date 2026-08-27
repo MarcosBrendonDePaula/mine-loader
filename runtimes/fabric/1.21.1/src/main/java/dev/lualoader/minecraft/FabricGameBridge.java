@@ -1428,4 +1428,28 @@ public final class FabricGameBridge implements GameBridge {
         Identifier parsed = Identifier.tryParse(id);
         return parsed == null ? null : registrar.declaredEntity(parsed);
     }
+
+    /**
+     * Por quantos tiques o item queima, perguntado ao proprio jogo.
+     *
+     * <p>O mapa de combustiveis da fornalha e o mesmo que qualquer maquina do jogo consulta, e
+     * inclui o que outros mods registraram. Uma tabela escrita no loader saberia so o que o autor
+     * dele conhecia.
+     */
+    @Override
+    public int fuelBurnTime(String item) {
+        String limpo = item == null ? "" : item.trim();
+        if (limpo.isEmpty()) return 0;
+
+        Identifier parsed = parseIdentifier(limpo);
+        if (!Registries.ITEM.containsId(parsed)) {
+            throw new BridgeException("item desconhecido: " + item);
+        }
+
+        // Exige mundo pela mesma razao das outras: e a fase em que o registro esta pronto.
+        requireWorld();
+        Integer tiques = net.minecraft.block.entity.AbstractFurnaceBlockEntity
+                .createFuelTimeMap().get(Registries.ITEM.get(parsed));
+        return tiques == null ? 0 : tiques;
+    }
 }

@@ -1441,4 +1441,20 @@ public final class FabricGameBridge implements GameBridge {
         Identifier parsed = Identifier.tryParse(id);
         return parsed == null ? null : registrar.declaredEntity(parsed);
     }
+
+    @Override
+    public int fuelBurnTime(String item) {
+        String limpo = item == null ? "" : item.trim();
+        if (limpo.isEmpty()) return 0;
+
+        Identifier parsed = parseIdentifier(limpo);
+        if (!Registries.ITEM.containsId(parsed)) {
+            throw new BridgeException("item desconhecido: " + item);
+        }
+
+        // Exige mundo pela mesma razao das outras: e a fase em que o registro esta pronto.
+        // Desde a 1.21.2 o combustivel vive num registro do mundo, nao num mapa estatico.
+        var world = requireWorld();
+        return world.getFuelRegistry().getFuelTicks(new ItemStack(Registries.ITEM.get(parsed)));
+    }
 }

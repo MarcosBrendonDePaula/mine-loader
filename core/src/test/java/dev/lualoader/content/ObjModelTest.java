@@ -281,6 +281,61 @@ class ObjModelTest {
     }
 
     @Test
+    void aNormalDoArquivoChegaAoVertice() throws IOException {
+        ObjModel modelo = ler("""
+                v 0 0 0
+                v 1 0 0
+                v 1 1 0
+                vt 0 0
+                vn 0.5 0.5 0.70710678
+                f 1/1/1 2/1/1 3/1/1
+                """);
+
+        ObjModel.Vertex vertice = modelo.faces().get(0).vertices().get(0);
+        assertTrue(vertice.hasNormal());
+        assertEquals(0.5, vertice.nx(), 1.0e-6);
+        assertEquals(0.70710678, vertice.nz(), 1.0e-6);
+    }
+
+    @Test
+    void semVnOVerticeNaoTemNormal() throws IOException {
+        // Quem converte recalcula pela face; e o que este leitor fazia com todo arquivo.
+        assertTrue(!ler(QUADRADO).faces().get(0).vertices().get(0).hasNormal());
+    }
+
+    @Test
+    void aNormalAtravessaAEscalaEODeslocamento() throws IOException {
+        ObjModel modelo = ler("""
+                v 0 0 0
+                v 100 0 0
+                v 100 100 0
+                vn 0 0 1
+                f 1//1 2//1 3//1
+                """).normalized();
+
+        ObjModel.Vertex vertice = modelo.faces().get(0).vertices().get(0);
+        assertEquals(0, vertice.nx(), 1.0e-9);
+        assertEquals(1, vertice.nz(), 1.0e-9, "escala igual nos tres eixos nao gira a normal");
+    }
+
+    @Test
+    void aCopiaPeloAvessoOlhaParaOLadoOposto() throws IOException {
+        ObjModel dobrado = ler("""
+                v 0 0 0
+                v 1 0 0
+                v 1 1 0
+                vn 0 0 1
+                f 1//1 2//1 3//1
+                """).doubleSided();
+
+        assertEquals(2, dobrado.faces().size());
+        // Sem virar a normal junto com a ordem dos vertices, a parede de dentro do cano acende
+        // como a de fora e o tubo perde o fundo.
+        assertEquals(1, dobrado.faces().get(0).vertices().get(0).nz(), 1.0e-9);
+        assertEquals(-1, dobrado.faces().get(1).vertices().get(0).nz(), 1.0e-9);
+    }
+
+    @Test
     void reconheceOCaminhoDeUmObj() {
         assertTrue(ObjModel.isObj("models/cano.obj"));
         assertTrue(ObjModel.isObj("MODELS/CANO.OBJ"));

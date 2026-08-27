@@ -27,8 +27,39 @@ import java.util.Locale;
  */
 public final class ObjModel {
 
-    /** Um vértice de face: posição, e a coordenada de textura quando o arquivo traz uma. */
-    public record Vertex(double x, double y, double z, double u, double v) {
+    /**
+     * Um vértice de face: posição, coordenada de textura e a normal, quando o arquivo traz.
+     *
+     * <p><b>A normal vem do arquivo porque ela não é dedutível da geometria.</b> Calcular pela face
+     * dá o vetor perpendicular àquele triângulo, e é o que descreve uma quina; a curva de um cano
+     * redondo está justamente na normal que o exportador guardou por vértice, interpolada entre os
+     * triângulos vizinhos. Sem ela o cilindro é iluminado como o prisma de doze lados que ele é, e
+     * as facetas aparecem.
+     *
+     * <p>Ausência é o vetor nulo, e não um sinalizador à parte: um OBJ sem {@code vn} é comum, e
+     * quem converte volta a calcular pela face — que era o que este leitor fazia com todo arquivo.
+     */
+    public record Vertex(double x, double y, double z, double u, double v,
+                         double nx, double ny, double nz) {
+
+        /** Um vértice sem normal declarada. */
+        public Vertex(double x, double y, double z, double u, double v) {
+            this(x, y, z, u, v, 0, 0, 0);
+        }
+
+        public boolean hasNormal() {
+            return nx != 0 || ny != 0 || nz != 0;
+        }
+
+        /** O mesmo vértice em outra posição, com a mesma textura e a mesma normal. */
+        public Vertex movedTo(double x, double y, double z) {
+            return new Vertex(x, y, z, u, v, nx, ny, nz);
+        }
+
+        /** O mesmo vértice olhando para o lado oposto. Ver {@link ObjModel#doubleSided()}. */
+        public Vertex flipped() {
+            return new Vertex(x, y, z, u, v, -nx, -ny, -nz);
+        }
     }
 
     /**
@@ -107,6 +138,7 @@ public final class ObjModel {
     public static ObjModel read(Reader source) throws IOException {
         List<double[]> positions = new ArrayList<>();
         List<double[]> uvs = new ArrayList<>();
+        List<double[]> normals = new ArrayList<>();
         List<Face> faces = new ArrayList<>();
         String group = "";
 
@@ -139,6 +171,11 @@ public final class ObjModel {
                         if (parts.length < 3) break;
                         uvs.add(new double[]{number(parts[1]), number(parts[2])});
                     }
+                    case "vn" -> {
+                        if (parts.length < 4) break;
+                        normals.add(new double[]{
+                                number(parts[1]), number(parts[2]), number(parts[3])});
+                    }
                     // O grupo e o material dao nome a parte; o desenho nao muda por causa deles.
                     //
                     // A LINHA INTEIRA vira o nome, e nao o primeiro nome dela. Uma ferramenta
@@ -149,7 +186,7 @@ public final class ObjModel {
                     case "f" -> {
                         List<Vertex> vertices = new ArrayList<>();
                         for (int index = 1; index < parts.length; index++) {
-                            Vertex vertex = vertexOf(parts[index], positions, uvs);
+                            Vertex vertex = vertexOf(parts[index], positions, uvs, normals);
                             if (vertex != null) vertices.add(vertex);
                         }
                         if (vertices.size() < 3) break;
@@ -171,8 +208,9 @@ public final class ObjModel {
                         }
                     }
                     default -> {
-                        // vn, s, mtllib e o que mais vier sao ignorados de proposito: nao mudam a
-                        // geometria, e recusar o arquivo por causa deles rejeitaria export legitimo.
+                        // s, mtllib e o que mais vier sao ignorados de proposito: nao mudam nem a
+                        // geometria nem a luz, e recusar o arquivo por causa deles rejeitaria
+                        // export legitimo.
                     }
                 }
             }
@@ -184,7 +222,8 @@ public final class ObjModel {
     }
 
     /** Um vértice da forma {@code v}, {@code v/vt} ou {@code v/vt/vn}. */
-    private static Vertex vertexOf(String token, List<double[]> positions, List<double[]> uvs) {
+    private static Vertex vertexOf(String token, List<double[]> positions, List<double[]> uvs,
+                                   List<double[]> normals) {
         String[] parts = token.split("/");
         if (parts.length == 0 || parts[0].isEmpty()) return null;
 
@@ -203,7 +242,17 @@ public final class ObjModel {
                 v = 1 - uv[1];
             }
         }
-        return new Vertex(position[0], position[1], position[2], u, v);
+        double nx = 0, ny = 0, nz = 0;
+        if (parts.length > 2 && !parts[2].isEmpty()) {
+            double[] normal = at(normals, parts[2]);
+            if (normal != null) {
+                nx = normal[0];
+                ny = normal[1];
+                nz = normal[2];
+            }
+        }
+
+        return new Vertex(position[0], position[1], position[2], u, v, nx, ny, nz);
     }
 
     /** Resolve um índice do OBJ, que começa em 1 e aceita negativo contando do fim. */
@@ -253,11 +302,12 @@ public final class ObjModel {
         for (Face face : faces) {
             List<Vertex> vertices = new ArrayList<>(face.vertices().size());
             for (Vertex vertex : face.vertices()) {
-                vertices.add(new Vertex(
+                // A normal atravessa inteira: escala igual nos tres eixos mais deslocamento nao
+                // gira nada, e renormalizar so acrescentaria erro de arredondamento.
+                vertices.add(vertex.movedTo(
                         vertex.x() * scale + offsetX,
                         vertex.y() * scale + offsetY,
-                        vertex.z() * scale + offsetZ,
-                        vertex.u(), vertex.v()));
+                        vertex.z() * scale + offsetZ));
             }
             moved.add(new Face(List.copyOf(vertices), face.group()));
         }
@@ -329,8 +379,13 @@ public final class ObjModel {
         for (Face face : faces) {
             both.add(face);
 
-            List<Vertex> reversed = new ArrayList<>(face.vertices());
-            java.util.Collections.reverse(reversed);
+            // Inverter a ordem VIRA a face, e a normal tem que virar junto. Sem isso a copia
+            // acende como se ainda olhasse para o lado de fora, e a parede de dentro do cano fica
+            // com o brilho da de fora -- o tubo perde o fundo e vira uma silhueta chapada.
+            List<Vertex> reversed = new ArrayList<>(face.vertices().size());
+            for (int index = face.vertices().size() - 1; index >= 0; index--) {
+                reversed.add(face.vertices().get(index).flipped());
+            }
             both.add(new Face(List.copyOf(reversed), face.group()));
         }
 
@@ -394,11 +449,10 @@ public final class ObjModel {
         for (Face face : faces) {
             List<Vertex> vertices = new ArrayList<>(face.vertices().size());
             for (Vertex vertex : face.vertices()) {
-                vertices.add(new Vertex(
+                vertices.add(vertex.movedTo(
                         8 + (vertex.x() - 8) * factor,
                         8 + (vertex.y() - 8) * factor,
-                        8 + (vertex.z() - 8) * factor,
-                        vertex.u(), vertex.v()));
+                        8 + (vertex.z() - 8) * factor));
             }
             grown.add(new Face(List.copyOf(vertices), face.group()));
         }
