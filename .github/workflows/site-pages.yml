@@ -40,7 +40,9 @@ jobs:
           node-version: 22
 
       - name: Enable pnpm
-        run: corepack enable
+        run: |
+          npm install --global pnpm@10.4.1
+          pnpm --version
 
       - name: Install frontend dependencies
         run: pnpm --dir site install --frozen-lockfile
