@@ -171,8 +171,28 @@ A pasta [examples/](examples/) contém mods usados pela bateria de GameTests e p
 | `gerenciador` | Catálogo, activação e instalação por link |
 | `bestiario` | Entidades declaradas, variantes e herança |
 | `logistica` | Rede de canos e entrega de itens |
+| `minimap_demo` | Protótipo de mapa 2D no HUD, com terreno, marcador, coordenadas e dimensão |
 
 Os exemplos documentais de capabilities, domínios e bibliotecas entre mods ficam separados em [docs/examples/](docs/examples/), para não serem carregados pela bateria de GameTests.
+
+### Testar o `minimap_demo`
+
+O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D de 9×9 células no HUD, classifica o bloco abaixo de cada célula por cor, marca o centro do jogador e mostra coordenadas e dimensão. A fotografia é actualizada sob comando porque o contrato actual ainda não tem stream client-side de posição e terreno.
+
+```bash
+./gradlew :runtimes:fabric:1.21.1:linkModsLua
+./gradlew :runtimes:fabric:1.21.1:runClient
+```
+
+Dentro do jogo, use:
+
+```text
+/mod minimap_demo on
+/mod minimap_demo refresh
+/mod minimap_demo off
+```
+
+O mesmo exemplo pode ser testado nos outros runtimes trocando o caminho por `fabric:1.21.4`, `neoforge:1.21.1` ou `neoforge:1.21.4`. O cliente precisa do protocolo de telas/HUD do MineLoader; num cliente sem esse protocolo, o exemplo informa a limitação pelo chat.
 
 ## Testar a matriz
 

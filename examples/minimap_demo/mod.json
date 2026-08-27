@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "minimap_demo",
+  "name": "Minimap Demo",
+  "version": "0.1.0",
+  "description": "Protótipo de minimap declarativo em HUD, com snapshot de terreno e coordenadas.",
+  "entrypoint": "main.lua",
+  "permissions": ["chat.send", "player.read", "player.menu", "world.read", "server.command.register"],
+  "requires": {
+    "domains": {
+      "world": "1.0.0",
+      "player": "1.0.0",
+      "ui": "1.0.0"
+    },
+    "capabilities": {
+      "world.block_state.read": "1.0.0",
+      "ui.menu": "1.0.0"
+    }
+  },
+  "events": {
+    "player_joined": "on_player_joined"
+  },
+  "enabled": true
+}
