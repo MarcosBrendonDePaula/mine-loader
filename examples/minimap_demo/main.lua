@@ -1,7 +1,8 @@
 -- Minimap Demo
 --
 -- Minimapa de superfície que acompanha o jogador sozinho, desenhado no HUD declarativo.
---   /mod minimap_demo on|off
+-- A tecla M abre a configuração declarativa; as opções ficam guardadas por jogador.
+--   /mod minimap_demo on|off|config
 --   /mod minimap_demo zoom <1..4>
 --
 -- Três decisões sustentam o resto, e nenhuma é óbvia:
@@ -17,7 +18,9 @@
 --    iguais numa faixa só cabe com folga — e é o que permite o mapa ser grande em vez de um
 --    quadradinho de nove por nove.
 
-local TILE = 2                 -- lado de uma célula, em pixels de tela
+local TILE_PADRAO = 2          -- lado padrão de uma célula, em pixels de tela
+local ZOOM_MIN = 1
+local ZOOM_MAX = 4
 local RADIUS = 20              -- 41x41 colunas
 local INTERVALO = 4            -- tiques entre atualizações; 4 = cinco vezes por segundo
 local ORCAMENTO_COLUNAS = 90   -- leituras de terreno novas por volta
@@ -34,6 +37,31 @@ local SESSOES = {}
 -- Cache de colunas do mundo, compartilhado por todos os jogadores: o terreno é o mesmo para todos.
 -- Fora de `ctx.state` de propósito — `ctx.state` vai para o disco, e isto é retrato descartável.
 local COLUNAS = {}
+
+local function limitar_zoom(valor)
+    local zoom = tonumber(valor) or ZOOM_MIN
+    zoom = math.floor(zoom)
+    if zoom < ZOOM_MIN then return ZOOM_MIN end
+    if zoom > ZOOM_MAX then return ZOOM_MAX end
+    return zoom
+end
+
+local function ler_config(ctx)
+    local zoom = limitar_zoom(ctx.player.data.get("minimap.zoom", ZOOM_MIN))
+    local mostrar_coordenadas = ctx.player.data.get("minimap.coordinates", true)
+    if type(mostrar_coordenadas) ~= "boolean" then
+        mostrar_coordenadas = true
+    end
+    return {
+        zoom = zoom,
+        mostrar_coordenadas = mostrar_coordenadas
+    }
+end
+
+local function guardar_config(ctx, config)
+    ctx.player.data.set("minimap.zoom", config.zoom)
+    ctx.player.data.set("minimap.coordinates", config.mostrar_coordenadas)
+end
 
 local CORES = {
     { "water",      0x28, 0x68, 0xB8 },
@@ -152,7 +180,7 @@ local function linhas_do_centro()
     return ordem
 end
 
-local function faixas(cx, cz, lado)
+local function faixas(cx, cz, lado, tile)
     local resultado = {}
 
     for _, dz in ipairs(linhas_do_centro()) do
@@ -169,11 +197,11 @@ local function faixas(cx, cz, lado)
                 if cor_atual ~= nil and cor_atual ~= "#00000000" then
                     resultado[#resultado + 1] = a_direita({
                         type = "panel",
-                        y = MAP_Y + (dz + RADIUS) * TILE,
-                        w = (dx - inicio) * TILE,
-                        h = TILE,
+                        y = MAP_Y + (dz + RADIUS) * tile,
+                        w = (dx - inicio) * tile,
+                        h = tile,
                         color = cor_atual
-                    }, (inicio + RADIUS) * TILE, lado)
+                    }, (inicio + RADIUS) * tile, lado)
                 end
                 inicio, cor_atual = dx, cor
             end
@@ -182,11 +210,11 @@ local function faixas(cx, cz, lado)
         if cor_atual ~= nil and cor_atual ~= "#00000000" then
             resultado[#resultado + 1] = a_direita({
                 type = "panel",
-                y = MAP_Y + (dz + RADIUS) * TILE,
-                w = (RADIUS + 1 - inicio) * TILE,
-                h = TILE,
+                y = MAP_Y + (dz + RADIUS) * tile,
+                w = (RADIUS + 1 - inicio) * tile,
+                h = tile,
                 color = cor_atual
-            }, (inicio + RADIUS) * TILE, lado)
+            }, (inicio + RADIUS) * tile, lado)
         end
     end
 
@@ -194,23 +222,26 @@ local function faixas(cx, cz, lado)
 end
 
 local function desenhar(ctx, sessao, cx, cz, posicao)
-    local lado = (RADIUS * 2 + 1) * TILE
+    local tile = sessao.tile or TILE_PADRAO
+    local lado = (RADIUS * 2 + 1) * tile
+    local mostrar_coordenadas = sessao.mostrar_coordenadas ~= false
     local elementos = {
         a_direita({ type = "panel", y = MAP_Y - 3,
                     w = lado + 6, h = lado + 6, color = "#101018E8" }, -3, lado)
     }
 
-    for _, faixa in ipairs(faixas(cx, cz, lado)) do
+    for _, faixa in ipairs(faixas(cx, cz, lado, tile)) do
         if #elementos >= MAX_FAIXAS then break end
         elementos[#elementos + 1] = faixa
     end
 
     -- O marcador vai depois do terreno para ficar por cima, e não some quando as faixas são cortadas.
-    local centro_x = RADIUS * TILE
-    local centro_y = MAP_Y + RADIUS * TILE
+    local centro_x = RADIUS * tile
+    local centro_y = MAP_Y + RADIUS * tile
     elementos[#elementos + 1] = a_direita({
         type = "panel", y = centro_y - 1,
-        w = TILE + 2, h = TILE + 2, color = "#000000FF"
+                    w = tile + 2, h = tile + 2, color = "#000000FF"
+
     }, centro_x - 1, lado)
     elementos[#elementos + 1] = a_direita({
         type = "panel", y = centro_y,
@@ -220,7 +251,7 @@ local function desenhar(ctx, sessao, cx, cz, posicao)
     -- A ponta indica para onde o jogador anda. Não há leitura de ângulo de visão na API, então a
     -- direção vem do próprio deslocamento — que é o que um minimapa precisa mostrar de qualquer forma.
     if sessao.dx ~= nil and (math.abs(sessao.dx) > 0.02 or math.abs(sessao.dz) > 0.02) then
-        local passo = TILE + 2
+        local passo = tile + 2
         local ponta_x, ponta_y = centro_x, centro_y
         if math.abs(sessao.dx) > math.abs(sessao.dz) then
             ponta_x = centro_x + (sessao.dx > 0 and passo or -passo)
@@ -229,18 +260,20 @@ local function desenhar(ctx, sessao, cx, cz, posicao)
         end
         elementos[#elementos + 1] = a_direita({
             type = "panel", y = ponta_y,
-            w = TILE, h = TILE, color = "#F5D547FF"
+            w = tile, h = tile, color = "#F5D547FF"
         }, ponta_x, lado)
     end
 
     elementos[#elementos + 1] = a_direita({
         type = "label", y = MAP_Y - 2, text = "N", color = "#FFFFFFFF"
     }, math.floor(lado / 2) + 3, lado)
-    elementos[#elementos + 1] = a_direita({
-        type = "label", y = MAP_Y + lado + 5,
-        text = "X " .. cx .. "  Z " .. cz .. "  Y " .. math.floor(posicao.y),
-        color = "#FFFFFFFF"
-    }, lado, lado)
+    if mostrar_coordenadas then
+        elementos[#elementos + 1] = a_direita({
+            type = "label", y = MAP_Y + lado + 5,
+            text = "X " .. cx .. "  Z " .. cz .. "  Y " .. math.floor(posicao.y),
+            color = "#FFFFFFFF"
+        }, lado, lado)
+    end
 
     return elementos
 end
@@ -279,6 +312,13 @@ local function acompanhar(ctx, uuid, geracao)
     end)
 end
 
+local function aplicar_configuracao(ctx, config)
+    local sessao = SESSOES[ctx.player.uuid]
+    if sessao == nil then return end
+    sessao.tile = config.zoom * TILE_PADRAO
+    sessao.mostrar_coordenadas = config.mostrar_coordenadas
+end
+
 local function ligar(ctx)
     if not ctx.player.supports_screens() then
         return false
@@ -287,7 +327,13 @@ local function ligar(ctx)
     local uuid = ctx.player.uuid
     local anterior = SESSOES[uuid]
     local geracao = (anterior and anterior.geracao or 0) + 1
-    SESSOES[uuid] = { geracao = geracao, volta = 0 }
+    local config = ler_config(ctx)
+    SESSOES[uuid] = {
+        geracao = geracao,
+        volta = 0,
+        tile = config.zoom * TILE_PADRAO,
+        mostrar_coordenadas = config.mostrar_coordenadas
+    }
 
     acompanhar(ctx, uuid, geracao)
     return true
@@ -296,6 +342,79 @@ end
 local function desligar(ctx)
     SESSOES[ctx.player.uuid] = nil
     ctx.player.set_hud({})
+end
+
+local function desenhar_config(ctx)
+    local config = ler_config(ctx)
+    local ativo = SESSOES[ctx.player.uuid] ~= nil
+    local coordenadas = config.mostrar_coordenadas and "SIM" or "NAO"
+    local estado = ativo and "LIGADO" or "DESLIGADO"
+
+    return {
+        title = "Configurar Minimap",
+        width = 220,
+        height = 150,
+        blur = true,
+        dim = true,
+        elements = {
+            { type = "panel", x = 0, y = 0, w = 220, h = 150, color = "#101018F0" },
+            { type = "label", x = 12, y = 10, text = "MINIMAP", color = "#F5D547FF" },
+            { type = "label", x = 12, y = 30,
+              text = "Zoom: " .. config.zoom .. "/" .. ZOOM_MAX, color = "#FFFFFFFF" },
+            { type = "button", id = "zoom_minus", x = 12, y = 48, w = 92, h = 20,
+              text = "Zoom -" },
+            { type = "button", id = "zoom_plus", x = 116, y = 48, w = 92, h = 20,
+              text = "Zoom +" },
+            { type = "button", id = "coordinates", x = 12, y = 75, w = 196, h = 20,
+              text = "Coordenadas: " .. coordenadas },
+            { type = "button", id = "map_toggle", x = 12, y = 101, w = 196, h = 20,
+              text = "Minimap: " .. estado },
+            { type = "button", id = "close", x = 12, y = 127, w = 196, h = 20,
+              text = "Fechar" }
+        }
+    }
+end
+
+mod.screen("config", function(ctx)
+    if ctx.player == nil then
+        return
+    end
+
+    if ctx.ui.action == "close" then
+        return
+    end
+
+    if ctx.ui.element == "close" then
+        ctx.player.close_screen()
+        return
+    end
+
+    local config = ler_config(ctx)
+    if ctx.ui.element == "zoom_minus" then
+        config.zoom = limitar_zoom(config.zoom - 1)
+    elseif ctx.ui.element == "zoom_plus" then
+        config.zoom = limitar_zoom(config.zoom + 1)
+    elseif ctx.ui.element == "coordinates" then
+        config.mostrar_coordenadas = not config.mostrar_coordenadas
+    elseif ctx.ui.element == "map_toggle" then
+        if SESSOES[ctx.player.uuid] == nil then
+            ligar(ctx)
+        else
+            desligar(ctx)
+        end
+    end
+
+    guardar_config(ctx, config)
+    aplicar_configuracao(ctx, config)
+    ctx.player.update_screen(desenhar_config(ctx))
+end)
+
+local function abrir_config(ctx)
+    if not ctx.player.supports_screens() then
+        ctx.player.send_message("Este cliente não suporta telas do loader.")
+        return false
+    end
+    return ctx.player.open_screen("config", desenhar_config(ctx))
 end
 
 local function on_player_joined(ctx)
@@ -317,6 +436,11 @@ mod.command("minimap_demo", function(ctx)
 
     local action = ctx.argv[2] or "on"
 
+    if action == "config" then
+        abrir_config(ctx)
+        return
+    end
+
     if action == "off" then
         desligar(ctx)
         ctx.player.send_message("Minimap desligado.")
@@ -325,12 +449,15 @@ mod.command("minimap_demo", function(ctx)
 
     if action == "zoom" then
         local pedido = tonumber(ctx.argv[3] or "")
-        if pedido == nil or pedido < 1 or pedido > 4 then
+        if pedido == nil or pedido < ZOOM_MIN or pedido > ZOOM_MAX then
             ctx.player.send_message("Uso: /mod minimap_demo zoom <1..4>")
             return
         end
-        TILE = math.floor(pedido) * 2
-        ctx.player.send_message("Minimap com zoom " .. math.floor(pedido) .. ".")
+        local config = ler_config(ctx)
+        config.zoom = limitar_zoom(pedido)
+        guardar_config(ctx, config)
+        aplicar_configuracao(ctx, config)
+        ctx.player.send_message("Minimap com zoom " .. config.zoom .. ".")
         return
     end
 
@@ -343,22 +470,14 @@ mod.command("minimap_demo", function(ctx)
         return
     end
 
-    ctx.player.send_message("Uso: /mod minimap_demo on|off|zoom <1..4>")
+    ctx.player.send_message("Uso: /mod minimap_demo on|off|config|zoom <1..4>")
 end)
 
 mod.keybind("toggle", function(ctx)
     if ctx.player == nil then
         return
     end
-
-    if SESSOES[ctx.player.uuid] ~= nil then
-        desligar(ctx)
-        ctx.player.send_message("Minimap desligado (M).")
-    elseif ligar(ctx) then
-        ctx.player.send_message("Minimap ligado (M).")
-    else
-        ctx.player.send_message("Este cliente não suporta o HUD do loader.")
-    end
+    abrir_config(ctx)
 end)
 
 return {

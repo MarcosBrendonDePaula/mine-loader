@@ -177,18 +177,19 @@ Os exemplos documentais de capabilities, domínios e bibliotecas entre mods fica
 
 ### Testar o `minimap_demo`
 
-O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D no HUD, classifica a superfície por cor, marca o centro do jogador e mostra coordenadas e dimensão. O exemplo actualiza o cache e o HUD automaticamente pelo agendador do servidor; a tecla `M` alterna o minimap sem executar código Lua no cliente.
+O `minimap_demo` é um protótipo visual, não a API final `client.map`. Ele desenha uma grelha 2D no HUD, classifica a superfície por cor, marca o centro do jogador e mostra coordenadas e dimensão. O exemplo actualiza o cache e o HUD automaticamente pelo agendador do servidor; a tecla `M` abre a UI de configuração sem executar código Lua no cliente.
 
 ```bash
 ./gradlew :runtimes:fabric:1.21.1:linkModsLua
 ./gradlew :runtimes:fabric:1.21.1:runClient
 ```
 
-Dentro do jogo, use `M` para ligar/desligar o minimap. Os comandos continuam disponíveis:
+Dentro do jogo, use `M` para abrir a configuração. Nela é possível alterar o zoom, mostrar/esconder coordenadas e ligar/desligar o HUD. Os comandos continuam disponíveis:
 
 ```text
 /mod minimap_demo on
 /mod minimap_demo off
+/mod minimap_demo config
 /mod minimap_demo zoom 2
 ```
 

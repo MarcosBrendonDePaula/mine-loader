@@ -3,9 +3,9 @@
   "id": "minimap_demo",
   "name": "Minimap Demo",
   "version": "0.1.0",
-  "description": "Protótipo de minimap declarativo em HUD, com snapshot de terreno e coordenadas.",
+  "description": "Protótipo de minimap declarativo em HUD, com configuração persistente aberta pela tecla M.",
   "entrypoint": "main.lua",
-  "permissions": ["chat.send", "player.read", "player.menu", "world.read", "server.command.register", "client.input.register"],
+  "permissions": ["chat.send", "player.read", "player.modify", "player.menu", "world.read", "server.command.register", "client.input.register"],
   "keybinds": [
     { "id": "toggle", "key": "key.keyboard.m", "category": "minimap_demo" }
   ],
@@ -19,7 +19,9 @@
     "capabilities": {
       "world.block_state.read": "1.0.0",
       "ui.menu": "1.0.0",
-      "client.input.keybind": "1.0.0"
+      "client.input.keybind": "1.0.0",
+      "player.data.read": "1.0.0",
+      "player.data.write": "1.0.0"
     }
   },
   "events": {

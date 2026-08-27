@@ -64,11 +64,12 @@ A implementação existe de forma equivalente em Fabric 1.21.1/1.21.4 e NeoForge
 
 ## Minimap
 
-O `examples/minimap_demo` declara `key.keyboard.m` como `toggle`. Em jogo, `M` liga ou desliga o HUD do minimap. Os comandos continuam disponíveis para diagnóstico e controlo explícito:
+O `examples/minimap_demo` declara `key.keyboard.m` como `toggle`. Em jogo, `M` abre a UI declarativa de configuração do minimap. Nessa tela é possível alterar o zoom, mostrar/esconder coordenadas e ligar/desligar o HUD. Os comandos continuam disponíveis para diagnóstico e controlo explícito:
 
 ```text
 /mod minimap_demo on
 /mod minimap_demo off
+/mod minimap_demo config
 /mod minimap_demo zoom 2
 ```
 
